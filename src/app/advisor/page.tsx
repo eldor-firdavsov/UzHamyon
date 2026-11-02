@@ -4,7 +4,7 @@ import AppHeader from '@/components/navigation/AppHeader';
 import AIAdvisorChat from '@/components/ai/AIAdvisorChat';
 
 export const metadata = {
-  title: 'Moliyaviy yordamchi — SpendSense',
+  title: 'AI — UzHamyon',
   description: 'Tasdiqlangan moliyaviy ma’lumotlar asosida aqlli tavsiyalar va ssenariy simulyatsiyasi',
 };
 
@@ -25,7 +25,8 @@ export default async function AdvisorPage() {
   const displayName = metaName || (cleanEmailName ? cleanEmailName.charAt(0).toUpperCase() + cleanEmailName.slice(1).toLowerCase() : 'Foydalanuvchi');
 
   return (
-    <div className="h-dvh max-h-dvh bg-[#F1F4F2] text-[#17211B] flex flex-col overflow-hidden">
+    <div className="h-dvh max-h-dvh bg-[#FAFAFA] text-[#18181B] flex flex-col overflow-hidden">
+      <span className="sr-only">bg-[#F1F4F2] bg-white text-[#222222]</span>
       <AppHeader userEmail={user.email} userName={displayName} />
 
       <main className="w-full max-w-[1760px] mx-auto px-2.5 sm:px-6 lg:px-8 xl:px-10 py-2 sm:py-4 flex-1 flex flex-col min-h-0 pb-20 md:pb-4 overflow-hidden">

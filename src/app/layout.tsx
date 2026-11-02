@@ -18,8 +18,8 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "SpendSense AI — Aqlli shaxsiy moliya va budjet boshqaruvi",
-  description: "Shaxsiy moliya, budjet nazorati va sun’iy intellektli moliyaviy maslahatchi",
+  title: "UzHamyon — Aqlli shaxsiy moliya va budjet boshqaruvi",
+  description: "UzHamyon — Shaxsiy moliya, xarajatlar va daromadlar boshqaruvi",
   icons: {
     icon: [
       { url: "/icon.png", type: "image/png" },

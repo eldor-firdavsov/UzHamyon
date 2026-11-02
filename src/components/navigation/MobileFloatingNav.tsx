@@ -51,7 +51,7 @@ const NAV_ITEMS = [
   },
   {
     href: '/advisor',
-    name: 'AI yordamchi',
+    name: 'AI',
     icon: Brain,
     matcher: (path: string) => path.startsWith('/advisor'),
     apiToWarm: '/api/ai/conversations',
@@ -91,10 +91,10 @@ export default function MobileFloatingNav({ onOpenAddTransaction }: MobileFloati
                 onTouchStart={() => item.apiToWarm && warmCache(item.apiToWarm)}
                 aria-label={item.name}
                 aria-current={isActive ? 'page' : undefined}
-                className={`flex items-center justify-center rounded-full transition-all duration-200 h-[44px] w-[44px] sm:h-[48px] sm:w-[48px] shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10B981] ${
+                className={`flex items-center justify-center rounded-full transition-all duration-200 h-[44px] w-[44px] sm:h-[48px] sm:w-[48px] shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#059669] ${
                   isActive
-                    ? 'bg-[#176B45] text-white shadow-xs'
-                    : 'text-[#5A675F] hover:text-[#17211B] hover:bg-black/5 active:scale-95'
+                    ? 'bg-[#059669] text-white shadow-xs'
+                    : 'text-[#52525B] hover:text-[#18181B] hover:bg-black/5 active:scale-95'
                 }`}
               >
                 <Icon className="h-5 w-5 stroke-[2]" aria-hidden="true" />
@@ -108,7 +108,7 @@ export default function MobileFloatingNav({ onOpenAddTransaction }: MobileFloati
           type="button"
           id="mobile-fab-add-transaction"
           onClick={onOpenAddTransaction}
-          className="pointer-events-auto h-[54px] w-[54px] sm:h-[58px] sm:w-[58px] rounded-full bg-[#176B45] hover:bg-[#125536] text-white shadow-[0_8px_25px_rgba(23,107,69,0.38)] flex items-center justify-center shrink-0 active:scale-95 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#10B981] focus-visible:ring-offset-2"
+          className="pointer-events-auto h-[54px] w-[54px] sm:h-[58px] sm:w-[58px] rounded-full bg-[#18181B] hover:bg-[#27272A] text-white shadow-[0_8px_25px_rgba(24,24,27,0.3)] flex items-center justify-center shrink-0 active:scale-95 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#059669] focus-visible:ring-offset-2"
           aria-label="Tranzaksiya qo‘shish"
         >
           <Plus className="h-6 w-6 stroke-[2.5]" aria-hidden="true" />

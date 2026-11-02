@@ -65,16 +65,16 @@ export default function ContributeModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
-      <div className="w-full max-w-sm rounded-2xl border border-[#D5DED7] bg-white p-6 sm:p-7 shadow-xl space-y-4">
-        <div className="flex items-center justify-between border-b border-[#D5DED7] pb-3.5">
+      <div className="w-full max-w-sm rounded-2xl border border-[#E5E7EB] bg-white p-6 sm:p-7 shadow-xl space-y-4">
+        <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3.5">
           <div>
-            <h2 className="text-xl font-semibold text-[#17211B]">Mablag‘ kiritish / yechish</h2>
-            <p className="text-sm sm:text-base text-[#47544C] mt-0.5">{goal.name}</p>
+            <h2 className="text-xl font-semibold text-[#18181B]">Mablag‘ kiritish / yechish</h2>
+            <p className="text-sm text-[#52525B] mt-0.5">{goal.name}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-xl text-[#5A675F] hover:text-[#17211B] hover:bg-[#F7F9F7] min-h-[40px] min-w-[40px] flex items-center justify-center transition-colors"
+            className="p-2 rounded-xl text-[#71717A] hover:text-[#18181B] hover:bg-[#F9FAFB] min-h-[40px] min-w-[40px] flex items-center justify-center transition-colors"
             aria-label="Yopish"
           >
             <X className="h-5 w-5" />
@@ -82,22 +82,22 @@ export default function ContributeModal({
         </div>
 
         {error && (
-          <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-[#C74747] text-sm font-medium">
+          <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-[#DC2626] text-sm font-medium">
             {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4 text-sm">
           {/* Action toggle */}
-          <div className="grid grid-cols-2 gap-2 p-1 bg-[#F7F9F7] rounded-xl border border-[#D5DED7]">
+          <div className="grid grid-cols-2 gap-2 p-1 bg-[#F5F6F8] rounded-xl border border-[#E5E7EB]">
             <button
               type="button"
               id="action-deposit-btn"
               onClick={() => setAction('deposit')}
-              className={`flex items-center justify-center gap-1.5 min-h-[44px] py-2 rounded-lg font-semibold text-sm transition-all ${
+              className={`flex items-center justify-center gap-1.5 min-h-[44px] py-2 rounded-lg font-medium text-sm transition-all ${
                 action === 'deposit'
-                  ? 'bg-[#176B45] text-white shadow-xs'
-                  : 'text-[#47544C] hover:text-[#17211B] hover:bg-black/5'
+                  ? 'bg-[#059669] text-white shadow-xs'
+                  : 'text-[#52525B] hover:text-[#18181B] hover:bg-black/5'
               }`}
             >
               <ArrowDownRight className="h-4 w-4" />
@@ -107,10 +107,10 @@ export default function ContributeModal({
               type="button"
               id="action-withdraw-btn"
               onClick={() => setAction('withdraw')}
-              className={`flex items-center justify-center gap-1.5 min-h-[44px] py-2 rounded-lg font-semibold text-sm transition-all ${
+              className={`flex items-center justify-center gap-1.5 min-h-[44px] py-2 rounded-lg font-medium text-sm transition-all ${
                 action === 'withdraw'
-                  ? 'bg-[#C74747] text-white shadow-xs'
-                  : 'text-[#47544C] hover:text-[#C74747] hover:bg-black/5'
+                  ? 'bg-[#DC2626] text-white shadow-xs'
+                  : 'text-[#52525B] hover:text-[#DC2626] hover:bg-black/5'
               }`}
             >
               <ArrowUpRight className="h-4 w-4" />
@@ -119,7 +119,7 @@ export default function ContributeModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-[#47544C] mb-1.5">
+            <label className="block text-sm font-medium text-[#52525B] mb-1.5">
               Summa (soʻm) *
             </label>
             <input
@@ -131,12 +131,12 @@ export default function ContributeModal({
               placeholder="100000"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              className="w-full min-h-[48px] bg-white border border-[#D5DED7] rounded-xl px-3.5 py-2.5 text-[#17211B] font-semibold font-mono tabular-nums text-base focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all"
+              className="w-full min-h-[48px] bg-white border border-[#E5E7EB] rounded-xl px-3.5 py-2.5 text-[#18181B] font-semibold font-mono tabular-nums text-base focus:border-[#059669] focus:outline-none focus:ring-2 focus:ring-[#059669]/20 transition-all"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-[#47544C] mb-1.5">
+            <label className="block text-sm font-medium text-[#52525B] mb-1.5">
               Izoh (ixtiyoriy)
             </label>
             <input
@@ -145,16 +145,16 @@ export default function ContributeModal({
               placeholder="Masalan: Oylik maoshdan tejash"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="w-full min-h-[48px] bg-white border border-[#D5DED7] rounded-xl px-3.5 py-2.5 text-sm text-[#17211B] placeholder-[#5A675F] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all"
+              className="w-full min-h-[48px] bg-white border border-[#E5E7EB] rounded-xl px-3.5 py-2.5 text-sm text-[#18181B] placeholder-[#71717A] focus:border-[#059669] focus:outline-none focus:ring-2 focus:ring-[#059669]/20 transition-all"
             />
           </div>
 
-          <div className="flex items-center justify-end gap-3 pt-3.5 border-t border-[#D5DED7]">
+          <div className="flex items-center justify-end gap-3 pt-3.5 border-t border-[#E5E7EB]">
             <button
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="px-5 py-2.5 min-h-[44px] rounded-xl border border-[#D5DED7] bg-white text-[#17211B] hover:bg-[#F7F9F7] text-sm font-semibold transition-colors"
+              className="px-5 py-2.5 min-h-[44px] rounded-xl border border-[#E5E7EB] bg-white text-[#18181B] hover:bg-[#F9FAFB] text-sm font-medium transition-colors"
             >
               Bekor qilish
             </button>
@@ -162,10 +162,10 @@ export default function ContributeModal({
               id="save-contribution-btn"
               type="submit"
               disabled={loading}
-              className={`inline-flex items-center gap-2 px-5 py-2.5 min-h-[44px] rounded-xl text-white font-semibold text-sm transition-colors disabled:opacity-50 shadow-fintech-card ${
+              className={`inline-flex items-center gap-2 px-5 py-2.5 min-h-[44px] rounded-xl text-white font-medium text-sm transition-colors disabled:opacity-50 shadow-xs ${
                 action === 'deposit'
-                  ? 'bg-[#176B45] hover:bg-[#125536]'
-                  : 'bg-[#C74747] hover:bg-[#963728]'
+                  ? 'bg-[#059669] hover:bg-[#047857]'
+                  : 'bg-[#DC2626] hover:bg-[#B91C1C]'
               }`}
             >
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}

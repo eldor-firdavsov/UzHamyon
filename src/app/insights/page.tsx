@@ -5,7 +5,7 @@ import InsightsFeed from '@/components/ai/InsightsFeed';
 import PageContainer from '@/components/bento/PageContainer';
 
 export const metadata = {
-  title: 'Moliyaviy xulosalar — SpendSense AI',
+  title: 'Moliyaviy xulosalar — UzHamyon',
   description: 'AI asosidagi tahlillar, xarajatlar tebranishi va foydali moliyaviy tavsiyalar.',
 };
 

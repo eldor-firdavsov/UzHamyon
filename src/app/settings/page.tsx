@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 
 export const metadata = {
-  title: 'Sozlamalar — SpendSense AI',
+  title: 'Sozlamalar — UzHamyon',
   description: 'Hisobingiz va profilingiz sozlamalarini boshqaring',
 };
 

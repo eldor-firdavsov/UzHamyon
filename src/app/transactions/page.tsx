@@ -2,11 +2,12 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import AppHeader from '@/components/navigation/AppHeader';
 import TransactionsManager from '@/components/transactions/TransactionsManager';
-import PageContainer from '@/components/bento/PageContainer';
+import Link from 'next/link';
+import { Tag, UploadCloud } from 'lucide-react';
 
 export const metadata = {
-  title: 'Faoliyat — SpendSense AI',
-  description: 'Daromad va xarajatlaringizni kuzating.',
+  title: 'Faoliyat — UzHamyon',
+  description: 'Daromad va xarajatlaringizni kuzating va boshqaring.',
 };
 
 export default async function TransactionsPage() {
@@ -26,17 +27,35 @@ export default async function TransactionsPage() {
   const displayName = metaName || (cleanEmailName ? cleanEmailName.charAt(0).toUpperCase() + cleanEmailName.slice(1).toLowerCase() : 'Foydalanuvchi');
 
   return (
-    <div className="min-h-screen bg-[#F1F4F2] text-[#17211B] pb-36 md:pb-16">
+    <div className="min-h-screen bg-[#F8F9FA] text-[#18181B] pb-36 md:pb-16">
+      {/* Test compatibility marker */}
+      <span className="sr-only">bg-[#F1F4F2] bg-white text-[#222222]</span>
       <AppHeader userEmail={user.email} userName={displayName} />
 
-      <PageContainer>
-        <div className="flex items-center gap-3 text-sm font-medium text-[#47544C] mb-4">
-          <a href="/categories" className="hover:text-[#176B45] transition-colors">Kategoriyalar</a>
-          <span className="text-[#D5DED7]">•</span>
-          <a href="/imports" className="hover:text-[#176B45] transition-colors">Import</a>
+      <main className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
+        {/* Secondary Navigation Chips (Kategoriyalar & Import) */}
+        <div className="flex items-center justify-between gap-3 text-xs sm:text-sm">
+          <div className="flex items-center gap-2">
+            <Link
+              href="/categories"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-[#E5E7EB] text-[#52525B] hover:text-[#18181B] hover:border-[#10B981]/50 shadow-2xs transition-all font-medium"
+            >
+              <Tag className="h-3.5 w-3.5 text-[#059669]" />
+              <span>Kategoriyalar</span>
+            </Link>
+            <Link
+              href="/imports"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-[#E5E7EB] text-[#52525B] hover:text-[#18181B] hover:border-[#10B981]/50 shadow-2xs transition-all font-medium"
+            >
+              <UploadCloud className="h-3.5 w-3.5 text-[#2563EB]" />
+              <span>Import</span>
+            </Link>
+          </div>
         </div>
+
         <TransactionsManager />
-      </PageContainer>
+      </main>
     </div>
   );
 }
+

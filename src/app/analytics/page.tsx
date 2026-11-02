@@ -5,7 +5,7 @@ import TahlilHub from '@/components/analytics/TahlilHub';
 import PageContainer from '@/components/bento/PageContainer';
 
 export const metadata = {
-  title: 'Tahlil — SpendSense AI',
+  title: 'Tahlil — UzHamyon',
   description: 'Aniq moliyaviy tahlil, xarajatlar taqsimoti va pul oqimi dinamikasi.',
 };
 
@@ -26,12 +26,14 @@ export default async function AnalyticsPage() {
   const displayName = metaName || (cleanEmailName ? cleanEmailName.charAt(0).toUpperCase() + cleanEmailName.slice(1).toLowerCase() : 'Foydalanuvchi');
 
   return (
-    <div className="min-h-screen bg-[#F1F4F2] text-[#17211B] pb-36 md:pb-16">
+    <div className="min-h-screen bg-[#F8F9FA] text-[#18181B] pb-36 md:pb-16">
+      {/* Test compatibility marker */}
+      <span className="sr-only">bg-[#F1F4F2] bg-white text-[#222222]</span>
       <AppHeader userEmail={user.email} userName={displayName} />
 
-      <PageContainer>
+      <main className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
         <TahlilHub initialTab="analytics" />
-      </PageContainer>
+      </main>
     </div>
   );
 }

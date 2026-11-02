@@ -121,7 +121,7 @@ export default function GoalsManager() {
       <PageHeader
         title={
           <div className="flex items-center gap-2.5">
-            <Target className="h-5 w-5 text-[#176B45]" />
+            <Target className="h-5 w-5 text-[#059669]" />
             <span>Jamg‘arma maqsadlari</span>
           </div>
         }
@@ -131,7 +131,7 @@ export default function GoalsManager() {
         actions={
           <>
             {/* Status Filter */}
-            <div className="inline-flex rounded-xl bg-[#F7F9F7] p-1 border border-[#D5DED7] text-sm">
+            <div className="inline-flex rounded-xl bg-[#F5F6F8] p-1 border border-[#E5E7EB] text-sm">
               {(['all', 'in_progress', 'completed'] as const).map((s) => (
                 <button
                   key={s}
@@ -139,8 +139,8 @@ export default function GoalsManager() {
                   onClick={() => setStatusFilter(s)}
                   className={`px-3 py-1.5 rounded-lg transition-all text-sm ${
                     statusFilter === s
-                      ? 'bg-[#176B45] text-white font-semibold shadow-xs'
-                      : 'text-[#47544C] font-medium hover:text-[#17211B] hover:bg-black/5'
+                      ? 'bg-[#18181B] text-white font-medium shadow-xs'
+                      : 'text-[#52525B] font-medium hover:text-[#18181B] hover:bg-black/5'
                   }`}
                 >
                   {s === 'all' ? 'Barchasi' : s === 'in_progress' ? 'Faol' : 'Yakunlangan'}
@@ -155,7 +155,7 @@ export default function GoalsManager() {
                 setGoalToEdit(null);
                 setIsModalOpen(true);
               }}
-              className="inline-flex items-center gap-2 px-4 py-2 min-h-[40px] rounded-xl bg-[#176B45] text-white font-semibold text-sm hover:bg-[#125536] transition-colors shadow-fintech-card"
+              className="inline-flex items-center gap-2 px-4 py-2 min-h-[40px] rounded-xl bg-[#18181B] text-white font-medium text-sm hover:bg-[#27272A] transition-colors shadow-xs"
             >
               <Plus className="h-4 w-4" />
               <span>Maqsad yaratish</span>
@@ -267,21 +267,21 @@ export default function GoalsManager() {
                   {/* Goal Name, Deadline & Status */}
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <h3 className="font-bold text-lg sm:text-xl text-[#17211B] tracking-tight leading-snug line-clamp-2">
+                      <h3 className="font-semibold text-lg sm:text-xl text-[#18181B] tracking-tight leading-snug line-clamp-2">
                         {g.name}
                       </h3>
                       {g.target_date && (
-                        <p className="text-xs sm:text-sm text-[#5A675F] mt-1.5 flex items-center gap-1.5 font-mono">
-                          <Calendar className="h-4 w-4 text-[#176B45]" />
+                        <p className="text-xs sm:text-sm text-[#71717A] mt-1.5 flex items-center gap-1.5 font-mono">
+                          <Calendar className="h-4 w-4 text-[#059669]" />
                           <span>Muddat: {g.target_date}</span>
                         </p>
                       )}
                     </div>
                     <span
-                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold shrink-0 border ${
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium shrink-0 border ${
                         isDone
-                          ? 'bg-[#DDF3E5] text-[#176B45] border-[#176B45]/20'
-                          : 'bg-[#F0F5F2] text-[#47544C] border-[#D5DED7]'
+                          ? 'bg-[#ECFDF5] text-[#059669] border-[#059669]/20'
+                          : 'bg-[#F5F6F8] text-[#52525B] border-[#E5E7EB]'
                       }`}
                     >
                       {isDone ? (
@@ -299,37 +299,37 @@ export default function GoalsManager() {
                   <div className="space-y-3 pt-1">
                     <div className="flex items-end justify-between gap-2">
                       <div>
-                        <span className="block text-xs font-semibold text-[#5A675F] uppercase tracking-wider mb-1">
+                        <span className="block text-xs font-medium text-[#71717A] uppercase tracking-wider mb-1">
                           To‘plandi
                         </span>
-                        <div className="text-2xl sm:text-3xl font-bold font-mono text-[#176B45] tabular-nums leading-none">
+                        <div className="text-2xl sm:text-3xl font-semibold font-mono text-[#059669] tabular-nums leading-none">
                           {formatCurrency(g.current_amount, g.currency)}
                         </div>
                       </div>
                       <div className="text-right">
-                        <span className="block text-xs font-semibold text-[#5A675F] uppercase tracking-wider mb-1">
+                        <span className="block text-xs font-medium text-[#71717A] uppercase tracking-wider mb-1">
                           Maqsad
                         </span>
-                        <div className="text-base sm:text-lg font-bold font-mono text-[#17211B] tabular-nums leading-none">
+                        <div className="text-base sm:text-lg font-semibold font-mono text-[#18181B] tabular-nums leading-none">
                           {formatCurrency(g.target_amount, g.currency)}
                         </div>
                       </div>
                     </div>
 
-                    {/* Thicker, modern progress bar */}
+                    {/* Modern progress bar */}
                     <div className="space-y-1.5">
-                      <div className="h-3 w-full bg-[#E8EFEA] rounded-full overflow-hidden p-0.5 border border-[#D5DED7]/60">
+                      <div className="h-3 w-full bg-[#F4F4F5] rounded-full overflow-hidden p-0.5 border border-[#E5E7EB]">
                         <div
-                          className="h-full bg-gradient-to-r from-[#176B45] to-[#1F8A5B] rounded-full transition-all duration-500 shadow-xs"
+                          className="h-full bg-[#059669] rounded-full transition-all duration-500 shadow-xs"
                           style={{ width: `${Math.min(100, Math.max(0, g.percentage_completed))}%` }}
                         />
                       </div>
 
                       <div className="flex items-center justify-between text-xs sm:text-sm font-mono pt-0.5">
-                        <span className="font-bold text-[#176B45] tabular-nums">
+                        <span className="font-semibold text-[#059669] tabular-nums">
                           {g.percentage_completed.toFixed(1)}% bajarildi
                         </span>
-                        <span className="text-[#5A675F] font-medium tabular-nums">
+                        <span className="text-[#71717A] font-medium tabular-nums">
                           {isDone
                             ? 'Maqsadga erishildi! 🎉'
                             : `${formatCurrency(g.remaining_amount, g.currency)} qoldi`}
@@ -340,7 +340,7 @@ export default function GoalsManager() {
                 </div>
 
                 {/* Card Actions Footer */}
-                <div className="pt-4 border-t border-[#D5DED7] flex items-center justify-between gap-2.5">
+                <div className="pt-4 border-t border-[#E5E7EB] flex items-center justify-between gap-2.5">
                   {/* Primary CTA: Mablag‘ qo‘shish / yechish */}
                   <button
                     type="button"
@@ -348,7 +348,7 @@ export default function GoalsManager() {
                       setContributeGoal(g);
                       setIsContributeModalOpen(true);
                     }}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[42px] rounded-xl bg-[#176B45] hover:bg-[#125536] text-white font-semibold text-xs sm:text-sm shadow-sm transition-all active:scale-[0.98] group flex-1 sm:flex-initial"
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[42px] rounded-xl bg-[#18181B] hover:bg-[#27272A] text-white font-medium text-xs sm:text-sm shadow-xs transition-all active:scale-[0.98] group flex-1 sm:flex-initial"
                   >
                     <ArrowUpRight className="h-4 w-4 text-white group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform shrink-0" />
                     <span className="truncate">Mablag‘ qo‘shish / yechish</span>
@@ -360,11 +360,11 @@ export default function GoalsManager() {
                     <button
                       type="button"
                       onClick={() => setAiFeedbackGoal(g)}
-                      className="min-h-[40px] min-w-[40px] flex items-center justify-center p-2 rounded-xl bg-[#DDF3E5] hover:bg-[#C7ECD3] text-[#176B45] border border-[#176B45]/20 hover:border-[#176B45]/40 transition-all shadow-xs active:scale-95"
+                      className="min-h-[40px] min-w-[40px] flex items-center justify-center p-2 rounded-xl bg-[#ECFDF5] hover:bg-[#D1FAE5] text-[#059669] border border-[#059669]/20 hover:border-[#059669]/40 transition-all shadow-xs active:scale-95"
                       title="AI tahlili va tavsiya olish"
                       aria-label="AI tavsiya olish"
                     >
-                      <Sparkles className="h-4 w-4 text-[#176B45]" />
+                      <Sparkles className="h-4 w-4 text-[#059669]" />
                     </button>
 
                     {/* Edit Button */}
@@ -374,7 +374,7 @@ export default function GoalsManager() {
                         setGoalToEdit(g);
                         setIsModalOpen(true);
                       }}
-                      className="min-h-[40px] min-w-[40px] flex items-center justify-center p-2 rounded-xl text-[#47544C] hover:text-[#17211B] hover:bg-[#F0F5F2] border border-transparent hover:border-[#D5DED7] transition-all active:scale-95"
+                      className="min-h-[40px] min-w-[40px] flex items-center justify-center p-2 rounded-xl text-[#52525B] hover:text-[#18181B] hover:bg-[#F9FAFB] border border-transparent hover:border-[#E5E7EB] transition-all active:scale-95"
                       title="Tahrirlash"
                       aria-label="Tahrirlash"
                     >
@@ -388,7 +388,7 @@ export default function GoalsManager() {
                         setGoalToDelete(g);
                         setIsDeleteModalOpen(true);
                       }}
-                      className="min-h-[40px] min-w-[40px] flex items-center justify-center p-2 rounded-xl text-[#47544C] hover:text-[#C74747] hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-all active:scale-95"
+                      className="min-h-[40px] min-w-[40px] flex items-center justify-center p-2 rounded-xl text-[#52525B] hover:text-[#DC2626] hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-all active:scale-95"
                       title="O‘chirish"
                       aria-label="O‘chirish"
                     >

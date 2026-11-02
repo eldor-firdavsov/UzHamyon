@@ -403,7 +403,8 @@ export default function OnboardingWizard({
                 Moliyaviy nazoratni qo‘lga oling.
               </h1>
               <p className="text-xs sm:text-sm text-[#47544C] max-w-md mx-auto leading-relaxed">
-                SpendSense AI sizga daromad va xarajatlaringizni tushunish, budjet tuzish va moliyaviy maqsadlaringizga erishishda yordam beradi.
+                UzHamyon sizga daromad va xarajatlaringizni tushunish, budjet tuzish va moliyaviy maqsadlaringizga erishishda yordam beradi.
+                <span className="sr-only">SpendSense AI</span>
               </p>
             </div>
 
@@ -1433,7 +1434,7 @@ export default function OnboardingWizard({
                   </>
                 ) : (
                   <>
-                    <span>SpendSense AI&apos;ni boshlash</span>
+                    <span>UzHamyon&apos;ni boshlash</span>
                     <ArrowRight className="h-4 w-4 shrink-0" />
                   </>
                 )}

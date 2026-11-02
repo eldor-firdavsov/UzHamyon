@@ -5,7 +5,7 @@ import ImportManager from '@/components/imports/ImportManager';
 import PageContainer from '@/components/bento/PageContainer';
 
 export const metadata = {
-  title: 'Import — SpendSense AI',
+  title: 'Import — UzHamyon',
   description: 'Bank ko‘chirmalari va moliyaviy ma’lumotlarni dublikatsiz yuklang.',
 };
 

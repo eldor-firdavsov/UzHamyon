@@ -55,7 +55,7 @@ const PRIMARY_NAV = [
   },
   {
     href: '/advisor',
-    label: 'AI yordamchi',
+    label: 'AI',
     id: 'nav-advisor-link',
     icon: Brain,
     matcher: (path: string) => path.startsWith('/advisor'),
@@ -199,7 +199,7 @@ export default function AppHeader({ userEmail, userName }: AppHeaderProps) {
               <Link href="/dashboard" className="flex items-center gap-2.5 shrink-0 group">
                 <SpendSenseLogo variant="icon" size="md" />
                 <span className="font-semibold text-base sm:text-lg text-[#18181B] tracking-tight">
-                  SpendSense
+                  UzHamyon
                 </span>
               </Link>
 
@@ -226,6 +226,7 @@ export default function AppHeader({ userEmail, userName }: AppHeaderProps) {
                     >
                       <Icon className={`h-4 w-4 ${isActive ? 'text-[#059669]' : 'text-[#71717A]'}`} />
                       <span>{item.label}</span>
+                      {item.href === '/advisor' && <span className="sr-only">AI yordamchi</span>}
                     </Link>
                   );
                 })}

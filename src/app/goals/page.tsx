@@ -5,7 +5,7 @@ import TahlilHub from '@/components/analytics/TahlilHub';
 import PageContainer from '@/components/bento/PageContainer';
 
 export const metadata = {
-  title: 'Jamg‘arma maqsadlari — SpendSense AI',
+  title: 'Jamg‘arma maqsadlari — UzHamyon',
   description: 'Moliyaviy maqsadlar belgilang, muddatlarni rejalashtiring va taraqqiyotni kuzatib boring.',
 };
 

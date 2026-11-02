@@ -5,7 +5,7 @@ import TahlilHub from '@/components/analytics/TahlilHub';
 import PageContainer from '@/components/bento/PageContainer';
 
 export const metadata = {
-  title: 'Budjetlar — SpendSense AI',
+  title: 'Budjetlar — UzHamyon',
   description: 'Xarajat limitlarini belgilang va real vaqtda sarf-xarajatlarni kuzatib boring.',
 };
 

@@ -3,8 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import OnboardingWizard from '@/components/onboarding/OnboardingWizard';
 
 export const metadata = {
-  title: 'Moliyaviy rejalashtirish — SpendSense AI',
-  description: 'SpendSense AI yangi foydalanuvchi moliyaviy rejasi',
+  title: 'Moliyaviy rejalashtirish — UzHamyon',
+  description: 'UzHamyon yangi foydalanuvchi moliyaviy rejasi',
 };
 
 export default async function OnboardingPage() {

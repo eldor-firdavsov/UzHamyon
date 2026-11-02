@@ -41,15 +41,18 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-[#F5F6F8] px-4 py-12 text-[#18181B]">
       <div className="w-full max-w-md space-y-6 rounded-2xl border border-[#E5E7EB] bg-white p-6 sm:p-8 shadow-xs">
         <div className="text-center">
-          <div className="flex justify-center mb-4">
+          <div className="flex justify-center mb-3">
             <SpendSenseLogo variant="icon" size="lg" />
+          </div>
+          <div className="text-xl font-bold tracking-tight text-[#18181B] mb-1">
+            UzHamyon
           </div>
           <h1 className="text-2xl font-semibold tracking-tight text-[#18181B]">
             Ro‘yxatdan o‘tish
             <span className="sr-only">Create your SpendSense account</span>
           </h1>
-          <p className="mt-2 text-sm text-[#52525B] leading-relaxed">
-            SpendSense hisobini yaratish uchun ma’lumotlaringizni kiriting
+          <p className="mt-1.5 text-sm text-[#52525B] leading-relaxed">
+            UzHamyon hisobini yaratish uchun ma’lumotlaringizni kiriting
           </p>
         </div>
 

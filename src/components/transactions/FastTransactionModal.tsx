@@ -171,14 +171,14 @@ export default function FastTransactionModal({
       }}
     >
       <div
-        className="w-full max-w-lg bg-white rounded-t-2xl sm:rounded-2xl border border-[#D5DED7] shadow-2xl p-6 sm:p-7 space-y-5 animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto"
+        className="w-full max-w-lg bg-white rounded-t-2xl sm:rounded-2xl border border-[#E5E7EB] shadow-2xl p-6 sm:p-7 space-y-5 animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto"
         role="dialog"
         aria-modal="true"
         aria-labelledby="fast-transaction-title"
       >
         {/* Modal Header */}
-        <div className="flex items-center justify-between pb-3.5 border-b border-[#D5DED7]">
-          <h2 id="fast-transaction-title" className="text-xl font-semibold text-[#17211B]">
+        <div className="flex items-center justify-between pb-3.5 border-b border-[#E5E7EB]">
+          <h2 id="fast-transaction-title" className="text-xl font-semibold text-[#18181B]">
             Tranzaksiya qo‘shish
           </h2>
           <button
@@ -186,7 +186,7 @@ export default function FastTransactionModal({
             id="close-fast-transaction-btn"
             onClick={onClose}
             disabled={isSubmitting}
-            className="min-h-[40px] min-w-[40px] flex items-center justify-center p-2 rounded-xl text-[#5A675F] hover:text-[#17211B] hover:bg-[#F7F9F7] transition-colors"
+            className="min-h-[40px] min-w-[40px] flex items-center justify-center p-2 rounded-xl text-[#71717A] hover:text-[#18181B] hover:bg-[#F9FAFB] transition-colors"
             aria-label="Yopish"
           >
             <X className="h-5 w-5" />
@@ -197,7 +197,7 @@ export default function FastTransactionModal({
         {error && (
           <div
             id="fast-transaction-error"
-            className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-sm text-[#B54736] font-medium"
+            className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-sm text-[#DC2626] font-medium"
           >
             {error}
           </div>
@@ -207,7 +207,7 @@ export default function FastTransactionModal({
         {successMessage && (
           <div
             id="fast-transaction-success"
-            className="p-3.5 rounded-xl bg-[#DDF3E5] border border-[#176B45]/30 text-sm text-[#176B45] font-semibold flex items-center gap-2"
+            className="p-3.5 rounded-xl bg-[#ECFDF5] border border-[#059669]/30 text-sm text-[#059669] font-medium flex items-center gap-2"
           >
             <Check className="h-4 w-4" />
             <span>{successMessage}</span>
@@ -217,18 +217,18 @@ export default function FastTransactionModal({
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* 1. Transaction Type (Xarajat, Daromad) */}
           <div>
-            <label className="block text-sm font-medium text-[#47544C] mb-1.5">
+            <label className="block text-sm font-medium text-[#52525B] mb-1.5">
               Tranzaksiya turi
             </label>
-            <div className="grid grid-cols-2 gap-2 p-1 bg-[#F7F9F7] rounded-xl border border-[#D5DED7]">
+            <div className="grid grid-cols-2 gap-2 p-1 bg-[#F5F6F8] rounded-xl border border-[#E5E7EB]">
               <button
                 type="button"
                 id="fast-tx-tab-expense"
                 onClick={() => setActiveTab('expense')}
-                className={`min-h-[44px] py-2 text-sm font-semibold rounded-lg transition-all ${
+                className={`min-h-[44px] py-2 text-sm font-medium rounded-lg transition-all ${
                   activeTab === 'expense'
-                    ? 'bg-[#C74747] text-white shadow-xs'
-                    : 'text-[#47544C] hover:text-[#17211B] hover:bg-black/5'
+                    ? 'bg-[#DC2626] text-white shadow-xs'
+                    : 'text-[#52525B] hover:text-[#18181B] hover:bg-black/5'
                 }`}
               >
                 Xarajat
@@ -237,10 +237,10 @@ export default function FastTransactionModal({
                 type="button"
                 id="fast-tx-tab-income"
                 onClick={() => setActiveTab('income')}
-                className={`min-h-[44px] py-2 text-sm font-semibold rounded-lg transition-all ${
+                className={`min-h-[44px] py-2 text-sm font-medium rounded-lg transition-all ${
                   activeTab === 'income'
-                    ? 'bg-[#176B45] text-white shadow-xs'
-                    : 'text-[#47544C] hover:text-[#17211B] hover:bg-black/5'
+                    ? 'bg-[#059669] text-white shadow-xs'
+                    : 'text-[#52525B] hover:text-[#18181B] hover:bg-black/5'
                 }`}
               >
                 Daromad
@@ -260,11 +260,11 @@ export default function FastTransactionModal({
 
           {/* 2. Amount Field (Focused Immediately, Large, Numeric Keyboard) */}
           <div>
-            <label htmlFor="fast-tx-amount" className="block text-sm font-medium text-[#47544C] mb-1.5">
-              Summa <span className="text-[#B54736]">*</span>
+            <label htmlFor="fast-tx-amount" className="block text-sm font-medium text-[#52525B] mb-1.5">
+              Summa <span className="text-[#DC2626]">*</span>
             </label>
             <div className="relative">
-              <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-sm font-semibold text-[#5A675F]">
+              <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-sm font-medium text-[#71717A]">
                 so‘m
               </span>
               <input
@@ -277,7 +277,7 @@ export default function FastTransactionModal({
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 disabled={isSubmitting}
-                className="w-full min-h-[52px] rounded-xl border border-[#D5DED7] bg-white pl-14 pr-3.5 py-2.5 text-2xl font-semibold font-mono tabular-nums text-[#17211B] placeholder-[#9CA3AF] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all"
+                className="w-full min-h-[52px] rounded-xl border border-[#E5E7EB] bg-white pl-14 pr-3.5 py-2.5 text-2xl font-semibold font-mono tabular-nums text-[#18181B] placeholder-[#A1A1AA] focus:border-[#059669] focus:outline-none focus:ring-2 focus:ring-[#059669]/20 transition-all"
                 required
               />
             </div>
@@ -285,7 +285,7 @@ export default function FastTransactionModal({
 
           {/* 3. Category Selector */}
           <div>
-            <label htmlFor="fast-tx-category" className="block text-sm font-medium text-[#47544C] mb-1.5">
+            <label htmlFor="fast-tx-category" className="block text-sm font-medium text-[#52525B] mb-1.5">
               Kategoriya
             </label>
             <select
@@ -293,7 +293,7 @@ export default function FastTransactionModal({
               value={effectiveCategoryId}
               onChange={(e) => setChosenCategoryId(e.target.value)}
               disabled={isSubmitting || loadingCategories}
-              className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white px-3.5 py-2.5 text-sm text-[#17211B] font-medium focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all"
+              className="w-full min-h-[48px] rounded-xl border border-[#E5E7EB] bg-white px-3.5 py-2.5 text-sm text-[#18181B] font-medium focus:border-[#059669] focus:outline-none focus:ring-2 focus:ring-[#059669]/20 transition-all"
             >
               {filteredCategories.length === 0 ? (
                 <option value="">(Kategoriyalar mavjud emas)</option>
@@ -309,7 +309,7 @@ export default function FastTransactionModal({
 
           {/* 4. Date (Defaults to Today) */}
           <div>
-            <label htmlFor="fast-tx-date" className="block text-sm font-medium text-[#47544C] mb-1.5">
+            <label htmlFor="fast-tx-date" className="block text-sm font-medium text-[#52525B] mb-1.5">
               Sana
             </label>
             <input
@@ -318,14 +318,14 @@ export default function FastTransactionModal({
               value={date}
               onChange={(e) => setDate(e.target.value)}
               disabled={isSubmitting}
-              className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white px-3.5 py-2.5 text-sm text-[#17211B] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all"
+              className="w-full min-h-[48px] rounded-xl border border-[#E5E7EB] bg-white px-3.5 py-2.5 text-sm text-[#18181B] focus:border-[#059669] focus:outline-none focus:ring-2 focus:ring-[#059669]/20 transition-all"
             />
           </div>
 
           {/* 5. Optional Note */}
           <div>
-            <label htmlFor="fast-tx-note" className="block text-sm font-medium text-[#47544C] mb-1.5">
-              Izoh <span className="text-[#5A675F] font-normal">(ixtiyoriy)</span>
+            <label htmlFor="fast-tx-note" className="block text-sm font-medium text-[#52525B] mb-1.5">
+              Izoh <span className="text-[#71717A] font-normal">(ixtiyoriy)</span>
             </label>
             <input
               id="fast-tx-note"
@@ -334,7 +334,7 @@ export default function FastTransactionModal({
               value={note}
               onChange={(e) => setNote(e.target.value)}
               disabled={isSubmitting}
-              className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white px-3.5 py-2.5 text-sm text-[#17211B] placeholder-[#5A675F] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all"
+              className="w-full min-h-[48px] rounded-xl border border-[#E5E7EB] bg-white px-3.5 py-2.5 text-sm text-[#18181B] placeholder-[#71717A] focus:border-[#059669] focus:outline-none focus:ring-2 focus:ring-[#059669]/20 transition-all"
             />
           </div>
 
@@ -345,7 +345,7 @@ export default function FastTransactionModal({
               id="fast-tx-cancel-btn"
               onClick={onClose}
               disabled={isSubmitting}
-              className="flex-1 min-h-[48px] py-2.5 px-4 rounded-xl border border-[#D5DED7] bg-white hover:bg-[#F7F9F7] text-[#17211B] text-sm font-semibold transition-all disabled:opacity-50"
+              className="flex-1 min-h-[48px] py-2.5 px-4 rounded-xl border border-[#E5E7EB] bg-white hover:bg-[#F9FAFB] text-[#18181B] text-sm font-medium transition-all disabled:opacity-50"
             >
               Bekor qilish
             </button>
@@ -353,7 +353,7 @@ export default function FastTransactionModal({
               type="submit"
               id="fast-tx-submit-btn"
               disabled={isSubmitting || !amount}
-              className="flex-1 min-h-[48px] flex items-center justify-center gap-2 rounded-xl bg-[#176B45] hover:bg-[#125536] text-white py-2.5 px-4 text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-fintech-card active:scale-98"
+              className="flex-1 min-h-[48px] flex items-center justify-center gap-2 rounded-xl bg-[#18181B] hover:bg-[#27272A] text-white py-2.5 px-4 text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-xs active:scale-98"
             >
               {isSubmitting ? (
                 <>

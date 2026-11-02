@@ -138,17 +138,6 @@ export default function InsightsFeed() {
             </div>
 
             <button
-              id="refresh-insights-btn"
-              type="button"
-              onClick={refreshInsights}
-              disabled={loading || generating}
-              className="min-h-[38px] min-w-[38px] p-2 rounded-xl bg-white border border-[#D5DED7] text-[#47544C] hover:text-[#17211B] hover:bg-[#F7F9F7] transition-all shadow-xs disabled:opacity-50 flex items-center justify-center"
-              title="Yangilash"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin text-[#176B45]' : ''}`} />
-            </button>
-
-            <button
               id="generate-insights-btn"
               type="button"
               onClick={handleGenerateFresh}

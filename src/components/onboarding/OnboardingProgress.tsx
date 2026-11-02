@@ -23,7 +23,7 @@ export default function OnboardingProgress({
           <SpendSenseLogo variant="icon" size="md" />
           <div className="flex flex-col">
             <span className="text-base font-semibold tracking-tight text-[#17211B]">
-              SpendSense
+              UzHamyon
             </span>
             <span className="text-xs text-[#5A675F] font-medium">
               Moliyaviy rejalashtirish
