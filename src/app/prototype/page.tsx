@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { DesktopHeader } from '@/prototype/components/DesktopHeader';
 import { PrototypeHeader } from '@/prototype/components/PrototypeHeader';
 import { FinancialOverviewBlock } from '@/prototype/components/FinancialOverviewBlock';
@@ -14,12 +14,13 @@ import { AddTransactionModal } from '@/prototype/components/AddTransactionModal'
 import { GoalDetailModal } from '@/prototype/components/GoalDetailModal';
 import { PlaceholderScreen } from '@/prototype/components/PlaceholderScreen';
 import { 
-  DEMO_OVERVIEW, 
+  DEMO_CONFIG, 
   INITIAL_DEMO_TRANSACTIONS, 
   DEMO_SAVINGS_GOALS, 
   type DemoTransaction, 
   type DemoSavingsGoal 
 } from '@/prototype/demoData';
+import { getTransactionsInCalendarMonth, parseLocalDate } from '@/prototype/dateUtils';
 import { CheckCircle2, Calendar, Plus } from 'lucide-react';
 
 export default function PrototypeDashboardPage() {
@@ -30,23 +31,38 @@ export default function PrototypeDashboardPage() {
   const [selectedGoal, setSelectedGoal] = useState<DemoSavingsGoal | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Financial figures calculated dynamically from initial demo + added transactions
-  const totalLifetimeIncome = DEMO_OVERVIEW.totalLifetimeIncome;
-  
-  // Calculate expenses and income added during this session
-  const addedExpenses = transactions
-    .slice(0, transactions.length - INITIAL_DEMO_TRANSACTIONS.length)
-    .filter(t => t.type === 'expense')
-    .reduce((sum, t) => sum + t.amount, 0);
+  // Reference calendar date: 2026-10-31
+  const refDate = parseLocalDate(DEMO_CONFIG.referenceDate);
 
-  const addedIncome = transactions
-    .slice(0, transactions.length - INITIAL_DEMO_TRANSACTIONS.length)
-    .filter(t => t.type === 'income')
-    .reduce((sum, t) => sum + t.amount, 0);
+  // Exact calendar-accurate metrics dynamically calculated from transactions
+  const { totalLifetimeIncome, allTimeExpenses, currentMonthIncome, currentMonthExpenses } = useMemo(() => {
+    let lifetimeIncome = 0;
+    let lifetimeExpense = 0;
+    let monthIncome = 0;
+    let monthExpense = 0;
 
-  const periodIncome = DEMO_OVERVIEW.selectedPeriodIncome + addedIncome;
-  const periodExpenses = DEMO_OVERVIEW.selectedPeriodExpenses + addedExpenses;
-  const allTimeExpenses = DEMO_OVERVIEW.allTimeExpenses + addedExpenses;
+    transactions.forEach((tx) => {
+      const p = parseLocalDate(tx.date);
+      if (tx.type === 'income') {
+        lifetimeIncome += tx.amount;
+        if (p.year === refDate.year && p.month === refDate.month) {
+          monthIncome += tx.amount;
+        }
+      } else {
+        lifetimeExpense += tx.amount;
+        if (p.year === refDate.year && p.month === refDate.month) {
+          monthExpense += tx.amount;
+        }
+      }
+    });
+
+    return {
+      totalLifetimeIncome: lifetimeIncome,
+      allTimeExpenses: lifetimeExpense,
+      currentMonthIncome: monthIncome,
+      currentMonthExpenses: monthExpense,
+    };
+  }, [transactions, refDate.year, refDate.month]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -77,16 +93,16 @@ export default function PrototypeDashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#F7F8F5] text-[#171B16] flex flex-col antialiased">
-      {/* ── Desktop Header (Visible on lg: >= 1024px) ── */}
+      {/* ── Desktop Header (Visible on lg: >= 1024px, completely preserved) ── */}
       <DesktopHeader
         activeTab={activeTab}
         onTabChange={(tab) => setActiveTab(tab)}
         onOpenAddModal={() => setIsAddModalOpen(true)}
         onNotificationClick={() => showToast('Hozircha yangi xabarnomalar yo‘q')}
-        userName="Aziz Qodirov"
+        userName={DEMO_CONFIG.userName}
       />
 
-      {/* ── Mobile Top Header (Visible on < lg) ── */}
+      {/* ── Mobile Top Header (Visible on < lg, completely preserved) ── */}
       <div className="lg:hidden">
         <PrototypeHeader 
           userName="Aziz" 
@@ -100,27 +116,31 @@ export default function PrototypeDashboardPage() {
           <div>
             {/* ── MOBILE / TABLET VIEW (< 1024px): Single-Column Streamlined Stack ── */}
             <div className="lg:hidden max-w-lg mx-auto px-4 py-4 space-y-4 pb-28">
-              {/* BLOCK 1: Financial Overview */}
+              {/* BLOCK 1: Financial Overview (Hero Card + Paired Metric Cards) */}
               <FinancialOverviewBlock
                 totalLifetimeIncome={totalLifetimeIncome}
-                periodIncome={periodIncome}
-                periodExpenses={periodExpenses}
-                activeMonthLabel={DEMO_OVERVIEW.activeMonthLabel}
+                periodIncome={currentMonthIncome}
+                periodExpenses={currentMonthExpenses}
+                activeMonthLabel={DEMO_CONFIG.activeMonthLabel}
               />
 
-              {/* BLOCK 2: Financial Chart */}
-              <FinancialChartBlock />
+              {/* BLOCK 2: Financial Chart (Income Green #26834A, Expense Red #D64D4D) */}
+              <FinancialChartBlock
+                transactions={transactions}
+                referenceDate={DEMO_CONFIG.referenceDate}
+                financialStartDate={DEMO_CONFIG.financialStartDate}
+              />
 
               {/* BLOCK 3: Monthly Cash Flow */}
               <MonthlyCashFlowBlock
-                monthlyIncome={periodIncome}
-                monthlyExpenses={periodExpenses}
+                monthlyIncome={currentMonthIncome}
+                monthlyExpenses={currentMonthExpenses}
                 allTimeIncome={totalLifetimeIncome}
                 allTimeExpenses={allTimeExpenses}
-                activeMonthLabel={DEMO_OVERVIEW.activeMonthLabel}
+                activeMonthLabel={DEMO_CONFIG.activeMonthLabel}
               />
 
-              {/* BLOCK 4: Recent Transactions */}
+              {/* BLOCK 4: Recent Transactions (5 Latest with Strict Semantics) */}
               <RecentTransactionsBlock
                 transactions={transactions.slice(0, 5)}
                 onViewAll={() => setActiveTab('faoliyat')}
@@ -143,53 +163,57 @@ export default function PrototypeDashboardPage() {
               {/* Desktop Header Row: Title & Controls */}
               <div className="flex items-center justify-between pb-1">
                 <div>
-                  <h1 className="text-2xl font-bold text-[#171B16] tracking-tight">
+                  <h1 className="text-2xl sm:text-3xl lg:text-[32px] font-bold text-[#171B16] tracking-tight">
                     Moliyaviy holat
                   </h1>
-                  <p className="text-xs text-[#697168] mt-0.5">
+                  <p className="text-sm text-[#697168] mt-0.5">
                     Shaxsiy mablag‘lar, oylik pul oqimi va jamg‘armalar tahlili
                   </p>
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white border border-[#E8EBE5] text-xs font-semibold text-[#171B16] shadow-xs">
-                    <Calendar className="w-3.5 h-3.5 text-[#26834A]" />
-                    <span>{DEMO_OVERVIEW.activeMonthLabel}</span>
+                  <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-[#E8EBE5] text-sm font-semibold text-[#171B16] shadow-xs">
+                    <Calendar className="w-4 h-4 text-[#26834A]" />
+                    <span>{DEMO_CONFIG.activeMonthLabel}</span>
                   </div>
 
                   <button
                     type="button"
                     onClick={() => setIsAddModalOpen(true)}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#163300] hover:bg-[#234A05] text-white text-xs font-semibold transition-all shadow-xs cursor-pointer active:scale-95"
+                    className="min-h-[44px] flex items-center gap-2 px-4 py-2 rounded-xl bg-[#163300] hover:bg-[#234A05] text-white text-sm font-bold transition-all shadow-xs cursor-pointer active:scale-95"
                   >
-                    <Plus className="w-3.5 h-3.5 text-[#9FE870] stroke-[2.5]" />
+                    <Plus className="w-4 h-4 text-[#9FE870] stroke-[2.5]" />
                     <span>Amal qo‘shish</span>
                   </button>
                 </div>
               </div>
 
-              {/* Top Section: Financial Overview (Clean, unified header) */}
+              {/* Top Section: Financial Overview (Hero Card 7 cols + Paired Metric Cards 5 cols) */}
               <FinancialOverviewBlock
                 totalLifetimeIncome={totalLifetimeIncome}
-                periodIncome={periodIncome}
-                periodExpenses={periodExpenses}
-                activeMonthLabel={DEMO_OVERVIEW.activeMonthLabel}
+                periodIncome={currentMonthIncome}
+                periodExpenses={currentMonthExpenses}
+                activeMonthLabel={DEMO_CONFIG.activeMonthLabel}
               />
 
               {/* Two-Column Grid: Dominant Chart on Left, Supporting Context on Right */}
               <div className="grid grid-cols-12 gap-6 items-start">
                 {/* Left / Primary Column (Chart + Cash Flow Breakdown) */}
                 <div className="col-span-7 xl:col-span-8 space-y-6">
-                  {/* BLOCK 2: Financial Chart (Dominant Visual Element) */}
-                  <FinancialChartBlock />
+                  {/* BLOCK 2: Financial Chart (Dominant Visual Element with Green/Red) */}
+                  <FinancialChartBlock
+                    transactions={transactions}
+                    referenceDate={DEMO_CONFIG.referenceDate}
+                    financialStartDate={DEMO_CONFIG.financialStartDate}
+                  />
 
                   {/* BLOCK 3: Monthly Cash Flow (Supporting Breakdown) */}
                   <MonthlyCashFlowBlock
-                    monthlyIncome={periodIncome}
-                    monthlyExpenses={periodExpenses}
+                    monthlyIncome={currentMonthIncome}
+                    monthlyExpenses={currentMonthExpenses}
                     allTimeIncome={totalLifetimeIncome}
                     allTimeExpenses={allTimeExpenses}
-                    activeMonthLabel={DEMO_OVERVIEW.activeMonthLabel}
+                    activeMonthLabel={DEMO_CONFIG.activeMonthLabel}
                   />
                 </div>
 
@@ -231,7 +255,7 @@ export default function PrototypeDashboardPage() {
         <div
           role="status"
           aria-live="polite"
-          className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[#163300] text-white text-xs font-semibold px-4 py-2.5 rounded-full shadow-lg flex items-center gap-2 border border-[#9FE870]/30 transition-all animate-in fade-in slide-in-from-top-2 duration-200"
+          className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[#163300] text-white text-xs sm:text-sm font-semibold px-5 py-3 rounded-full shadow-lg flex items-center gap-2.5 border border-[#9FE870]/30 transition-all animate-in fade-in slide-in-from-top-2 duration-200"
         >
           <CheckCircle2 className="w-4 h-4 text-[#9FE870] shrink-0" />
           <span>{toastMessage}</span>

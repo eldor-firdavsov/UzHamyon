@@ -36,7 +36,7 @@ export function AddTransactionModal({
       name: name.trim() || (type === 'income' ? 'Qo‘shimcha daromad' : 'Kutilmagan xarajat'),
       category: selectedCategory || (type === 'income' ? 'Daromad' : 'Umumiy xarajat'),
       categoryIcon: type === 'income' ? 'wallet' : 'cart',
-      date: '31-oktabr, 2026',
+      date: dateStr || '2026-10-31',
       time: '12:00',
       amount: numericAmount,
       type,

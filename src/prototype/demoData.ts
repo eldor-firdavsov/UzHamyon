@@ -2,6 +2,7 @@
  * UzHamyon Prototype — Realistic Demo Data
  *
  * Clearly labeled mock financial figures for Tashkent, Uzbekistan fintech context.
+ * Strictly adheres to real calendar dates, months, and timezone rules.
  * NOT connected to production database.
  */
 
@@ -10,7 +11,7 @@ export interface DemoTransaction {
   name: string;
   category: string;
   categoryIcon: string;
-  date: string;
+  date: string; // ISO YYYY-MM-DD
   time?: string;
   amount: number;
   type: 'income' | 'expense';
@@ -27,119 +28,233 @@ export interface DemoSavingsGoal {
   icon: string;
 }
 
-export interface DemoChartPoint {
-  label: string;
-  income: number;
-  expense: number;
-}
-
-export const DEMO_USER = {
-  name: 'Anvar Qodirov',
+export const DEMO_CONFIG = {
+  userName: 'Aziz Qodirov',
   avatarInitials: 'AQ',
   phone: '+998 90 123 45 67',
-  currency: 'UZS',
+  currency: 'so‘m',
+  referenceDate: '2026-10-31',
+  financialStartDate: '2026-05-01',
   activeMonthLabel: 'Oktabr 2026',
 };
 
-// Block 1 & 3: Financial Figures
-export const DEMO_OVERVIEW = {
-  totalLifetimeIncome: 12000000,   // Jami daromad (lifetime)
-  selectedPeriodIncome: 6000000,   // Tanlangan davr daromadi (Oktabr)
-  selectedPeriodExpenses: 4950000, // Tanlangan davr xarajatlari (Oktabr)
-  allTimeExpenses: 9800000,        // Barcha davr xarajatlari
-  netCashFlow: 1050000,            // Sof foyda / tejab qolingan
-  savingsRatePercent: 17.5,
-  activeMonthLabel: 'Oktabr 2026',
-};
-
-// Block 2: Financial Chart Demo Points
-export const DEMO_CHART_PERIODS: Record<string, { label: string; points: DemoChartPoint[] }> = {
-  '1m': {
-    label: 'Joriy oy',
-    points: [
-      { label: '1-7 okt', income: 6000000, expense: 1240000 },
-      { label: '8-14 okt', income: 0, expense: 980000 },
-      { label: '15-21 okt', income: 0, expense: 1430000 },
-      { label: '22-28 okt', income: 0, expense: 850000 },
-      { label: '29-31 okt', income: 0, expense: 450000 },
-    ],
-  },
-  '3m': {
-    label: '3 oy',
-    points: [
-      { label: 'Avgust', income: 6000000, expense: 5200000 },
-      { label: 'Sentabr', income: 6000000, expense: 5000000 },
-      { label: 'Oktabr', income: 6000000, expense: 4950000 },
-    ],
-  },
-  'all': {
-    label: 'Jami davr',
-    points: [
-      { label: 'Iyun', income: 5500000, expense: 4800000 },
-      { label: 'Iyul', income: 5500000, expense: 5100000 },
-      { label: 'Avgust', income: 6000000, expense: 5200000 },
-      { label: 'Sentabr', income: 6000000, expense: 5000000 },
-      { label: 'Oktabr', income: 6000000, expense: 4950000 },
-    ],
-  },
-};
-
-// Block 4: Recent Transactions
+// Initial Qualifying Demo Transactions spanning calendar months from financial start date (May 2026)
 export const INITIAL_DEMO_TRANSACTIONS: DemoTransaction[] = [
+  // ── October 2026 (Active Month: 31 days) ──
   {
-    id: 'tx-1',
+    id: 'tx-oct-1',
     name: 'Oylik maosh',
     category: 'Daromad',
     categoryIcon: 'wallet',
-    date: '28-oktabr, 2026',
+    date: '2026-10-28',
     time: '10:30',
     amount: 6000000,
     type: 'income',
     account: 'Asosiy karta',
   },
   {
-    id: 'tx-2',
+    id: 'tx-oct-2',
     name: 'Korzinka Supermarket',
     category: 'Oziq-ovqat',
     categoryIcon: 'cart',
-    date: '27-oktabr, 2026',
+    date: '2026-10-27',
     time: '18:45',
     amount: 320000,
     type: 'expense',
     account: 'Uzcard',
   },
   {
-    id: 'tx-3',
+    id: 'tx-oct-3',
     name: 'Yandex Go (Taksi)',
     category: 'Transport',
     categoryIcon: 'car',
-    date: '26-oktabr, 2026',
+    date: '2026-10-26',
     time: '09:15',
     amount: 42000,
     type: 'expense',
     account: 'Humo',
   },
   {
-    id: 'tx-4',
+    id: 'tx-oct-4',
     name: 'Rayhon Milliy Taomlar',
     category: 'Restoran & Kafe',
     categoryIcon: 'coffee',
-    date: '25-oktabr, 2026',
+    date: '2026-10-25',
     time: '13:20',
     amount: 115000,
     type: 'expense',
     account: 'Uzcard',
   },
   {
-    id: 'tx-5',
+    id: 'tx-oct-5',
     name: 'Uztelecom (Internet)',
     category: 'Kommunal & Aloqa',
     categoryIcon: 'wifi',
-    date: '24-oktabr, 2026',
+    date: '2026-10-24',
     time: '11:00',
     amount: 180000,
     type: 'expense',
     account: 'Humo',
+  },
+  {
+    id: 'tx-oct-6',
+    name: 'Xonadon kommunal to‘lovlari',
+    category: 'Kommunal & Aloqa',
+    categoryIcon: 'wifi',
+    date: '2026-10-18',
+    amount: 1430000,
+    type: 'expense',
+    account: 'Uzcard',
+  },
+  {
+    id: 'tx-oct-7',
+    name: 'Haftalik oziq-ovqat bozori',
+    category: 'Oziq-ovqat',
+    categoryIcon: 'cart',
+    date: '2026-10-11',
+    amount: 980000,
+    type: 'expense',
+    account: 'Humo',
+  },
+  {
+    id: 'tx-oct-8',
+    name: 'Texnika ta’mirlash va xarid',
+    category: 'Xarid',
+    categoryIcon: 'cart',
+    date: '2026-10-04',
+    amount: 1240000,
+    type: 'expense',
+    account: 'Uzcard',
+  },
+  {
+    id: 'tx-oct-9',
+    name: 'Kechki qahva va shirinlik',
+    category: 'Restoran & Kafe',
+    categoryIcon: 'coffee',
+    date: '2026-10-30',
+    amount: 643000,
+    type: 'expense',
+    account: 'Humo',
+  },
+
+  // ── September 2026 (30 days) ──
+  {
+    id: 'tx-sep-1',
+    name: 'Sentabr oylik maoshi',
+    category: 'Daromad',
+    categoryIcon: 'wallet',
+    date: '2026-09-28',
+    amount: 6000000,
+    type: 'income',
+    account: 'Asosiy karta',
+  },
+  {
+    id: 'tx-sep-2',
+    name: 'Oziq-ovqat va ro‘zg‘or',
+    category: 'Oziq-ovqat',
+    categoryIcon: 'cart',
+    date: '2026-09-20',
+    amount: 3200000,
+    type: 'expense',
+    account: 'Uzcard',
+  },
+  {
+    id: 'tx-sep-3',
+    name: 'Kommunal va internet to‘lovi',
+    category: 'Kommunal & Aloqa',
+    categoryIcon: 'wifi',
+    date: '2026-09-10',
+    amount: 1800000,
+    type: 'expense',
+    account: 'Humo',
+  },
+
+  // ── August 2026 (31 days) ──
+  {
+    id: 'tx-aug-1',
+    name: 'Avgust oylik maoshi',
+    category: 'Daromad',
+    categoryIcon: 'wallet',
+    date: '2026-08-28',
+    amount: 6000000,
+    type: 'income',
+    account: 'Asosiy karta',
+  },
+  {
+    id: 'tx-aug-2',
+    name: 'Dam olish va sayohat xarajatlari',
+    category: 'Transport',
+    categoryIcon: 'car',
+    date: '2026-08-16',
+    amount: 5200000,
+    type: 'expense',
+    account: 'Uzcard',
+  },
+
+  // ── July 2026 (31 days) ──
+  {
+    id: 'tx-jul-1',
+    name: 'Iyul oylik maoshi',
+    category: 'Daromad',
+    categoryIcon: 'wallet',
+    date: '2026-07-28',
+    amount: 5500000,
+    type: 'income',
+    account: 'Asosiy karta',
+  },
+  {
+    id: 'tx-jul-2',
+    name: 'Iyul oyi xarajatlari',
+    category: 'Oziq-ovqat',
+    categoryIcon: 'cart',
+    date: '2026-07-15',
+    amount: 5100000,
+    type: 'expense',
+    account: 'Uzcard',
+  },
+
+  // ── June 2026 (30 days) ──
+  {
+    id: 'tx-jun-1',
+    name: 'Iyun oylik maoshi',
+    category: 'Daromad',
+    categoryIcon: 'wallet',
+    date: '2026-06-28',
+    amount: 5500000,
+    type: 'income',
+    account: 'Asosiy karta',
+  },
+  {
+    id: 'tx-jun-2',
+    name: 'Iyun oyi xarajatlari',
+    category: 'Oziq-ovqat',
+    categoryIcon: 'cart',
+    date: '2026-06-18',
+    amount: 4800000,
+    type: 'expense',
+    account: 'Uzcard',
+  },
+
+  // ── May 2026 (Financial Start Date: 2026-05-01, 31 days) ──
+  {
+    id: 'tx-may-1',
+    name: 'May oylik maoshi',
+    category: 'Daromad',
+    categoryIcon: 'wallet',
+    date: '2026-05-28',
+    amount: 5500000,
+    type: 'income',
+    account: 'Asosiy karta',
+  },
+  {
+    id: 'tx-may-2',
+    name: 'May oyi xarajatlari',
+    category: 'Oziq-ovqat',
+    categoryIcon: 'cart',
+    date: '2026-05-14',
+    amount: 4600000,
+    type: 'expense',
+    account: 'Uzcard',
   },
 ];
 
