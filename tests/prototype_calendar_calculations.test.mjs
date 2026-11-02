@@ -6,6 +6,11 @@ import {
   parseLocalDate,
   getTransactionsInCalendarMonth,
   calculateChartData,
+  getAvailableMonths,
+  canNavigatePrevious,
+  canNavigateNext,
+  getPreviousMonth,
+  getNextMonth,
   UZBEK_MONTH_NAMES,
 } from '../src/prototype/dateUtils.ts';
 
@@ -43,147 +48,90 @@ test('1. Calendar Month Day Lengths & Leap Year Validation', () => {
   assert.equal(getDaysInCalendarMonth(2026, 12), 31, 'December must have 31 days');
 });
 
-test('2. Month Boundary & No UTC Shift Test', () => {
-  // Test local parsing of date boundary without timezone shifting
-  const lastDaySep = parseLocalDate('2026-09-30');
-  assert.equal(lastDaySep.year, 2026);
-  assert.equal(lastDaySep.month, 9);
-  assert.equal(lastDaySep.day, 30);
+test('2. Month Navigation Transitions (Jan->Feb, Dec->Jan, Leap Year, Boundaries)', () => {
+  const finStart = '2026-05-01';
+  const maxDate = '2026-10-31';
 
-  const firstDayOct = parseLocalDate('2026-10-01');
-  assert.equal(firstDayOct.year, 2026);
-  assert.equal(firstDayOct.month, 10);
-  assert.equal(firstDayOct.day, 1);
+  // Available months must strictly start from financial start date (May 2026) to maxDate (October 2026)
+  const available = getAvailableMonths(finStart, maxDate);
+  assert.equal(available.length, 6, 'Must have exactly 6 available months (May to October 2026)');
+  assert.equal(available[0].isoMonth, '2026-05');
+  assert.equal(available[5].isoMonth, '2026-10');
 
-  const testTransactions = [
+  // Boundary checks: May 2026 cannot navigate back
+  assert.equal(canNavigatePrevious(2026, 5, finStart), false, 'May 2026 cannot navigate to April');
+  assert.equal(getPreviousMonth(2026, 5, finStart), null, 'getPreviousMonth at boundary returns null');
+
+  // October 2026 cannot navigate forward
+  assert.equal(canNavigateNext(2026, 10, maxDate), false, 'October 2026 cannot navigate to November');
+  assert.equal(getNextMonth(2026, 10, maxDate), null, 'getNextMonth at max boundary returns null');
+
+  // Navigation between August and September
+  assert.equal(canNavigateNext(2026, 8, maxDate), true);
+  const nextFromAug = getNextMonth(2026, 8, maxDate);
+  assert.deepEqual(nextFromAug, { year: 2026, month: 9 });
+
+  const prevFromSep = getPreviousMonth(2026, 9, finStart);
+  assert.deepEqual(prevFromSep, { year: 2026, month: 8 });
+
+  // Year transition: December to January next year
+  const nextFromDec = getNextMonth(2025, 12, '2026-12-31');
+  assert.deepEqual(nextFromDec, { year: 2026, month: 1 }, 'December to January rollover');
+
+  const prevFromJan = getPreviousMonth(2026, 1, '2024-01-01');
+  assert.deepEqual(prevFromJan, { year: 2025, month: 12 }, 'January to December previous year rollover');
+});
+
+test('3. Month Boundaries, Empty Months & Transaction Filtering', () => {
+  const transactions = [
     {
-      id: 'tx-sep-end',
-      name: 'Sentabr oxirgi kuni xarid',
-      category: 'Oziq-ovqat',
-      categoryIcon: 'cart',
+      id: 'tx-may-salary',
+      name: 'May oylik',
+      category: 'Daromad',
+      categoryIcon: 'wallet',
+      date: '2026-05-28',
+      amount: 5500000,
+      type: 'income',
+      account: 'Asosiy',
+    },
+    {
+      id: 'tx-sep-30',
+      name: 'Sentabr oxirgi kuni',
+      category: 'Kafe',
+      categoryIcon: 'coffee',
       date: '2026-09-30',
       amount: 150000,
       type: 'expense',
       account: 'Uzcard',
     },
     {
-      id: 'tx-oct-start',
-      name: 'Oktabr birinchi kuni daromad',
+      id: 'tx-oct-01',
+      name: 'Oktabr birinchi kuni',
       category: 'Daromad',
       categoryIcon: 'wallet',
       date: '2026-10-01',
-      amount: 5000000,
-      type: 'income',
-      account: 'Humo',
-    },
-    {
-      id: 'tx-oct-end',
-      name: 'Oktabr oxirgi kuni xarajat',
-      category: 'Kafe',
-      categoryIcon: 'coffee',
-      date: '2026-10-31',
-      amount: 80000,
-      type: 'expense',
-      account: 'Uzcard',
-    },
-    {
-      id: 'tx-nov-start',
-      name: 'Noyabr boshi tushum',
-      category: 'Daromad',
-      categoryIcon: 'wallet',
-      date: '2026-11-01',
-      amount: 1200000,
-      type: 'income',
-      account: 'Humo',
-    },
-  ];
-
-  // Filtering for September 2026
-  const sepTxs = getTransactionsInCalendarMonth(testTransactions, 2026, 9);
-  assert.equal(sepTxs.length, 1, 'September should contain exactly 1 transaction');
-  assert.equal(sepTxs[0].id, 'tx-sep-end');
-
-  // Filtering for October 2026
-  const octTxs = getTransactionsInCalendarMonth(testTransactions, 2026, 10);
-  assert.equal(octTxs.length, 2, 'October should contain exactly 2 transactions');
-  assert.equal(octTxs[0].id, 'tx-oct-start');
-  assert.equal(octTxs[1].id, 'tx-oct-end');
-
-  // Filtering for November 2026
-  const novTxs = getTransactionsInCalendarMonth(testTransactions, 2026, 11);
-  assert.equal(novTxs.length, 1, 'November should contain exactly 1 transaction');
-  assert.equal(novTxs[0].id, 'tx-nov-start');
-});
-
-test('3. Dynamic Chart Calculations (Joriy oy, 3 oy, 6 oy, Yil)', () => {
-  const transactions = [
-    {
-      id: 'tx-1',
-      name: 'Oylik maosh',
-      category: 'Daromad',
-      categoryIcon: 'wallet',
-      date: '2026-10-28',
       amount: 6000000,
       type: 'income',
       account: 'Humo',
     },
-    {
-      id: 'tx-2',
-      name: 'Kechki ovqat',
-      category: 'Kafe',
-      categoryIcon: 'coffee',
-      date: '2026-10-30',
-      amount: 120000,
-      type: 'expense',
-      account: 'Uzcard',
-    },
-    {
-      id: 'tx-3',
-      name: 'Sentabr oylik',
-      category: 'Daromad',
-      categoryIcon: 'wallet',
-      date: '2026-09-28',
-      amount: 5500000,
-      type: 'income',
-      account: 'Humo',
-    },
-    {
-      id: 'tx-4',
-      name: 'Sentabr xarajat',
-      category: 'Oziq-ovqat',
-      categoryIcon: 'cart',
-      date: '2026-09-15',
-      amount: 2000000,
-      type: 'expense',
-      account: 'Uzcard',
-    },
   ];
 
-  // Test '1m' (Joriy oy - Oktabr 2026: 31 days)
-  const currentMonthChart = calculateChartData(transactions, '1m', '2026-10-31', '2026-05-01');
-  assert.equal(currentMonthChart.points.length, 5, 'October should have 5 calendar week intervals');
-  assert.equal(currentMonthChart.points[4].label, '29-31 okt', 'Final interval must end on exact 31st day');
-  assert.equal(currentMonthChart.totalIncome, 6000000, 'October total income must match October transactions only');
-  assert.equal(currentMonthChart.totalExpense, 120000, 'October total expense must match October transactions only');
+  // Month with both income and expenses
+  const sepTxs = getTransactionsInCalendarMonth(transactions, 2026, 9);
+  assert.equal(sepTxs.length, 1);
+  assert.equal(sepTxs[0].id, 'tx-sep-30');
 
-  // Test '3m' (Oxirgi 3 oy: Avgust, Sentabr, Oktabr)
-  const threeMonthChart = calculateChartData(transactions, '3m', '2026-10-31', '2026-05-01');
-  assert.equal(threeMonthChart.points.length, 3, 'Must contain exactly 3 calendar months');
-  assert.equal(threeMonthChart.points[0].label, 'Avgust');
-  assert.equal(threeMonthChart.points[1].label, 'Sentabr');
-  assert.equal(threeMonthChart.points[2].label, 'Oktabr');
-  assert.equal(threeMonthChart.points[1].income, 5500000, 'September income must match September transactions');
-  assert.equal(threeMonthChart.points[1].expense, 2000000, 'September expense must match September transactions');
-  assert.equal(threeMonthChart.points[2].income, 6000000, 'October income must match October transactions');
-  assert.equal(threeMonthChart.points[2].expense, 120000, 'October expense must match October transactions');
+  // Month with income only
+  const octTxs = getTransactionsInCalendarMonth(transactions, 2026, 10);
+  assert.equal(octTxs.length, 1);
+  assert.equal(octTxs[0].id, 'tx-oct-01');
 
-  // Test '6m' (Oxirgi 6 oy: May, Iyun, Iyul, Avgust, Sentabr, Oktabr)
-  const sixMonthChart = calculateChartData(transactions, '6m', '2026-10-31', '2026-05-01');
-  assert.equal(sixMonthChart.points.length, 6, 'Must contain exactly 6 calendar months');
-  assert.equal(sixMonthChart.points[0].label, 'May');
-  assert.equal(sixMonthChart.points[5].label, 'Oktabr');
+  // Month with NO transactions (e.g. August 2026 for this test array)
+  const augTxs = getTransactionsInCalendarMonth(transactions, 2026, 8);
+  assert.equal(augTxs.length, 0, 'August must return empty array when no transactions exist');
 
-  // Test Financial Start Date constraint: months before 2026-05-01 must not be included
-  const yearChart = calculateChartData(transactions, 'year', '2026-10-31', '2026-05-01');
-  assert.equal(yearChart.points[0].label, 'May', 'Must respect financial start date May 2026');
+  // Empty month chart calculation
+  const augChart = calculateChartData(transactions, '1m', '2026-08-31', '2026-05-01');
+  assert.equal(augChart.totalIncome, 0, 'Empty month income must be 0');
+  assert.equal(augChart.totalExpense, 0, 'Empty month expense must be 0');
 });

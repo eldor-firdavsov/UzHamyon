@@ -65,3 +65,47 @@ Endi har bir bo‘lim bir xil kulrang ramkali oq quti emas:
 - **Yangi Mobil (To‘liq sahifa):** [new_mobile_390px_full.png](file:///home/eldor_firdavsov/Desktop/SpendSense/docs/prototype-preview/new_mobile_390px_full.png)
 - **Oldingi Mobil (Taqqoslov uchun):** [before_mobile_390px.png](file:///home/eldor_firdavsov/Desktop/SpendSense/docs/prototype-preview/before_mobile_390px.png)
 - **Boshqa o‘lchamlar:** `mobile_320px.png`, `mobile_375px.png`, `mobile_430px.png`, `desktop_1024px.png`, `desktop_1280px.png`, `desktop_1920px.png`.
+
+---
+
+## 5. Foydalanuvchi Boshqaruvidagi Oy Tanlovi (Month Navigation)
+
+- **Mustaqil Tanlov va Sinxronizatsiya:**
+  - `MonthSelector` komponenti orqali joriy tanlangan oy (`Oktabr 2026`) va yil ko‘rsatiladi.
+  - Oldingi (`<`) va keyingi (`>`) oylar strelkalari bilan erkin harakatlanish imkoniyati yaratildi.
+  - Oyni bosganda qulay popup picker ochilib, barcha mavjud oylar ro‘yxatidan to‘g‘ridan-to‘g‘ri tanlash imkoniyati berildi.
+- **Taqvim Qoidalari va Chegaralar:**
+  - 28, 29 (kabisa yili), 30 va 31 kunlik oylar to‘liq haqiqiy kalendar bo‘yicha hisoblanadi.
+  - `financial_start_date` (`2026-05-01`) qat’iy hurmat qilinadi — foydalanuvchiga may 2026 dan oldingi oylar taklif etilmaydi va `<` strelkasi chegarada nofaol (`disabled`) bo‘ladi.
+  - Kelajakdagi amallarsiz oylar (noyabr 2026 va undan keyingi) bloklanadi va taklif etilmaydi.
+  - Bo‘sh oy tanlanganda ma’lumotlar sun’iy o‘ylab topilmaydi, o‘rniga toza "Bu oyda tranzaksiyalar mavjud emas" holati ko‘rsatiladi.
+- **Sinxronizatsiya:**
+  - Oy o‘zgarganda grafik (`FinancialChartBlock`), oylik kirim/chiqim (`MonthlyCashFlowBlock`), umumiy hisob-kitoblar va tranzaksiyalar ro‘yxati (`RecentTransactionsBlock`) bir vaqtda yangilanadi.
+
+---
+
+## 6. Tranzaksiyalar Qatorlarini Ixchamlashtirish (Compact Transactions)
+
+- **Desktop (54px qator balandligi):**
+  - Ortiqcha vertikal bo‘shliqlar olib tashlandi, har bir tranzaksiya alohida katta karta ichiga solinmasdan, toza va ingichka chegara chiziqlari bilan ajratildi.
+  - Toifa piktogrammasi: 34px, yumshoq yashil/qizil fonli.
+  - Tranzaksiya nomi: 14.5px, `font-medium`, toifa va sana yonma-yon joylashtirildi.
+  - Summalar: Daromad qat’iy yashil (`#26834A`, `+`), Xarajat qat’iy qizil (`#D64D4D`, `−`), o‘ng tomonga tekislangan va tabular raqamlar bilan.
+- **Mobil (60px qator balandligi):**
+  - Mobil ekranda vertikal balandlik 60px gacha ixchamlashdi, bir vaqtning o‘zida ekranda ko‘proq amallar sig‘adi.
+  - Ixcham ikonka (34px), aniq o‘qiladigan sarlavha va farqlanuvchi ranglar.
+
+---
+
+## 7. Bosh Qismni (Header) Tozalash va Tartibga Solish
+
+- **Faqat Muhim Elementlar Qoldirildi:**
+  1. `UzHamyon` logotipi va brendi.
+  2. Asosiy 4 ta navigatsiya bo‘limi: Dashboard, Faoliyat, Tahlil, AI.
+  3. Bitta asosiy amallar tugmasi: `+ Yangi amal`.
+  4. Foydalanuvchi profil menyusi va avatari.
+- **Olib Tashlangan Ortiqcha Elementlar:**
+  - Hech qanday vazifani bajarmaydigan bildirishnomalar qo‘ng‘iroqchasi (`Bell`) ikonkasi olib tashlandi.
+  - Bosh sahifa sarlavhasidagi takroriy (dublikat) "+ Amal qo‘shish" tugmasi olib tashlandi — barcha yangi amal qo‘shishlar bosh qismdagi yagona qulay tugmaga jamlandi.
+  - Mobil bosh qismida foydalanuvchi salomlashuvi va avatar saqlanib, barcha keraksiz bezaklar tozalab chiqildi.
+

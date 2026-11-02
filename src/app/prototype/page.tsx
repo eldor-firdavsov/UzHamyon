@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { DesktopHeader } from '@/prototype/components/DesktopHeader';
 import { PrototypeHeader } from '@/prototype/components/PrototypeHeader';
+import { MonthSelector } from '@/prototype/components/MonthSelector';
 import { FinancialOverviewBlock } from '@/prototype/components/FinancialOverviewBlock';
 import { FinancialChartBlock } from '@/prototype/components/FinancialChartBlock';
 import { MonthlyCashFlowBlock } from '@/prototype/components/MonthlyCashFlowBlock';
@@ -20,8 +21,13 @@ import {
   type DemoTransaction, 
   type DemoSavingsGoal 
 } from '@/prototype/demoData';
-import { getTransactionsInCalendarMonth, parseLocalDate } from '@/prototype/dateUtils';
-import { CheckCircle2, Calendar, Plus } from 'lucide-react';
+import { 
+  getTransactionsInCalendarMonth, 
+  getDaysInCalendarMonth,
+  parseLocalDate,
+  UZBEK_MONTH_NAMES
+} from '@/prototype/dateUtils';
+import { CheckCircle2 } from 'lucide-react';
 
 export default function PrototypeDashboardPage() {
   const [activeTab, setActiveTab] = useState<PrototypeTab>('dashboard');
@@ -31,8 +37,18 @@ export default function PrototypeDashboardPage() {
   const [selectedGoal, setSelectedGoal] = useState<DemoSavingsGoal | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Reference calendar date: 2026-10-31
-  const refDate = parseLocalDate(DEMO_CONFIG.referenceDate);
+  // ── User-Controlled Month Selection State (Default: October 2026) ──
+  const [selectedYear, setSelectedYear] = useState<number>(2026);
+  const [selectedMonth, setSelectedMonth] = useState<number>(10);
+
+  const selectedMonthLabel = `${UZBEK_MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`;
+  const daysInSelectedMonth = getDaysInCalendarMonth(selectedYear, selectedMonth);
+  const selectedMonthReferenceDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(daysInSelectedMonth).padStart(2, '0')}`;
+
+  // Filter transactions strictly belonging to the currently selected calendar month
+  const selectedMonthTransactions = useMemo(() => {
+    return getTransactionsInCalendarMonth(transactions, selectedYear, selectedMonth);
+  }, [transactions, selectedYear, selectedMonth]);
 
   // Exact calendar-accurate metrics dynamically calculated from transactions
   const { totalLifetimeIncome, allTimeExpenses, currentMonthIncome, currentMonthExpenses } = useMemo(() => {
@@ -45,12 +61,12 @@ export default function PrototypeDashboardPage() {
       const p = parseLocalDate(tx.date);
       if (tx.type === 'income') {
         lifetimeIncome += tx.amount;
-        if (p.year === refDate.year && p.month === refDate.month) {
+        if (p.year === selectedYear && p.month === selectedMonth) {
           monthIncome += tx.amount;
         }
       } else {
         lifetimeExpense += tx.amount;
-        if (p.year === refDate.year && p.month === refDate.month) {
+        if (p.year === selectedYear && p.month === selectedMonth) {
           monthExpense += tx.amount;
         }
       }
@@ -62,7 +78,7 @@ export default function PrototypeDashboardPage() {
       currentMonthIncome: monthIncome,
       currentMonthExpenses: monthExpense,
     };
-  }, [transactions, refDate.year, refDate.month]);
+  }, [transactions, selectedYear, selectedMonth]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -93,21 +109,17 @@ export default function PrototypeDashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#F7F8F5] text-[#171B16] flex flex-col antialiased">
-      {/* ── Desktop Header (Visible on lg: >= 1024px, completely preserved) ── */}
+      {/* ── Desktop Header (Cleaned up: Essential navigation, ONE Add action, Profile) ── */}
       <DesktopHeader
         activeTab={activeTab}
         onTabChange={(tab) => setActiveTab(tab)}
         onOpenAddModal={() => setIsAddModalOpen(true)}
-        onNotificationClick={() => showToast('Hozircha yangi xabarnomalar yo‘q')}
         userName={DEMO_CONFIG.userName}
       />
 
-      {/* ── Mobile Top Header (Visible on < lg, completely preserved) ── */}
+      {/* ── Mobile Top Header (Cleaned up: greeting, avatar, no dead buttons) ── */}
       <div className="lg:hidden">
-        <PrototypeHeader 
-          userName="Aziz" 
-          onNotificationClick={() => showToast('Hozircha yangi xabarnomalar yo‘q')} 
-        />
+        <PrototypeHeader userName="Aziz" />
       </div>
 
       {/* ── Main Content Area ── */}
@@ -116,18 +128,38 @@ export default function PrototypeDashboardPage() {
           <div>
             {/* ── MOBILE / TABLET VIEW (< 1024px): Single-Column Streamlined Stack ── */}
             <div className="lg:hidden max-w-lg mx-auto px-4 py-4 space-y-4 pb-28">
+              {/* Mobile Month Navigator Control */}
+              <div className="flex items-center justify-between pb-1">
+                <div>
+                  <h1 className="text-xl sm:text-2xl font-bold text-[#171B16] tracking-tight">
+                    Moliyaviy holat
+                  </h1>
+                </div>
+
+                <MonthSelector
+                  selectedYear={selectedYear}
+                  selectedMonth={selectedMonth}
+                  onSelectMonth={(year, month) => {
+                    setSelectedYear(year);
+                    setSelectedMonth(month);
+                  }}
+                  financialStartDate={DEMO_CONFIG.financialStartDate}
+                  maxDate={DEMO_CONFIG.referenceDate}
+                />
+              </div>
+
               {/* BLOCK 1: Financial Overview (Hero Card + Paired Metric Cards) */}
               <FinancialOverviewBlock
                 totalLifetimeIncome={totalLifetimeIncome}
                 periodIncome={currentMonthIncome}
                 periodExpenses={currentMonthExpenses}
-                activeMonthLabel={DEMO_CONFIG.activeMonthLabel}
+                activeMonthLabel={selectedMonthLabel}
               />
 
               {/* BLOCK 2: Financial Chart (Income Green #26834A, Expense Red #D64D4D) */}
               <FinancialChartBlock
                 transactions={transactions}
-                referenceDate={DEMO_CONFIG.referenceDate}
+                referenceDate={selectedMonthReferenceDate}
                 financialStartDate={DEMO_CONFIG.financialStartDate}
               />
 
@@ -137,14 +169,15 @@ export default function PrototypeDashboardPage() {
                 monthlyExpenses={currentMonthExpenses}
                 allTimeIncome={totalLifetimeIncome}
                 allTimeExpenses={allTimeExpenses}
-                activeMonthLabel={DEMO_CONFIG.activeMonthLabel}
+                activeMonthLabel={selectedMonthLabel}
               />
 
-              {/* BLOCK 4: Recent Transactions (5 Latest with Strict Semantics) */}
+              {/* BLOCK 4: Compact Recent Transactions for Selected Month */}
               <RecentTransactionsBlock
-                transactions={transactions.slice(0, 5)}
+                transactions={selectedMonthTransactions.slice(0, 6)}
                 onViewAll={() => setActiveTab('faoliyat')}
                 onSelectTransaction={(tx) => showToast(`${tx.name}: ${tx.amount.toLocaleString('uz-UZ')} so‘m`)}
+                selectedMonthLabel={selectedMonthLabel}
               />
 
               {/* BLOCK 5: AI Recommendation */}
@@ -160,7 +193,7 @@ export default function PrototypeDashboardPage() {
 
             {/* ── DESKTOP VIEW (>= 1024px): Balanced Spacious Multi-Column Grid ── */}
             <div className="hidden lg:block max-w-7xl mx-auto px-6 xl:px-8 py-8 space-y-6">
-              {/* Desktop Header Row: Title & Controls */}
+              {/* Desktop Header Row: Title & Month Navigation (No duplicate buttons) */}
               <div className="flex items-center justify-between pb-1">
                 <div>
                   <h1 className="text-2xl sm:text-3xl lg:text-[32px] font-bold text-[#171B16] tracking-tight">
@@ -171,20 +204,18 @@ export default function PrototypeDashboardPage() {
                   </p>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-[#E8EBE5] text-sm font-semibold text-[#171B16] shadow-xs">
-                    <Calendar className="w-4 h-4 text-[#26834A]" />
-                    <span>{DEMO_CONFIG.activeMonthLabel}</span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsAddModalOpen(true)}
-                    className="min-h-[44px] flex items-center gap-2 px-4 py-2 rounded-xl bg-[#163300] hover:bg-[#234A05] text-white text-sm font-bold transition-all shadow-xs cursor-pointer active:scale-95"
-                  >
-                    <Plus className="w-4 h-4 text-[#9FE870] stroke-[2.5]" />
-                    <span>Amal qo‘shish</span>
-                  </button>
+                {/* User-Controlled Month Navigation with Arrows & Picker */}
+                <div>
+                  <MonthSelector
+                    selectedYear={selectedYear}
+                    selectedMonth={selectedMonth}
+                    onSelectMonth={(year, month) => {
+                      setSelectedYear(year);
+                      setSelectedMonth(month);
+                    }}
+                    financialStartDate={DEMO_CONFIG.financialStartDate}
+                    maxDate={DEMO_CONFIG.referenceDate}
+                  />
                 </div>
               </div>
 
@@ -193,37 +224,38 @@ export default function PrototypeDashboardPage() {
                 totalLifetimeIncome={totalLifetimeIncome}
                 periodIncome={currentMonthIncome}
                 periodExpenses={currentMonthExpenses}
-                activeMonthLabel={DEMO_CONFIG.activeMonthLabel}
+                activeMonthLabel={selectedMonthLabel}
               />
 
               {/* Two-Column Grid: Dominant Chart on Left, Supporting Context on Right */}
               <div className="grid grid-cols-12 gap-6 items-start">
                 {/* Left / Primary Column (Chart + Cash Flow Breakdown) */}
                 <div className="col-span-7 xl:col-span-8 space-y-6">
-                  {/* BLOCK 2: Financial Chart (Dominant Visual Element with Green/Red) */}
+                  {/* BLOCK 2: Financial Chart (Income Green #26834A, Expense Red #D64D4D) */}
                   <FinancialChartBlock
                     transactions={transactions}
-                    referenceDate={DEMO_CONFIG.referenceDate}
+                    referenceDate={selectedMonthReferenceDate}
                     financialStartDate={DEMO_CONFIG.financialStartDate}
                   />
 
-                  {/* BLOCK 3: Monthly Cash Flow (Supporting Breakdown) */}
+                  {/* BLOCK 3: Monthly Cash Flow */}
                   <MonthlyCashFlowBlock
                     monthlyIncome={currentMonthIncome}
                     monthlyExpenses={currentMonthExpenses}
                     allTimeIncome={totalLifetimeIncome}
                     allTimeExpenses={allTimeExpenses}
-                    activeMonthLabel={DEMO_CONFIG.activeMonthLabel}
+                    activeMonthLabel={selectedMonthLabel}
                   />
                 </div>
 
                 {/* Right / Supporting Column (Transactions + AI + Goals) */}
                 <div className="col-span-5 xl:col-span-4 space-y-6">
-                  {/* BLOCK 4: Recent Transactions */}
+                  {/* BLOCK 4: Compact Recent Transactions for Selected Month */}
                   <RecentTransactionsBlock
-                    transactions={transactions.slice(0, 5)}
+                    transactions={selectedMonthTransactions.slice(0, 6)}
                     onViewAll={() => setActiveTab('faoliyat')}
                     onSelectTransaction={(tx) => showToast(`${tx.name}: ${tx.amount.toLocaleString('uz-UZ')} so‘m`)}
+                    selectedMonthLabel={selectedMonthLabel}
                   />
 
                   {/* BLOCK 5: AI Recommendation */}

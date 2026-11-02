@@ -282,9 +282,9 @@ export function calculateChartData<T extends BaseTransaction>(
 
   const periodLabel =
     period === '3m'
-      ? 'Oxirgi 3 oy'
+      ? '3 oylik taqqoslov'
       : period === '6m'
-      ? 'Oxirgi 6 oy'
+      ? '6 oylik hisobot'
       : `${ref.year}-yil hisoboti`;
 
   return {
@@ -294,3 +294,125 @@ export function calculateChartData<T extends BaseTransaction>(
     totalExpense,
   };
 }
+
+/**
+ * Returns list of selectable calendar months between financialStartDate and maxDate.
+ */
+export function getAvailableMonths(
+  financialStartDateStr: string = '2026-05-01',
+  maxDateStr: string = '2026-10-31'
+): { year: number; month: number; label: string; shortLabel: string; isoMonth: string }[] {
+  const start = parseLocalDate(financialStartDateStr);
+  const end = parseLocalDate(maxDateStr);
+
+  const months: { year: number; month: number; label: string; shortLabel: string; isoMonth: string }[] = [];
+
+  let currentYear = start.year;
+  let currentMonth = start.month;
+
+  while (
+    currentYear < end.year ||
+    (currentYear === end.year && currentMonth <= end.month)
+  ) {
+    months.push({
+      year: currentYear,
+      month: currentMonth,
+      label: `${UZBEK_MONTH_NAMES[currentMonth - 1]} ${currentYear}`,
+      shortLabel: `${UZBEK_MONTH_SHORT[currentMonth - 1]} ${currentYear}`,
+      isoMonth: `${currentYear}-${String(currentMonth).padStart(2, '0')}`,
+    });
+
+    currentMonth++;
+    if (currentMonth > 12) {
+      currentMonth = 1;
+      currentYear++;
+    }
+  }
+
+  return months;
+}
+
+/**
+ * Checks whether user can navigate to previous calendar month without violating financialStartDate.
+ */
+export function canNavigatePrevious(
+  year: number,
+  month: number,
+  financialStartDateStr: string = '2026-05-01'
+): boolean {
+  const start = parseLocalDate(financialStartDateStr);
+  let prevMonth = month - 1;
+  let prevYear = year;
+  if (prevMonth < 1) {
+    prevMonth = 12;
+    prevYear -= 1;
+  }
+
+  return (
+    prevYear > start.year ||
+    (prevYear === start.year && prevMonth >= start.month)
+  );
+}
+
+/**
+ * Checks whether user can navigate to next calendar month without violating maxDate.
+ */
+export function canNavigateNext(
+  year: number,
+  month: number,
+  maxDateStr: string = '2026-10-31'
+): boolean {
+  const max = parseLocalDate(maxDateStr);
+  let nextMonth = month + 1;
+  let nextYear = year;
+  if (nextMonth > 12) {
+    nextMonth = 1;
+    nextYear += 1;
+  }
+
+  return (
+    nextYear < max.year ||
+    (nextYear === max.year && nextMonth <= max.month)
+  );
+}
+
+/**
+ * Calculates previous calendar month within financial boundaries.
+ */
+export function getPreviousMonth(
+  year: number,
+  month: number,
+  financialStartDateStr: string = '2026-05-01'
+): { year: number; month: number } | null {
+  if (!canNavigatePrevious(year, month, financialStartDateStr)) {
+    return null;
+  }
+  let prevMonth = month - 1;
+  let prevYear = year;
+  if (prevMonth < 1) {
+    prevMonth = 12;
+    prevYear -= 1;
+  }
+  return { year: prevYear, month: prevMonth };
+}
+
+/**
+ * Calculates next calendar month within financial boundaries.
+ */
+export function getNextMonth(
+  year: number,
+  month: number,
+  maxDateStr: string = '2026-10-31'
+): { year: number; month: number } | null {
+  if (!canNavigateNext(year, month, maxDateStr)) {
+    return null;
+  }
+  let nextMonth = month + 1;
+  let nextYear = year;
+  if (nextMonth > 12) {
+    nextMonth = 1;
+    nextYear += 1;
+  }
+  return { year: nextYear, month: nextMonth };
+}
+
