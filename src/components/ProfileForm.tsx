@@ -3,7 +3,7 @@
 import { useActionState } from 'react';
 import { updateProfileAction } from '@/app/auth/actions';
 import { type AuthActionResult } from '@/app/auth/schemas';
-import { User, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { User, CheckCircle2, AlertCircle, Loader2, ShieldCheck, Lock } from 'lucide-react';
 
 interface ProfileFormProps {
   initialFirstName: string;
@@ -22,88 +22,123 @@ export default function ProfileForm({
   );
 
   return (
-    <form id="profile-edit-form" action={formAction} className="space-y-4">
+    <form id="profile-edit-form" action={formAction} className="space-y-5">
       {state?.success && (
         <div
           id="profile-success-banner"
-          className="flex items-center gap-2.5 rounded-xl border border-[#176B45]/20 bg-[#DDF3E5] p-3.5 text-sm text-[#176B45]"
+          className="flex items-center gap-3 rounded-2xl border border-[#9FE870]/60 bg-[#F0F9E9] p-4 text-sm text-[#163300] shadow-xs animate-in fade-in duration-200"
         >
-          <CheckCircle2 className="h-4 w-4 shrink-0 text-[#176B45]" />
-          <span className="font-semibold">Profil muvaffaqiyatli yangilandi!</span>
+          <div className="h-7 w-7 rounded-full bg-[#163300] text-[#9FE870] flex items-center justify-center shrink-0">
+            <CheckCircle2 className="h-4 w-4" />
+          </div>
+          <div>
+            <div className="font-bold text-[#163300]">Muvaffaqiyatli saqlandi!</div>
+            <div className="text-xs text-[#2b520a]">Profil ma’lumotlaringiz yangilandi.</div>
+          </div>
         </div>
       )}
 
       {state?.error && (
         <div
           id="profile-error-banner"
-          className="flex items-center gap-2.5 rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm text-[#C74747]"
+          className="flex items-center gap-3 rounded-2xl border border-[#D64D4D]/30 bg-[#FDF1F1] p-4 text-sm text-[#D64D4D] shadow-xs animate-in fade-in duration-200"
         >
-          <AlertCircle className="h-4 w-4 shrink-0 text-[#C74747]" />
-          <span className="font-semibold">{state.error}</span>
+          <div className="h-7 w-7 rounded-full bg-[#D64D4D] text-white flex items-center justify-center shrink-0">
+            <AlertCircle className="h-4 w-4" />
+          </div>
+          <div>
+            <div className="font-bold text-[#D64D4D]">Xatolik yuz berdi</div>
+            <div className="text-xs text-[#9c2424]">{state.error}</div>
+          </div>
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
         <div>
           <label
             htmlFor="profile-first-name-input"
-            className="block text-sm font-medium text-[#47544C] mb-1.5"
+            className="block text-xs font-bold uppercase tracking-wider text-[#697168] mb-2"
           >
             Ism
           </label>
           <div className="relative">
-            <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5A675F]" />
+            <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#959E94]" />
             <input
               id="profile-first-name-input"
               name="firstName"
               type="text"
               required
               defaultValue={initialFirstName}
-              className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white py-2.5 pl-10 pr-3.5 text-sm text-[#17211B] placeholder-[#5A675F] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all"
+              placeholder="Ismingizni kiriting"
+              className="w-full min-h-[48px] rounded-2xl border border-[#E8EBE5] bg-white py-3 pl-10 pr-4 text-sm font-medium text-[#171B16] placeholder-[#959E94] focus:border-[#163300] focus:outline-none focus:ring-2 focus:ring-[#9FE870]/40 transition-all shadow-2xs"
             />
           </div>
           {state?.fieldErrors?.firstName && (
-            <p className="mt-1.5 text-sm font-medium text-[#C74747]">{state.fieldErrors.firstName[0]}</p>
+            <p className="mt-1.5 text-xs font-semibold text-[#D64D4D] flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              <span>{state.fieldErrors.firstName[0]}</span>
+            </p>
           )}
         </div>
 
         <div>
           <label
             htmlFor="profile-last-name-input"
-            className="block text-sm font-medium text-[#47544C] mb-1.5"
+            className="block text-xs font-bold uppercase tracking-wider text-[#697168] mb-2"
           >
             Familiya
           </label>
           <div className="relative">
-            <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5A675F]" />
+            <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#959E94]" />
             <input
               id="profile-last-name-input"
               name="lastName"
               type="text"
               required
               defaultValue={initialLastName}
-              className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white py-2.5 pl-10 pr-3.5 text-sm text-[#17211B] placeholder-[#5A675F] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all"
+              placeholder="Familiyangizni kiriting"
+              className="w-full min-h-[48px] rounded-2xl border border-[#E8EBE5] bg-white py-3 pl-10 pr-4 text-sm font-medium text-[#171B16] placeholder-[#959E94] focus:border-[#163300] focus:outline-none focus:ring-2 focus:ring-[#9FE870]/40 transition-all shadow-2xs"
             />
           </div>
           {state?.fieldErrors?.lastName && (
-            <p className="mt-1.5 text-sm font-medium text-[#C74747]">{state.fieldErrors.lastName[0]}</p>
+            <p className="mt-1.5 text-xs font-semibold text-[#D64D4D] flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              <span>{state.fieldErrors.lastName[0]}</span>
+            </p>
           )}
         </div>
 
+        {/* Email Address - Responsive, Never-Truncating with Verified Status */}
         <div className="sm:col-span-2">
-          <label
-            htmlFor="profile-email-display"
-            className="block text-sm font-medium text-[#47544C] mb-1.5"
-          >
-            Elektron pochta
-          </label>
-          <input
-            id="profile-email-display"
-            type="email"
-            disabled
-            defaultValue={email}
-            className="w-full min-h-[44px] rounded-xl border border-[#D5DED7] bg-[#F7F9F7] py-2 px-3.5 text-sm text-[#5A675F] cursor-not-allowed"
-          />
+          <div className="flex items-center justify-between mb-2">
+            <label
+              htmlFor="profile-email-display"
+              className="block text-xs font-bold uppercase tracking-wider text-[#697168]"
+            >
+              Elektron pochta
+            </label>
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#26834A] bg-[#EDF7F0] border border-[#26834A]/20 px-2 py-0.5 rounded-full">
+              <ShieldCheck className="h-3 w-3" />
+              <span>Tasdiqlangan</span>
+            </span>
+          </div>
+
+          <div className="relative">
+            <div className="w-full min-h-[48px] rounded-2xl border border-[#E8EBE5] bg-[#F7F8F5] py-3 pl-10 pr-10 text-sm font-medium text-[#171B16] break-all select-all flex items-center">
+              <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#959E94]" />
+              <span className="truncate sm:overflow-visible">{email}</span>
+            </div>
+            {/* Hidden field for form action compatibility if needed */}
+            <input
+              id="profile-email-display"
+              type="hidden"
+              name="email"
+              value={email}
+            />
+          </div>
+          <p className="mt-1.5 text-[11px] text-[#697168]">
+            Xavfsizlik yuzasidan login pochtasi qat’iy bog‘langan. O‘zgartirish uchun qo‘llab-quvvatlashga murojaat qiling.
+          </p>
         </div>
       </div>
 
@@ -112,15 +147,18 @@ export default function ProfileForm({
           id="profile-save-button"
           type="submit"
           disabled={isPending}
-          className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 rounded-xl bg-[#176B45] px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-[#125536] disabled:cursor-not-allowed disabled:opacity-50 shadow-fintech-card active:scale-98"
+          className="w-full sm:w-auto min-h-[48px] inline-flex items-center justify-center gap-2.5 rounded-2xl bg-[#163300] hover:bg-[#204400] px-7 py-3 text-sm font-bold text-[#9FE870] transition-all shadow-xs active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
         >
           {isPending ? (
             <>
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin text-[#9FE870]" />
               <span>Saqlanmoqda...</span>
             </>
           ) : (
-            <span>Profilni saqlash</span>
+            <>
+              <CheckCircle2 className="h-4 w-4 text-[#9FE870]" />
+              <span>Profilni saqlash</span>
+            </>
           )}
         </button>
       </div>

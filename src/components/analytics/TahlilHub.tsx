@@ -59,13 +59,13 @@ export default function TahlilHub({ initialTab = 'analytics' }: TahlilHubProps) 
       <span className="sr-only">bg-[#F1F4F2] bg-white text-[#222222]</span>
 
       {/* Unified Fintech Segmented Switch Bar */}
-      <div className="rounded-2xl border border-[#E5E7EB] bg-white p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="rounded-[24px] border border-[#E8EBE5] bg-white p-4 sm:p-5 shadow-[0_2px_8px_rgba(23,27,22,0.04)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-semibold text-[#18181B] tracking-tight flex items-center gap-2.5">
-            <BarChart3 className="h-6 w-6 text-[#059669]" />
+          <h1 className="text-xl sm:text-2xl font-bold text-[#171B16] tracking-tight flex items-center gap-2.5">
+            <BarChart3 className="h-6 w-6 text-[#26834A]" />
             <span>Tahlil va jamg‘armalar</span>
           </h1>
-          <p className="text-xs sm:text-sm text-[#71717A] mt-0.5">
+          <p className="text-xs sm:text-sm text-[#697168] mt-0.5">
             Moliyaviy tahlil, xarajatlar taqsimoti va jamg‘arma maqsadlari
           </p>
         </div>
@@ -74,7 +74,7 @@ export default function TahlilHub({ initialTab = 'analytics' }: TahlilHubProps) 
         <div
           role="tablist"
           aria-label="Tahlil bo‘limlari"
-          className="inline-flex items-center rounded-xl bg-[#F5F6F8] p-1 border border-[#E5E7EB] text-xs sm:text-sm self-start sm:self-auto shrink-0 max-w-full"
+          className="inline-flex items-center rounded-xl bg-[#F7F8F5] p-1 border border-[#E8EBE5] text-xs sm:text-sm self-start sm:self-auto shrink-0 max-w-full"
         >
           <button
             type="button"
@@ -85,13 +85,13 @@ export default function TahlilHub({ initialTab = 'analytics' }: TahlilHubProps) 
             onMouseEnter={() => warmCache('/api/timeline/available-months')}
             onFocus={() => warmCache('/api/timeline/available-months')}
             onTouchStart={() => warmCache('/api/timeline/available-months')}
-            className={`px-3 sm:px-4 py-2 min-h-[40px] rounded-lg transition-all font-semibold flex items-center justify-center gap-1.5 sm:gap-2 text-center text-xs sm:text-sm ${
+            className={`px-3.5 sm:px-4 py-2 min-h-[40px] rounded-lg transition-all font-bold flex items-center justify-center gap-1.5 sm:gap-2 text-center text-xs sm:text-sm cursor-pointer ${
               activeTab === 'analytics'
-                ? 'bg-[#18181B] text-white shadow-xs'
-                : 'text-[#52525B] hover:text-[#18181B] hover:bg-black/5'
+                ? 'bg-[#163300] text-[#9FE870] shadow-xs'
+                : 'text-[#697168] hover:text-[#171B16] hover:bg-white/80'
             }`}
           >
-            <BarChart3 className="h-4 w-4 shrink-0 text-[#059669]" />
+            <BarChart3 className={`h-4 w-4 shrink-0 ${activeTab === 'analytics' ? 'text-[#9FE870]' : 'text-[#26834A]'}`} />
             <span>Moliyaviy tahlil</span>
           </button>
 
@@ -104,13 +104,13 @@ export default function TahlilHub({ initialTab = 'analytics' }: TahlilHubProps) 
             onMouseEnter={() => warmCache('/api/goals?currency=UZS')}
             onFocus={() => warmCache('/api/goals?currency=UZS')}
             onTouchStart={() => warmCache('/api/goals?currency=UZS')}
-            className={`px-3 sm:px-4 py-2 min-h-[40px] rounded-lg transition-all font-semibold flex items-center justify-center gap-1.5 sm:gap-2 text-center text-xs sm:text-sm ${
+            className={`px-3.5 sm:px-4 py-2 min-h-[40px] rounded-lg transition-all font-bold flex items-center justify-center gap-1.5 sm:gap-2 text-center text-xs sm:text-sm cursor-pointer ${
               activeTab === 'goals'
-                ? 'bg-[#18181B] text-white shadow-xs'
-                : 'text-[#52525B] hover:text-[#18181B] hover:bg-black/5'
+                ? 'bg-[#163300] text-[#9FE870] shadow-xs'
+                : 'text-[#697168] hover:text-[#171B16] hover:bg-white/80'
             }`}
           >
-            <Target className="h-4 w-4 shrink-0 text-[#059669]" />
+            <Target className={`h-4 w-4 shrink-0 ${activeTab === 'goals' ? 'text-[#9FE870]' : 'text-[#26834A]'}`} />
             <span>Jamg‘arma maqsadlari</span>
           </button>
 
@@ -124,7 +124,7 @@ export default function TahlilHub({ initialTab = 'analytics' }: TahlilHubProps) 
             onMouseEnter={() => warmCache('/api/budgets?currency=UZS')}
             onFocus={() => warmCache('/api/budgets?currency=UZS')}
             onTouchStart={() => warmCache('/api/budgets?currency=UZS')}
-            className={activeTab === 'budgets' ? 'px-3 sm:px-4 py-2 min-h-[40px] rounded-lg transition-all font-semibold flex items-center justify-center gap-1.5 sm:gap-2 text-center text-xs sm:text-sm bg-[#18181B] text-white shadow-xs' : 'sr-only'}
+            className={activeTab === 'budgets' ? 'px-3.5 sm:px-4 py-2 min-h-[40px] rounded-lg transition-all font-bold flex items-center justify-center gap-1.5 sm:gap-2 text-center text-xs sm:text-sm bg-[#163300] text-[#9FE870] shadow-xs' : 'sr-only'}
           >
             <Wallet className="h-4 w-4 shrink-0" />
             <span>Budjetlar</span>

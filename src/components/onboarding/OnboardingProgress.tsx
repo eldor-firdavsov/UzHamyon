@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import SpendSenseLogo from '@/components/brand/SpendSenseLogo';
+import UzHamyonLogo from '@/components/brand/UzHamyonLogo';
 
 interface OnboardingProgressProps {
   currentStep: number; // 0 to 6
@@ -20,7 +20,7 @@ export default function OnboardingProgress({
       {/* Brand Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <SpendSenseLogo variant="icon" size="md" />
+          <UzHamyonLogo variant="icon" size="md" />
           <div className="flex flex-col">
             <span className="text-base font-semibold tracking-tight text-[#17211B]">
               UzHamyon

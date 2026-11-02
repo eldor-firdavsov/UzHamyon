@@ -18,6 +18,7 @@ import CategoryModal from './CategoryModal';
 import DeleteCategoryModal from './DeleteCategoryModal';
 import { PageHeader, BentoGrid, BentoMetricCard } from '@/components/bento';
 import { getCategoryDisplayName } from '@/lib/categories/schemas';
+import CategoryIcon from '@/components/categories/CategoryIcon';
 
 export default function CategoriesManager() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -328,16 +329,7 @@ export default function CategoriesManager() {
                     className="flex items-center justify-between p-4 rounded-xl border border-[#D5DED7] bg-white hover:border-[#176B45]/40 transition-all shadow-xs"
                   >
                     <div className="flex items-center gap-3.5 min-w-0">
-                      <div
-                        className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 border"
-                        style={{
-                          backgroundColor: cat.color ? `${cat.color}15` : '#176B4515',
-                          borderColor: cat.color ? `${cat.color}30` : '#176B4530',
-                          color: cat.color || '#176B45',
-                        }}
-                      >
-                        <Tag className="h-4.5 w-4.5" />
-                      </div>
+                      <CategoryIcon name={cat.name} type={cat.type === 'income' ? 'in' : 'ex'} size="sm" />
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-sm sm:text-base font-semibold text-[#17211B] truncate">{cat.name}</span>
@@ -414,16 +406,7 @@ export default function CategoriesManager() {
                   className="flex items-center justify-between p-3 rounded-xl border border-[#D5DED7] bg-[#F7F9F7]"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div
-                      className="h-7 w-7 rounded-lg flex items-center justify-center shrink-0 border text-xs"
-                      style={{
-                        backgroundColor: cat.color ? `${cat.color}15` : '#176B4515',
-                        borderColor: cat.color ? `${cat.color}20` : '#176B4520',
-                        color: cat.color || '#176B45',
-                      }}
-                    >
-                      <Tag className="h-3.5 w-3.5" />
-                    </div>
+                    <CategoryIcon name={getCategoryDisplayName(cat.name)} type={cat.type === 'income' ? 'in' : 'ex'} size="xs" />
                     <div className="min-w-0">
                       <span className="text-xs sm:text-sm font-medium text-[#17211B] truncate block">{getCategoryDisplayName(cat.name)}</span>
                     </div>

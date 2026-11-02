@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * SpendSense AI — Client-side In-Memory Cache and SWR Engine
+ * UzHamyon AI — Client-side In-Memory Cache and SWR Engine
  * 
  * Provides:
  * 1. Instant (0ms) data retrieval on page revisit or tab navigation.
@@ -167,6 +167,7 @@ async function executeNetworkFetch<T>(
     });
 
     if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('uzhamyon:cache-updated', { detail: { url, data } }));
       window.dispatchEvent(new CustomEvent('spendsense:cache-updated', { detail: { url, data } }));
     }
 
@@ -223,6 +224,7 @@ export function invalidateCache(urlPrefix?: string): void {
 
   // Broadcast event for active views to re-fetch if needed
   if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('uzhamyon:cache-invalidated', { detail: { urlPrefix } }));
     window.dispatchEvent(new CustomEvent('spendsense:cache-invalidated', { detail: { urlPrefix } }));
   }
 }
@@ -235,6 +237,7 @@ export function clearAllCache(): void {
   memoryCache.clear();
   inFlightRequests.clear();
   if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('uzhamyon:cache-cleared'));
     window.dispatchEvent(new CustomEvent('spendsense:cache-cleared'));
   }
 }

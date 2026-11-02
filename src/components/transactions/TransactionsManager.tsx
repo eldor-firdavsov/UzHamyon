@@ -21,6 +21,7 @@ import { PageHeader } from '@/components/bento';
 import { cachedFetch, peekCache, invalidateCache, invalidateAllFinancialCaches, CACHE_TTL } from '@/lib/cache/clientCache';
 import { getCategoryDisplayName } from '@/lib/categories/schemas';
 import { TransactionRowSkeleton } from '@/components/ui/Skeleton';
+import CategoryIcon from '@/components/categories/CategoryIcon';
 
 const DEFAULT_TX_URL = '/api/transactions?page=1&pageSize=12&sortBy=date&sortDirection=desc';
 
@@ -346,9 +347,9 @@ export default function TransactionsManager() {
               setTransactionToEdit(null);
               setIsModalOpen(true);
             }}
-            className="inline-flex items-center gap-2 px-4 py-2 min-h-[40px] rounded-xl bg-[#176B45] text-white font-semibold text-sm hover:bg-[#125536] transition-colors shadow-fintech-card cursor-pointer"
+            className="inline-flex items-center gap-2 px-4 py-2 min-h-[40px] rounded-xl bg-[#9FE870] hover:bg-[#8ED760] text-[#163300] font-bold text-sm transition-all shadow-xs active:scale-95 cursor-pointer"
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="h-4 w-4 stroke-[2.5]" />
             <span>Tranzaksiya qo‘shish</span>
             <span className="sr-only">Add Transaction</span>
           </button>
@@ -358,17 +359,17 @@ export default function TransactionsManager() {
       {/* Toast Notification Banner */}
       {notification && (
         <div
-          className={`p-3.5 rounded-xl text-sm font-medium flex items-center justify-between border ${
+          className={`p-3.5 rounded-xl text-sm font-semibold flex items-center justify-between border ${
             notification.type === 'success'
-              ? 'bg-[#DDF3E5] border-[#176B45]/20 text-[#176B45]'
-              : 'bg-rose-50 border-rose-200 text-[#C74747]'
+              ? 'bg-[#EDF8F1] border-[#C5E9D2] text-[#1E7440]'
+              : 'bg-[#FDF2F2] border-[#F8C8C8] text-[#C53B3B]'
           }`}
         >
           <span>{notification.message}</span>
           <button
             type="button"
             onClick={() => setNotification(null)}
-            className="p-1 hover:opacity-75 transition-opacity"
+            className="p-1 hover:opacity-75 transition-opacity cursor-pointer"
             aria-label="Yopish"
           >
             <X className="h-4 w-4" />
@@ -377,11 +378,11 @@ export default function TransactionsManager() {
       )}
 
       {/* Filters and Search Bar */}
-      <div className="rounded-2xl border border-[#E5E7EB] bg-white p-4 sm:p-5 space-y-4 shadow-xs">
+      <div className="rounded-[24px] border border-[#E8EBE5] bg-white p-4 sm:p-5 space-y-4 shadow-[0_2px_8px_rgba(23,27,22,0.04)]">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-4">
           {/* Search Input */}
           <div className="md:col-span-4 relative">
-            <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#71717A]">
+            <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#697168]">
               <Search className="h-4 w-4" />
             </span>
             <input
@@ -394,13 +395,13 @@ export default function TransactionsManager() {
                 setPage(1);
                 setIsLoading(true);
               }}
-              className="w-full min-h-[44px] rounded-xl border border-[#E5E7EB] bg-white pl-10 pr-3.5 py-2 text-sm text-[#18181B] placeholder-[#71717A] focus:border-[#10B981] focus:outline-none focus:ring-2 focus:ring-[#10B981]/20 transition-all"
+              className="w-full min-h-[44px] rounded-xl border border-[#E8EBE5] bg-white pl-10 pr-3.5 py-2 text-sm text-[#171B16] placeholder-[#959E94] focus:border-[#9FE870] focus:outline-none focus:ring-2 focus:ring-[#9FE870]/20 transition-all"
             />
           </div>
 
           {/* Type Filter Buttons */}
           <div className="md:col-span-3">
-            <div className="flex rounded-xl border border-[#E5E7EB] p-1 bg-[#F5F6F8] text-sm">
+            <div className="flex rounded-xl border border-[#E8EBE5] p-1 bg-[#F7F8F5] text-sm">
               <button
                 type="button"
                 onClick={() => {
@@ -408,10 +409,10 @@ export default function TransactionsManager() {
                   setPage(1);
                   setIsLoading(true);
                 }}
-                className={`flex-1 py-1.5 sm:py-2 rounded-lg text-center transition-all ${
+                className={`flex-1 py-1.5 sm:py-2 rounded-lg text-center transition-all cursor-pointer ${
                   typeFilter === 'all'
-                    ? 'bg-[#18181B] text-white shadow-xs font-semibold'
-                    : 'text-[#52525B] font-medium hover:text-[#18181B] hover:bg-black/5'
+                    ? 'bg-[#163300] text-[#9FE870] shadow-xs font-bold'
+                    : 'text-[#697168] font-semibold hover:text-[#171B16] hover:bg-white'
                 }`}
               >
                 Barchasi
@@ -423,10 +424,10 @@ export default function TransactionsManager() {
                   setPage(1);
                   setIsLoading(true);
                 }}
-                className={`flex-1 py-1.5 sm:py-2 rounded-lg text-center transition-all ${
+                className={`flex-1 py-1.5 sm:py-2 rounded-lg text-center transition-all cursor-pointer ${
                   typeFilter === 'income'
-                    ? 'bg-[#059669] text-white shadow-xs font-semibold'
-                    : 'text-[#52525B] font-medium hover:text-[#18181B] hover:bg-black/5'
+                    ? 'bg-[#26834A] text-white shadow-xs font-bold'
+                    : 'text-[#697168] font-semibold hover:text-[#171B16] hover:bg-white'
                 }`}
               >
                 Daromad
@@ -438,10 +439,10 @@ export default function TransactionsManager() {
                   setPage(1);
                   setIsLoading(true);
                 }}
-                className={`flex-1 py-1.5 sm:py-2 rounded-lg text-center transition-all ${
+                className={`flex-1 py-1.5 sm:py-2 rounded-lg text-center transition-all cursor-pointer ${
                   typeFilter === 'expense'
-                    ? 'bg-[#DC2626] text-white shadow-xs font-semibold'
-                    : 'text-[#52525B] font-medium hover:text-[#18181B] hover:bg-black/5'
+                    ? 'bg-[#D64D4D] text-white shadow-xs font-bold'
+                    : 'text-[#697168] font-semibold hover:text-[#171B16] hover:bg-white'
                 }`}
               >
                 Xarajat
@@ -460,7 +461,7 @@ export default function TransactionsManager() {
                 setPage(1);
                 setIsLoading(true);
               }}
-              className="w-full min-h-[44px] rounded-xl border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#18181B] focus:border-[#10B981] focus:outline-none focus:ring-2 focus:ring-[#10B981]/20 transition-all"
+              className="w-full min-h-[44px] rounded-xl border border-[#E8EBE5] bg-white px-3 py-2 text-sm text-[#171B16] focus:border-[#9FE870] focus:outline-none focus:ring-2 focus:ring-[#9FE870]/20 transition-all cursor-pointer font-medium"
             >
               <option value="all">Barcha kategoriyalar</option>
               <option value="uncategorized">(Kategoriyasiz)</option>
@@ -485,7 +486,7 @@ export default function TransactionsManager() {
                 setPage(1);
                 setIsLoading(true);
               }}
-              className="w-full min-h-[44px] rounded-xl border border-[#E5E7EB] bg-white px-3 py-2 text-sm text-[#18181B] focus:border-[#10B981] focus:outline-none focus:ring-2 focus:ring-[#10B981]/20 transition-all"
+              className="w-full min-h-[44px] rounded-xl border border-[#E8EBE5] bg-white px-3 py-2 text-sm text-[#171B16] focus:border-[#9FE870] focus:outline-none focus:ring-2 focus:ring-[#9FE870]/20 transition-all cursor-pointer font-medium"
             >
               <option value="date-desc">Eng yangi</option>
               <option value="date-asc">Eng eski</option>
@@ -498,7 +499,7 @@ export default function TransactionsManager() {
               id="reset-filters-btn"
               onClick={handleResetFilters}
               title="Filtrlarni tozalash"
-              className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl border border-[#E5E7EB] bg-white p-2.5 text-[#52525B] hover:text-[#18181B] hover:bg-[#F9FAFB] transition-colors"
+              className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl border border-[#E8EBE5] bg-white p-2.5 text-[#697168] hover:text-[#171B16] hover:bg-[#F7F8F5] transition-colors cursor-pointer"
             >
               <X className="h-4 w-4" />
             </button>
@@ -506,10 +507,10 @@ export default function TransactionsManager() {
         </div>
 
         {/* Date Range & Month Filter Row */}
-        <div className="space-y-2.5 pt-3 border-t border-[#E5E7EB] text-sm text-[#52525B]">
+        <div className="space-y-2.5 pt-3 border-t border-[#E8EBE5] text-sm text-[#697168]">
           {availableMonths.length > 0 && (
             <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-              <span className="text-xs font-medium text-[#18181B] shrink-0 mr-1">Oylar:</span>
+              <span className="text-xs font-bold text-[#171B16] shrink-0 mr-1">Oylar:</span>
               <button
                 type="button"
                 onClick={() => {
@@ -519,10 +520,10 @@ export default function TransactionsManager() {
                   setPage(1);
                   setIsLoading(true);
                 }}
-                className={`px-2.5 py-1 text-xs rounded-full transition-all shrink-0 ${
+                className={`px-3 py-1 text-xs rounded-lg transition-all shrink-0 cursor-pointer ${
                   selectedMonth === 'all'
-                    ? 'bg-[#18181B] text-white font-semibold shadow-xs'
-                    : 'bg-[#F5F6F8] text-[#52525B] hover:bg-[#E5E7EB] font-medium'
+                    ? 'bg-[#163300] text-[#9FE870] font-bold shadow-xs'
+                    : 'bg-[#F7F8F5] text-[#697168] hover:bg-[#E8EBE5] font-semibold'
                 }`}
               >
                 Barchasi
@@ -538,10 +539,10 @@ export default function TransactionsManager() {
                     setPage(1);
                     setIsLoading(true);
                   }}
-                  className={`px-2.5 py-1 text-xs rounded-full transition-all shrink-0 ${
+                  className={`px-3 py-1 text-xs rounded-lg transition-all shrink-0 cursor-pointer ${
                     selectedMonth === m.key
-                      ? 'bg-[#18181B] text-white font-semibold shadow-xs'
-                      : 'bg-[#F5F6F8] text-[#52525B] hover:bg-[#E5E7EB] font-medium'
+                      ? 'bg-[#163300] text-[#9FE870] font-bold shadow-xs'
+                      : 'bg-[#F7F8F5] text-[#697168] hover:bg-[#E8EBE5] font-semibold'
                   }`}
                 >
                   {m.labelUz}
@@ -551,8 +552,8 @@ export default function TransactionsManager() {
           )}
 
           <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
-            <span className="flex items-center gap-1.5 font-medium text-[#18181B] text-xs sm:text-sm shrink-0">
-              <Calendar className="h-4 w-4 text-[#059669]" /> Maxsus sana:
+            <span className="flex items-center gap-1.5 font-bold text-[#171B16] text-xs sm:text-sm shrink-0">
+              <Calendar className="h-4 w-4 text-[#26834A]" /> Maxsus sana:
             </span>
             <div className="flex flex-1 sm:flex-initial items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
               <input
@@ -566,9 +567,9 @@ export default function TransactionsManager() {
                   setPage(1);
                   setIsLoading(true);
                 }}
-                className="flex-1 sm:flex-initial min-h-[38px] w-full sm:w-36 rounded-xl border border-[#E5E7EB] bg-white px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm text-[#18181B] focus:border-[#10B981] focus:outline-none focus:ring-2 focus:ring-[#10B981]/20 transition-all"
+                className="flex-1 sm:flex-initial min-h-[38px] w-full sm:w-36 rounded-xl border border-[#E8EBE5] bg-white px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm text-[#171B16] focus:border-[#9FE870] focus:outline-none focus:ring-2 focus:ring-[#9FE870]/20 transition-all font-medium"
               />
-              <span className="text-[#71717A] shrink-0 text-xs">—</span>
+              <span className="text-[#959E94] shrink-0 text-xs">—</span>
               <input
                 id="filter-end-date"
                 aria-label="Tugash sanasi"
@@ -580,11 +581,11 @@ export default function TransactionsManager() {
                   setPage(1);
                   setIsLoading(true);
                 }}
-                className="flex-1 sm:flex-initial min-h-[38px] w-full sm:w-36 rounded-xl border border-[#E5E7EB] bg-white px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm text-[#18181B] focus:border-[#10B981] focus:outline-none focus:ring-2 focus:ring-[#10B981]/20 transition-all"
+                className="flex-1 sm:flex-initial min-h-[38px] w-full sm:w-36 rounded-xl border border-[#E8EBE5] bg-white px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm text-[#171B16] focus:border-[#9FE870] focus:outline-none focus:ring-2 focus:ring-[#9FE870]/20 transition-all font-medium"
               />
             </div>
             {(startDate || endDate || search || typeFilter !== 'all' || categoryFilter !== 'all') && (
-              <span className="text-[#059669] text-xs sm:text-sm font-medium w-full sm:w-auto sm:ml-auto">
+              <span className="text-[#26834A] text-xs sm:text-sm font-bold w-full sm:w-auto sm:ml-auto">
                 Topildi: {totalCount} ta mos yozuv
               </span>
             )}
@@ -593,10 +594,10 @@ export default function TransactionsManager() {
       </div>
 
       {/* Main Content Area: Grouped List (Desktop & Mobile) */}
-      <div className="rounded-2xl border border-[#E5E7EB] bg-white overflow-hidden shadow-xs">
+      <div className="rounded-[24px] border border-[#E8EBE5] bg-white overflow-hidden shadow-[0_4px_20px_rgba(23,27,22,0.04)]">
         {isLoading && transactions.length === 0 ? (
-          <div id="transactions-loading" className="divide-y divide-[#E5E7EB]">
-            <div className="bg-[#F9FAFB] px-5 py-3 border-b border-[#E5E7EB]">
+          <div id="transactions-loading" className="divide-y divide-[#E8EBE5]">
+            <div className="bg-[#F7F8F5] px-5 py-3 border-b border-[#E8EBE5]">
               <div className="h-4 w-36 skeleton-shimmer rounded" />
             </div>
             {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -605,33 +606,33 @@ export default function TransactionsManager() {
           </div>
         ) : transactions.length === 0 ? (
           <div id="transactions-empty-state" className="py-20 text-center px-4">
-            <div className="h-12 w-12 rounded-full bg-[#F5F6F8] flex items-center justify-center mx-auto text-[#71717A] mb-3 border border-[#E5E7EB]">
+            <div className="h-12 w-12 rounded-full bg-[#F7F8F5] flex items-center justify-center mx-auto text-[#697168] mb-3 border border-[#E8EBE5]">
               <ArrowUpDown className="h-6 w-6" />
             </div>
-            <h3 className="text-base sm:text-lg font-semibold text-[#18181B]">Tranzaksiyalar hali yo‘q.</h3>
-            <p className="text-sm sm:text-base text-[#52525B] mt-1.5 max-w-sm mx-auto">
+            <h3 className="text-base sm:text-lg font-bold text-[#171B16]">Tranzaksiyalar hali yo‘q.</h3>
+            <p className="text-sm sm:text-base text-[#697168] mt-1.5 max-w-sm mx-auto">
               {search || typeFilter !== 'all' || categoryFilter !== 'all' || startDate || endDate
                 ? 'Tanlangan filtrlarga mos keluvchi tranzaksiyalar topilmadi.'
                 : 'Birinchi daromad yoki xarajatingizni qo‘shing.'}
             </p>
           </div>
         ) : (
-          <div id="transactions-table" className="divide-y divide-[#E5E7EB]">
+          <div id="transactions-table" className="divide-y divide-[#E8EBE5]">
             {Object.entries(groupedTransactions).map(([date, dateTxList]) => (
               <div key={date}>
                 {/* Date Group Header */}
-                <div className="px-5 py-2.5 bg-[#F9FAFB] border-y border-[#E5E7EB] first:border-t-0 flex items-center justify-between text-xs font-semibold text-[#52525B]">
+                <div className="px-5 py-2.5 bg-[#F7F8F5] border-y border-[#E8EBE5] first:border-t-0 flex items-center justify-between text-xs font-bold text-[#171B16]">
                   <div className="flex items-center gap-2">
-                    <Calendar className="h-3.5 w-3.5 text-[#059669]" />
+                    <Calendar className="h-3.5 w-3.5 text-[#26834A]" />
                     <span>{formatDateHeader(date)}</span>
                   </div>
-                  <span className="text-xs text-[#71717A] font-mono">
+                  <span className="text-xs text-[#697168] font-mono font-medium">
                     {dateTxList.length} ta tranzaksiya
                   </span>
                 </div>
 
                 {/* Transaction Items in beloved modern fintech style */}
-                <div className="divide-y divide-[#E5E7EB]/60">
+                <div className="divide-y divide-[#E8EBE5]/60">
                   {dateTxList.map((tx) => {
                     const isIncome = tx.type === 'income';
                     const rawAmount = Math.abs(Number(tx.amount) || 0);
@@ -643,37 +644,27 @@ export default function TransactionsManager() {
                         key={tx.id}
                         id={`transaction-row-${tx.id}`}
                         onClick={() => setSelectedTxDetail(tx)}
-                        className="px-3.5 sm:px-5 py-3.5 sm:py-4 flex items-center justify-between hover:bg-[#F9FAFB] transition-all cursor-pointer group gap-2.5 sm:gap-4"
+                        className="px-3.5 sm:px-5 py-3 sm:py-3.5 flex items-center justify-between hover:bg-[#F7F8F5] transition-all cursor-pointer group gap-2.5 sm:gap-4"
                       >
                         {/* Left: Direction Icon + Title + Metadata */}
                         <div className="flex-1 min-w-0 flex items-center gap-2.5 sm:gap-3.5">
-                          <div
-                            className={`h-9 w-9 sm:h-11 sm:w-11 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-2xs transition-transform group-hover:scale-105 ${
-                              isIncome ? 'bg-[#ECFDF5] text-[#059669]' : 'bg-[#FEF2F2] text-[#DC2626]'
-                            }`}
-                          >
-                            {isIncome ? (
-                              <ArrowDownLeft className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
-                            ) : (
-                              <ArrowUpRight className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
-                            )}
-                          </div>
+                          <CategoryIcon name={catName} type={isIncome ? 'in' : 'ex'} size="sm" />
                           <div className="min-w-0 flex-1">
-                            <div className="font-semibold text-sm sm:text-base text-[#18181B] truncate group-hover:text-[#059669] transition-colors leading-tight">
+                            <div className="font-semibold text-sm sm:text-base text-[#171B16] truncate group-hover:text-[#163300] transition-colors leading-tight">
                               {tx.description}
                             </div>
-                            <div className="text-xs text-[#71717A] flex items-center gap-1.5 mt-1 whitespace-nowrap overflow-hidden">
-                              <span className="px-2 py-0.5 bg-[#F5F6F8] border border-[#E5E7EB] rounded-md text-[#18181B] font-medium text-[11px] truncate max-w-[120px] sm:max-w-[160px] shrink-0">
+                            <div className="text-xs text-[#697168] flex items-center gap-1.5 mt-1 whitespace-nowrap overflow-hidden">
+                              <span className="px-2 py-0.5 bg-[#F7F8F5] border border-[#E8EBE5] rounded-md text-[#171B16] font-semibold text-[11px] truncate max-w-[120px] sm:max-w-[160px] shrink-0">
                                 {catName}
                               </span>
-                              <span className="text-[#E5E7EB] shrink-0">•</span>
-                              <span className="font-mono text-[11px] text-[#71717A] shrink-0">
+                              <span className="text-[#959E94] shrink-0">•</span>
+                              <span className="font-mono text-[11px] text-[#697168] shrink-0">
                                 {tx.transaction_date}
                               </span>
                               {tx.merchant && tx.merchant !== tx.description && (
                                 <>
-                                  <span className="hidden sm:inline text-[#E5E7EB]">•</span>
-                                  <span className="hidden sm:inline truncate max-w-[160px] text-[#52525B] text-[11px]">
+                                  <span className="hidden sm:inline text-[#959E94]">•</span>
+                                  <span className="hidden sm:inline truncate max-w-[160px] text-[#697168] text-[11px]">
                                     {tx.merchant}
                                   </span>
                                 </>
@@ -686,7 +677,7 @@ export default function TransactionsManager() {
                         <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1 sm:gap-3 shrink-0 pl-1">
                           <div
                             className={`font-mono font-bold text-sm sm:text-base whitespace-nowrap tabular-nums ${
-                              isIncome ? 'text-[#059669]' : 'text-[#DC2626]'
+                              isIncome ? 'text-[#26834A]' : 'text-[#D64D4D]'
                             }`}
                           >
                             {isIncome ? '+' : '-'}
@@ -707,7 +698,7 @@ export default function TransactionsManager() {
                               }}
                               title="Tahrirlash"
                               aria-label="Tahrirlash"
-                              className="min-h-[32px] min-w-[32px] sm:min-h-[36px] sm:min-w-[36px] flex items-center justify-center p-1 sm:p-2 text-[#71717A] hover:text-[#059669] hover:bg-[#ECFDF5] rounded-lg sm:rounded-xl transition-all active:scale-95"
+                              className="min-h-[32px] min-w-[32px] sm:min-h-[36px] sm:min-w-[36px] flex items-center justify-center p-1 sm:p-2 text-[#697168] hover:text-[#163300] hover:bg-[#F0F9E9] rounded-lg sm:rounded-xl transition-all active:scale-95 cursor-pointer"
                             >
                               <Edit2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                             </button>
@@ -717,7 +708,7 @@ export default function TransactionsManager() {
                               onClick={() => setTransactionToDelete(tx)}
                               title="O‘chirish"
                               aria-label="O‘chirish"
-                              className="min-h-[32px] min-w-[32px] sm:min-h-[36px] sm:min-w-[36px] flex items-center justify-center p-1 sm:p-2 text-[#71717A] hover:text-[#DC2626] hover:bg-rose-50 rounded-lg sm:rounded-xl transition-all active:scale-95"
+                              className="min-h-[32px] min-w-[32px] sm:min-h-[36px] sm:min-w-[36px] flex items-center justify-center p-1 sm:p-2 text-[#697168] hover:text-[#D64D4D] hover:bg-[#FDF2F2] rounded-lg sm:rounded-xl transition-all active:scale-95 cursor-pointer"
                             >
                               <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                             </button>
@@ -734,7 +725,7 @@ export default function TransactionsManager() {
 
         {/* Pagination Footer */}
         {!isLoading && totalCount > 0 && (
-          <div className="p-4 bg-[#F9FAFB] border-t border-[#E5E7EB] flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-[#52525B]">
+          <div className="p-4 bg-[#F7F8F5] border-t border-[#E8EBE5] flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-[#697168]">
             <div>
               Ko‘rsatilmoqda:{' '}
               <span className="text-[#17211B] font-semibold">{(page - 1) * pageSize + 1}</span> dan{' '}

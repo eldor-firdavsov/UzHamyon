@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 
 /**
- * SpendSense AI — Cryptographic Internal Authentication Protection
+ * UzHamyon AI — Cryptographic Internal Authentication Protection
  * 
  * Guarantees that internal user identity forwarding between Next.js Middleware
  * and Server Components CANNOT be spoofed by external HTTP clients.
@@ -15,8 +15,10 @@ import crypto from 'node:crypto';
 
 const INTERNAL_SECRET =
   process.env.INTERNAL_AUTH_SECRET ||
+  process.env.OPENROUTER_API_KEY ||
+  process.env.AI_API_KEY ||
   process.env.GEMINI_API_KEY ||
-  'spendsense_cryptographic_internal_secret_key_2026';
+  'uzhamyon_cryptographic_internal_secret_key_2026';
 
 export const INTERNAL_AUTH_HEADER = 'x-internal-auth';
 

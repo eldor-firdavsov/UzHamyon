@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { MessageBubbleSkeleton } from '@/components/ui/Skeleton';
 import { cachedFetch, peekCache } from '@/lib/cache/clientCache';
+import UzHamyonLogo from '@/components/brand/UzHamyonLogo';
 
 let messageCounter = 0;
 function generateId(prefix: string) {
@@ -482,13 +483,11 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
   return (
     <div className="relative max-w-4xl xl:max-w-5xl mx-auto w-full flex flex-col h-full flex-1 min-h-0 rounded-2xl sm:rounded-3xl border border-[#E5E7EB] bg-white shadow-fintech-card overflow-hidden">
       {/* ── Top Floating Minimal Header ── */}
-      <header className="px-5 sm:px-8 py-3.5 border-b border-[#E5E7EB] bg-white flex items-center justify-between gap-3 shrink-0 z-10">
+      <header className="px-5 sm:px-8 py-3.5 border-b border-[#E8EBE5] bg-white flex items-center justify-between gap-3 shrink-0 z-10">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-[#18181B] text-white flex items-center justify-center shadow-xs">
-            <WavingHandIcon className="h-4 w-4 text-white" />
-          </div>
+          <UzHamyonLogo variant="icon" size="sm" />
           <div>
-            <span className="font-semibold text-sm text-[#18181B]">AI</span>
+            <span className="font-bold text-sm text-[#171B16]">UzHamyon AI</span>
           </div>
         </div>
 
@@ -649,28 +648,28 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex-1 p-4 sm:p-6 sm:px-8 overflow-y-auto space-y-5 bg-[#FAFAFA]"
+        className="flex-1 p-4 sm:p-6 sm:px-8 overflow-y-auto space-y-5 bg-[#F7F8F5]"
       >
-        {/* ── SayHalo Inspired Hero Welcome Screen (In SpendSense Brand System) ── */}
+        {/* ── SayHalo Inspired Hero Welcome Screen (In UzHamyon Brand System) ── */}
         {messages.length === 0 && !loadingHistory && (
           <div className="min-h-full flex flex-col items-center justify-center py-3 sm:py-8 text-center animate-in fade-in-50 duration-200">
-            {/* Top Squircle Avatar Icon with waving hand */}
-            <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-[18px] sm:rounded-[22px] bg-[#18181B] shadow-xs flex items-center justify-center text-white mb-3 sm:mb-4 transform hover:scale-105 transition-all duration-300">
-              <WavingHandIcon className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
+            {/* Top Squircle Avatar Icon with UzHamyon Logo */}
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-[20px] sm:rounded-[22px] bg-white border border-[#E8EBE5] shadow-xs flex items-center justify-center p-2 mb-3 sm:mb-4 transform hover:scale-105 transition-all duration-300">
+              <UzHamyonLogo variant="icon" size="lg" />
             </div>
 
             {/* Greeting */}
-            <p className="text-[#71717A] text-sm sm:text-base font-medium tracking-tight mb-1">
+            <p className="text-[#697168] text-sm sm:text-base font-semibold tracking-tight mb-1">
               Salom, {userName || 'Foydalanuvchi'}
             </p>
 
             {/* Main Headline */}
-            <h1 className="text-xl sm:text-3xl lg:text-4xl font-semibold text-[#18181B] tracking-tight mb-2 max-w-xl mx-auto">
+            <h1 className="text-xl sm:text-3xl lg:text-4xl font-bold text-[#171B16] tracking-tight mb-2 max-w-xl mx-auto">
               Sizga qanday yordam bera olaman?
             </h1>
 
             {/* Subtitle */}
-            <p className="text-xs sm:text-sm text-[#52525B] max-w-md mx-auto leading-relaxed mb-6 sm:mb-8 px-2">
+            <p className="text-xs sm:text-sm text-[#697168] max-w-md mx-auto leading-relaxed mb-6 sm:mb-8 px-2 font-medium">
               Moliyaviy savollaringizga javob berish va shaxsiy tavsiyalar berishga tayyorman. Boshlaymizmi?
             </p>
 
@@ -681,9 +680,9 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
                   key={idx}
                   type="button"
                   onClick={() => handleSend(card.query)}
-                  className="bg-white rounded-2xl p-3 sm:p-5 shadow-xs border border-[#E5E7EB] hover:border-[#059669]/40 hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 cursor-pointer flex flex-col justify-between text-left group active:scale-[0.98]"
+                  className="bg-white rounded-[20px] p-3 sm:p-5 shadow-[0_2px_8px_rgba(23,27,22,0.04)] border border-[#E8EBE5] hover:border-[#9FE870] hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 cursor-pointer flex flex-col justify-between text-left group active:scale-[0.98]"
                 >
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-[#ECFDF5] group-hover:bg-[#059669] text-[#059669] group-hover:text-white flex items-center justify-center mb-3 transition-colors shadow-2xs shrink-0">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-[#F0F9E9] group-hover:bg-[#163300] text-[#163300] group-hover:text-[#9FE870] flex items-center justify-center mb-3 transition-colors shadow-2xs shrink-0 border border-[#9FE870]/30">
                     {card.icon === 'wave' ? (
                       <WavingHandIcon className="h-4 w-4 sm:h-5 sm:w-5" />
                     ) : card.icon === 'plane' ? (
@@ -693,10 +692,10 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
                     )}
                   </div>
                   <div className="min-w-0 flex-1 flex flex-col justify-between">
-                    <h4 className="font-semibold text-xs sm:text-sm text-[#18181B] group-hover:text-[#059669] transition-colors leading-tight line-clamp-2">
+                    <h4 className="font-bold text-xs sm:text-sm text-[#171B16] group-hover:text-[#163300] transition-colors leading-tight line-clamp-2">
                       {card.title}
                     </h4>
-                    <p className="text-[11px] sm:text-xs text-[#71717A] mt-1 font-normal leading-tight line-clamp-1 sm:line-clamp-2">
+                    <p className="text-[11px] sm:text-xs text-[#697168] mt-1 font-normal leading-tight line-clamp-1 sm:line-clamp-2">
                       {card.subtitle}
                     </p>
                   </div>
@@ -731,17 +730,17 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
                 >
                   {/* AI Avatar */}
                   {!isUser && (
-                    <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#18181B] text-white flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
-                      <WavingHandIcon className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+                    <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white border border-[#E8EBE5] flex items-center justify-center p-1 shrink-0 mt-0.5 shadow-2xs">
+                      <UzHamyonLogo variant="icon" size="sm" />
                     </div>
                   )}
 
                   {/* Message Bubble Card */}
                   <div
-                    className={`max-w-[88%] sm:max-w-[80%] rounded-2xl p-4 sm:p-5 space-y-3 ${
+                    className={`max-w-[88%] sm:max-w-[80%] rounded-[20px] p-4 sm:p-5 space-y-3 ${
                       isUser
-                        ? 'bg-[#18181B] text-white rounded-tr-xs shadow-xs'
-                        : 'bg-white border border-[#E5E7EB] text-[#18181B] rounded-tl-xs shadow-fintech-card'
+                        ? 'bg-[#163300] text-white rounded-tr-xs shadow-xs'
+                        : 'bg-white border border-[#E8EBE5] text-[#171B16] rounded-tl-xs shadow-[0_2px_8px_rgba(23,27,22,0.04)]'
                     }`}
                   >
                     {isUser ? (
@@ -882,7 +881,7 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
       </div>
 
       {/* ── Chatbot Bottom Floating Input Dock (Responsive on All Devices) ── */}
-      <footer className="p-2.5 sm:p-3.5 md:p-4 bg-white border-t border-[#E5E7EB] shrink-0">
+      <footer className="p-2.5 sm:p-3.5 md:p-4 bg-white border-t border-[#E8EBE5] shrink-0">
         <div className="w-full max-w-3xl mx-auto flex items-center gap-1.5 sm:gap-2.5 min-w-0">
           {/* Settings / Tools Icon Button */}
           <div className="relative shrink-0">
@@ -891,8 +890,8 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
               onClick={() => setToolsMenuOpen((prev) => !prev)}
               className={`w-9 h-9 sm:w-11 sm:h-11 rounded-full transition-all flex items-center justify-center shadow-xs active:scale-95 cursor-pointer shrink-0 ${
                 toolsMenuOpen || historyOpen || simOpen
-                  ? 'bg-[#059669] text-white'
-                  : 'bg-[#18181B] hover:bg-[#27272A] text-white'
+                  ? 'bg-[#163300] text-[#9FE870]'
+                  : 'bg-[#163300] hover:bg-[#234A05] text-[#9FE870]'
               }`}
               title="Qo‘shimcha vositalar va sozlamalar"
               aria-label="Sozlamalar"
@@ -902,15 +901,15 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
 
             {/* Quick Settings / Tools Popover */}
             {toolsMenuOpen && (
-              <div className="absolute bottom-12 sm:bottom-14 left-0 w-60 sm:w-64 bg-white border border-[#E5E7EB] rounded-2xl shadow-xl p-2 space-y-1 animate-in slide-in-from-bottom-2 duration-150 z-30">
+              <div className="absolute bottom-12 sm:bottom-14 left-0 w-60 sm:w-64 bg-white border border-[#E8EBE5] rounded-2xl shadow-xl p-2 space-y-1 animate-in slide-in-from-bottom-2 duration-150 z-30">
                 <button
                   type="button"
                   onClick={() => {
                     startNewChat();
                   }}
-                  className="w-full text-left px-3 py-2 rounded-xl text-xs sm:text-sm font-medium text-[#18181B] hover:bg-[#F9FAFB] flex items-center gap-2.5 transition-colors"
+                  className="w-full text-left px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold text-[#171B16] hover:bg-[#F7F8F5] flex items-center gap-2.5 transition-colors cursor-pointer"
                 >
-                  <Plus className="h-4 w-4 text-[#059669]" />
+                  <Plus className="h-4 w-4 text-[#26834A]" />
                   <span>Yangi suhbat</span>
                 </button>
 
@@ -921,9 +920,9 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
                     setSimOpen(false);
                     setToolsMenuOpen(false);
                   }}
-                  className="w-full text-left px-3 py-2 rounded-xl text-xs sm:text-sm font-medium text-[#18181B] hover:bg-[#F9FAFB] flex items-center gap-2.5 transition-colors"
+                  className="w-full text-left px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold text-[#171B16] hover:bg-[#F7F8F5] flex items-center gap-2.5 transition-colors cursor-pointer"
                 >
-                  <History className="h-4 w-4 text-[#059669]" />
+                  <History className="h-4 w-4 text-[#26834A]" />
                   <span>Suhbatlar tarixi</span>
                 </button>
 
@@ -934,9 +933,9 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
                     setHistoryOpen(false);
                     setToolsMenuOpen(false);
                   }}
-                  className="w-full text-left px-3 py-2 rounded-xl text-xs sm:text-sm font-medium text-[#18181B] hover:bg-[#F9FAFB] flex items-center gap-2.5 transition-colors"
+                  className="w-full text-left px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold text-[#171B16] hover:bg-[#F7F8F5] flex items-center gap-2.5 transition-colors cursor-pointer"
                 >
-                  <Sliders className="h-4 w-4 text-[#059669]" />
+                  <Sliders className="h-4 w-4 text-[#26834A]" />
                   <span>What-If simulyatori</span>
                 </button>
               </div>
@@ -944,7 +943,7 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
           </div>
 
           {/* Elongated Pill Input Container */}
-          <div className="flex-1 min-w-0 min-h-[42px] sm:min-h-[50px] rounded-full bg-white border border-[#E5E7EB] shadow-xs focus-within:border-[#059669] focus-within:ring-2 focus-within:ring-[#059669]/10 px-2 sm:px-4 py-1 flex items-center gap-1 sm:gap-2.5 transition-all">
+          <div className="flex-1 min-w-0 min-h-[42px] sm:min-h-[50px] rounded-full bg-white border border-[#E8EBE5] shadow-xs focus-within:border-[#9FE870] focus-within:ring-2 focus-within:ring-[#9FE870]/20 px-2 sm:px-4 py-1 flex items-center gap-1 sm:gap-2.5 transition-all">
             {/* Link / Simulation Tool Icon */}
             <button
               type="button"
@@ -952,7 +951,7 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
                 setSimOpen((prev) => !prev);
                 setHistoryOpen(false);
               }}
-              className="text-[#71717A] hover:text-[#059669] p-1 sm:p-1.5 rounded-full transition-colors shrink-0"
+              className="text-[#697168] hover:text-[#163300] p-1 sm:p-1.5 rounded-full transition-colors shrink-0 cursor-pointer"
               title="What-If simulyatorini ochish"
             >
               <Link2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 rotate-45" />
@@ -975,21 +974,21 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
                   }
                 }
               }}
-              className="flex-1 min-w-0 bg-transparent text-xs sm:text-sm md:text-base text-[#18181B] placeholder-[#71717A] focus:outline-none px-1"
+              className="flex-1 min-w-0 bg-transparent text-xs sm:text-sm md:text-base text-[#171B16] placeholder-[#959E94] focus:outline-none px-1"
             />
 
-            {/* SpendSense Signature Send Button */}
+            {/* UzHamyon Signature Send Button */}
             <button
               id="advisor-send-btn"
               type="button"
               disabled={loading || !input.trim()}
               onClick={() => handleSend()}
-              className="h-8 w-8 sm:h-9 sm:w-auto px-0 sm:px-4 py-0 sm:py-2 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs sm:text-sm font-medium flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+              className="h-8 w-8 sm:h-9 sm:w-auto px-0 sm:px-4 py-0 sm:py-2 rounded-full bg-[#9FE870] hover:bg-[#8ED760] text-[#163300] text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed shrink-0 cursor-pointer"
               title="Yuborish"
               aria-label="Yuborish"
             >
               {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                <Loader2 className="h-4 w-4 animate-spin shrink-0 text-[#163300]" />
               ) : (
                 <>
                   <span className="hidden sm:inline">Yuborish</span>

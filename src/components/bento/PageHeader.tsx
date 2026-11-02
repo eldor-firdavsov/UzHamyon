@@ -21,7 +21,7 @@ export interface PageHeaderProps {
 }
 
 /**
- * Standardized PageHeader component for SpendSense AI pages.
+ * Standardized PageHeader component for UzHamyon pages.
  * Integrates semantic h1 heading, optional breadcrumb trail, and responsive action triggers.
  */
 export function PageHeader({

@@ -23,16 +23,17 @@ export function FinancialOverviewBlock({
     <section aria-label="Moliyaviy ko‘rsatkichlar" className="w-full">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 sm:gap-4 items-stretch">
         {/* ── TYPE A: HERO CARD (Takes 7 cols on lg:, full width on mobile) ── */}
-        <div className="lg:col-span-7 relative overflow-hidden rounded-[26px] bg-gradient-to-br from-[#163300] via-[#1b3d02] to-[#122800] p-6 sm:p-7 text-white shadow-[0_12px_36px_rgba(22,51,0,0.18)] border border-[#2d580a]/60 flex flex-col justify-between">
-          {/* Subtle decorative geometric background curves & lighting */}
-          <div 
-            className="absolute -right-16 -top-16 h-64 w-64 rounded-full border-[32px] border-white/[0.04] pointer-events-none" 
-            aria-hidden="true" 
-          />
-          <div 
-            className="absolute right-12 -bottom-20 h-48 w-48 rounded-full bg-[#9FE870]/[0.08] blur-2xl pointer-events-none" 
-            aria-hidden="true" 
-          />
+        <div className="finance-card lg:col-span-7 relative overflow-hidden rounded-[24px] bg-[#0b1e0f] p-6 sm:p-7 text-white shadow-[0_12px_36px_rgba(11,30,15,0.35)] border border-[#1a3820] flex flex-col justify-between">
+          {/* Quarter-Naqsh Watermark in Top-Right Corner */}
+          <div className="card-naqsh-bg" aria-hidden="true">
+            <img
+              src="/naqsh-quarter-mobile.png"
+              alt=""
+              width={180}
+              height={180}
+              className="naqsh-img"
+            />
+          </div>
 
           <div className="relative z-10 space-y-4">
             {/* Header Row */}

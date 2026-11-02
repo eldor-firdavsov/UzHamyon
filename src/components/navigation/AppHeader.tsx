@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import LogoutButton from '@/components/LogoutButton';
 import FastTransactionModal from '@/components/transactions/FastTransactionModal';
-import SpendSenseLogo from '@/components/brand/SpendSenseLogo';
-import { warmCache, setCacheUser } from '@/lib/cache/clientCache';
+import UzHamyonLogo from '@/components/brand/UzHamyonLogo';
+import { warmCache, setCacheUser, cachedFetch, peekCache } from '@/lib/cache/clientCache';
+import type { FinancialTimelineSummary } from '@/lib/timeline/financialTimeline';
 import { createClient } from '@/lib/supabase/client';
 import MobileFloatingNav from './MobileFloatingNav';
 import {
@@ -16,6 +17,8 @@ import {
   Brain,
   Settings,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   User,
   Plus,
 } from 'lucide-react';
@@ -66,6 +69,114 @@ const PRIMARY_NAV = [
 interface AppHeaderProps {
   userEmail?: string | null;
   userName?: string | null;
+  monthSwitcher?: React.ReactNode;
+}
+
+function DefaultHeaderMonthSwitcher() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const [timeline, setTimeline] = useState<FinancialTimelineSummary | null>(() => {
+    return peekCache<FinancialTimelineSummary>('/api/timeline/available-months') || null;
+  });
+
+  useEffect(() => {
+    cachedFetch<FinancialTimelineSummary>('/api/timeline/available-months')
+      .then((data) => {
+        if (data && data.availableMonths && data.availableMonths.length > 0) {
+          setTimeline(data);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const isMonthSupported =
+    pathname.startsWith('/dashboard') ||
+    pathname.startsWith('/transactions') ||
+    pathname.startsWith('/analytics');
+
+  if (!isMonthSupported) return null;
+
+  const currentParam = searchParams.get('month');
+  const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const activeKey = currentParam || (timeline?.latestMonthKey || currentMonthKey);
+
+  const months = timeline?.availableMonths || [
+    {
+      key: '2026-11',
+      year: 2026,
+      month: 11,
+      labelUz: 'Noyabr 2026',
+      shortLabelUz: 'Noy 2026',
+      startDate: '2026-11-01',
+      endDate: '2026-11-30',
+      transactionCount: 0,
+    },
+    {
+      key: '2026-10',
+      year: 2026,
+      month: 10,
+      labelUz: 'Oktabr 2026',
+      shortLabelUz: 'Okt 2026',
+      startDate: '2026-10-01',
+      endDate: '2026-10-31',
+      transactionCount: 0,
+    },
+    {
+      key: '2026-09',
+      year: 2026,
+      month: 9,
+      labelUz: 'Sentabr 2026',
+      shortLabelUz: 'Sen 2026',
+      startDate: '2026-09-01',
+      endDate: '2026-09-30',
+      transactionCount: 0,
+    },
+  ];
+
+  const currentIndex = months.findIndex((m) => m.key === activeKey);
+  const activeMonthObj = currentIndex >= 0 ? months[currentIndex] : months[0];
+  const activeLabel = activeMonthObj ? activeMonthObj.labelUz : 'Noyabr 2026';
+
+  const canGoPrev = currentIndex < months.length - 1;
+  const canGoNext = currentIndex > 0;
+
+  const handleNavigate = (delta: number) => {
+    const nextIdx = (currentIndex >= 0 ? currentIndex : 0) - delta;
+    if (nextIdx >= 0 && nextIdx < months.length) {
+      const nextMonth = months[nextIdx];
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('month', nextMonth.key);
+      router.push(`${pathname}?${params.toString()}`);
+    }
+  };
+
+  return (
+    <div className="hidden md:inline-flex items-center bg-[#F7F8F5] border border-[#E8EBE5] rounded-xl p-1 shadow-2xs">
+      <button
+        type="button"
+        aria-label="Oldingi oy"
+        disabled={!canGoPrev}
+        onClick={() => handleNavigate(-1)}
+        className="h-8 w-8 rounded-lg flex items-center justify-center text-[#697168] hover:text-[#171B16] hover:bg-white disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </button>
+      <span className="px-3 py-1 text-xs sm:text-sm font-semibold text-[#171B16] select-none whitespace-nowrap">
+        {activeLabel}
+      </span>
+      <button
+        type="button"
+        aria-label="Keyingi oy"
+        disabled={!canGoNext}
+        onClick={() => handleNavigate(1)}
+        className="h-8 w-8 rounded-lg flex items-center justify-center text-[#697168] hover:text-[#171B16] hover:bg-white disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+      >
+        <ChevronRight className="h-4 w-4" />
+      </button>
+    </div>
+  );
 }
 
 function getCleanFallbackName(email?: string | null): string {
@@ -79,7 +190,7 @@ function getCleanFallbackName(email?: string | null): string {
     .join(' ');
 }
 
-export default function AppHeader({ userEmail, userName }: AppHeaderProps) {
+export default function AppHeader({ userEmail, userName, monthSwitcher }: AppHeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -109,7 +220,8 @@ export default function AppHeader({ userEmail, userName }: AppHeaderProps) {
       return;
     }
     const supabase = createClient();
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
+    supabase.auth.getUser().then(async (userRes: any) => {
+      const user = userRes?.data?.user;
       if (user) {
         // Priority 1: profiles table
         const { data: profile } = await supabase
@@ -139,7 +251,7 @@ export default function AppHeader({ userEmail, userName }: AppHeaderProps) {
         if (cleanName) {
           const formatted = cleanName
             .split(/\s+/)
-            .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+            .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
             .join(' ');
           setResolvedName(formatted);
           return;
@@ -191,20 +303,20 @@ export default function AppHeader({ userEmail, userName }: AppHeaderProps) {
 
   return (
     <>
-      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl text-[#222222] border-b border-[#E5E7EB]/80 shadow-xs">
-        <div className="max-w-[1760px] w-full mx-auto px-4 sm:px-6 lg:px-8 xl:px-10">
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md text-[#171B16] border-b border-[#E8EBE5] shadow-xs">
+        <div className="max-w-[1440px] w-full mx-auto px-4 sm:px-6 lg:px-8">
           <div className="h-16 flex items-center justify-between gap-3 sm:gap-4">
             {/* Logo on Left */}
             <div className="flex items-center gap-3 lg:gap-8">
               <Link href="/dashboard" className="flex items-center gap-2.5 shrink-0 group">
-                <SpendSenseLogo variant="icon" size="md" />
-                <span className="font-semibold text-base sm:text-lg text-[#18181B] tracking-tight">
+                <UzHamyonLogo variant="icon" size="md" />
+                <span className="font-bold text-base sm:text-lg text-[#171B16] tracking-tight">
                   UzHamyon
                 </span>
               </Link>
 
               {/* 4 Primary Navigation Links (Desktop) */}
-              <nav className="hidden md:flex items-center gap-1 bg-[#F5F6F8] p-1 rounded-full border border-[#E5E7EB]/80" aria-label="Asosiy navigatsiya">
+              <nav className="hidden md:flex items-center gap-1.5 p-1 rounded-xl bg-[#F7F8F5] border border-[#E8EBE5]" aria-label="Asosiy navigatsiya">
                 {PRIMARY_NAV.map((item) => {
                   const isActive = item.matcher(pathname);
                   const Icon = item.icon;
@@ -218,13 +330,13 @@ export default function AppHeader({ userEmail, userName }: AppHeaderProps) {
                       onFocus={() => handlePrewarm(item.href, item.apiToWarm)}
                       onTouchStart={() => handlePrewarm(item.href, item.apiToWarm)}
                       aria-current={isActive ? 'page' : undefined}
-                      className={`inline-flex items-center gap-2 px-3.5 py-1.5 text-sm rounded-full transition-all ${
+                      className={`inline-flex items-center gap-2 px-3.5 py-1.5 text-sm rounded-lg transition-all ${
                         isActive
-                          ? 'bg-white text-[#18181B] font-medium shadow-xs'
-                          : 'text-[#52525B] hover:text-[#18181B] font-normal'
+                          ? 'bg-[#163300] text-white font-semibold shadow-xs'
+                          : 'text-[#697168] hover:text-[#171B16] hover:bg-white/80 font-medium'
                       }`}
                     >
-                      <Icon className={`h-4 w-4 ${isActive ? 'text-[#059669]' : 'text-[#71717A]'}`} />
+                      <Icon className={`h-4 w-4 ${isActive ? 'text-[#9FE870]' : 'text-current'}`} />
                       <span>{item.label}</span>
                       {item.href === '/advisor' && <span className="sr-only">AI yordamchi</span>}
                     </Link>
@@ -233,16 +345,25 @@ export default function AppHeader({ userEmail, userName }: AppHeaderProps) {
               </nav>
             </div>
 
-            {/* Right Side: + Tranzaksiya Button & Profile Menu */}
-            <div className="flex items-center gap-2.5 sm:gap-3">
+            {/* Right Side: Month Switcher + Tranzaksiya Button & Profile Menu */}
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* Month Switcher Capsule directly next to transaction button */}
+              {monthSwitcher ? (
+                monthSwitcher
+              ) : (
+                <Suspense fallback={null}>
+                  <DefaultHeaderMonthSwitcher />
+                </Suspense>
+              )}
+
               {/* Primary Tranzaksiya Action Button (Desktop/Tablet) */}
               <button
                 type="button"
                 id="header-add-transaction-btn"
                 onClick={() => setIsModalOpen(true)}
-                className="hidden sm:inline-flex items-center gap-2 px-4 py-2 min-h-[40px] rounded-full bg-[#18181B] hover:bg-[#27272A] text-white text-sm font-medium transition-all shadow-xs active:scale-98"
+                className="hidden sm:inline-flex items-center gap-2 px-4 py-2 min-h-[40px] rounded-xl bg-[#9FE870] hover:bg-[#8ED760] text-[#163300] text-sm font-bold transition-all shadow-xs active:scale-95 cursor-pointer"
               >
-                <Plus className="h-4 w-4" />
+                <Plus className="h-4 w-4 stroke-[2.5]" />
                 <span>Tranzaksiya</span>
               </button>
 
@@ -252,19 +373,19 @@ export default function AppHeader({ userEmail, userName }: AppHeaderProps) {
                   type="button"
                   id="profile-dropdown-button"
                   onClick={() => setProfileMenuOpen(!profileMenuOpen)}
-                  className="inline-flex items-center gap-2 rounded-full border border-[#E5E7EB] bg-white hover:bg-[#F9FAFB] px-3 py-1.5 text-sm font-medium text-[#18181B] transition-colors focus:outline-none focus:ring-2 focus:ring-[#10B981]"
+                  className="inline-flex items-center gap-2 rounded-xl border border-[#E8EBE5] bg-white hover:bg-[#F7F8F5] px-3 py-1.5 text-sm font-semibold text-[#171B16] transition-colors focus:outline-none focus:ring-2 focus:ring-[#9FE870] cursor-pointer"
                   aria-label="Foydalanuvchi menyusi"
                   aria-expanded={profileMenuOpen}
                 >
-                  <div className="h-7 w-7 rounded-full bg-[#ECFDF5] text-[#059669] flex items-center justify-center font-medium text-xs shrink-0">
+                  <div className="h-7 w-7 rounded-full bg-[#163300] text-[#9FE870] flex items-center justify-center font-bold text-xs shrink-0">
                     <User className="h-4 w-4" />
                   </div>
-                  <span className="hidden sm:inline-block max-w-[170px] truncate text-sm text-[#18181B] font-medium">
+                  <span className="hidden sm:inline-block max-w-[170px] truncate text-sm text-[#171B16] font-semibold">
                     {resolvedName && !resolvedName.includes('@')
                       ? resolvedName
                       : getCleanFallbackName(userEmail)}
                   </span>
-                  <ChevronDown className="h-3.5 w-3.5 text-[#71717A] shrink-0" />
+                  <ChevronDown className="h-3.5 w-3.5 text-[#697168] shrink-0" />
                 </button>
 
                 {profileMenuOpen && (

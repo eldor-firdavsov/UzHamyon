@@ -15,6 +15,7 @@ import {
 import type { DemoTransaction } from '../demoData';
 import { formatUzbekCurrency } from '../tokens';
 import { formatUzbekCalendarDate } from '../dateUtils';
+import CategoryIcon from '@/components/categories/CategoryIcon';
 
 interface RecentTransactionsBlockProps {
   transactions: DemoTransaction[];
@@ -95,15 +96,7 @@ export function RecentTransactionsBlock({
               >
                 {/* Left: Compact Category Icon (34px) + Name + Category/Date */}
                 <div className="flex items-center gap-3 min-w-0 flex-1 mr-3">
-                  <div
-                    className={`h-[34px] w-[34px] rounded-lg flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 shadow-2xs ${
-                      isIncome
-                        ? 'bg-[#EDF8F1] text-[#26834A] border border-[#C5E9D2]'
-                        : 'bg-[#FDF2F2] text-[#D64D4D] border border-[#F8C8C8]'
-                    }`}
-                  >
-                    {getCategoryIcon(tx.categoryIcon, isIncome)}
-                  </div>
+                  <CategoryIcon name={tx.category || tx.name} type={isIncome ? 'in' : 'ex'} size="sm" />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-[#171B16] truncate group-hover:text-[#163300] transition-colors leading-tight">
                       {tx.name}

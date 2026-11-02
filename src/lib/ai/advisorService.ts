@@ -1,5 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { generateGeminiContent } from './geminiClient.ts';
+import { generateAIContent } from './aiClient.ts';
 import type { AIConversation, AIMessage } from '../../types/database.ts';
 
 export interface ServiceResult<T> {
@@ -687,9 +687,9 @@ Asosiy vazifalar va javob tuzilishi:
 
     const fullPrompt = `${context}\n\nUSER QUESTION: ${question.trim()}`;
 
-    const aiRes = await generateGeminiContent(fullPrompt, systemInstruction);
+    const aiRes = await generateAIContent(fullPrompt, systemInstruction);
 
-    // If Gemini was rate limited or timed out, use verified deterministic grounded answer
+    // If AI was rate limited or timed out, use verified deterministic grounded answer
     let finalAnswer =
       !aiRes.isFallback && aiRes.text.trim()
         ? aiRes.text

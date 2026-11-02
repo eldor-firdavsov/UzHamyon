@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import AppHeader from '@/components/navigation/AppHeader';
-import AIAdvisorChat from '@/components/ai/AIAdvisorChat';
+import UzHamyonPrototypeApp from '@/components/prototype/UzHamyonPrototypeApp';
 
 export const metadata = {
   title: 'AI — UzHamyon',
@@ -19,19 +18,23 @@ export default async function AdvisorPage() {
     redirect('/login');
   }
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('first_name, last_name')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  const profileName = profile?.first_name ? `${profile.first_name}${profile.last_name ? ` ${profile.last_name}` : ''}` : '';
   const metaName = `${user.user_metadata?.first_name || ''} ${user.user_metadata?.last_name || ''}`.trim() || user.user_metadata?.full_name || '';
   const emailPrefix = (user.email || '').split('@')[0] || '';
   const cleanEmailName = emailPrefix.replace(/[0-9_.-]/g, ' ').trim();
-  const displayName = metaName || (cleanEmailName ? cleanEmailName.charAt(0).toUpperCase() + cleanEmailName.slice(1).toLowerCase() : 'Foydalanuvchi');
+  const displayName = profileName || metaName || (cleanEmailName ? cleanEmailName.charAt(0).toUpperCase() + cleanEmailName.slice(1).toLowerCase() : 'Foydalanuvchi');
 
   return (
-    <div className="h-dvh max-h-dvh bg-[#FAFAFA] text-[#18181B] flex flex-col overflow-hidden">
-      <span className="sr-only">bg-[#F1F4F2] bg-white text-[#222222]</span>
-      <AppHeader userEmail={user.email} userName={displayName} />
-
-      <main className="w-full max-w-[1760px] mx-auto px-2.5 sm:px-6 lg:px-8 xl:px-10 py-2 sm:py-4 flex-1 flex flex-col min-h-0 pb-20 md:pb-4 overflow-hidden">
-        <AIAdvisorChat userName={displayName} />
-      </main>
-    </div>
+    <UzHamyonPrototypeApp
+      initialTab="ai"
+      initialUserName={displayName}
+      userEmail={user.email}
+    />
   );
 }

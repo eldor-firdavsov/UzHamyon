@@ -7,8 +7,8 @@ import {
   BarChart2, 
   Brain, 
   Plus, 
-  Wallet
 } from 'lucide-react';
+import UzHamyonLogo from '@/components/brand/UzHamyonLogo';
 import type { PrototypeTab } from './FloatingMobileNav';
 
 interface DesktopHeaderProps {
@@ -39,9 +39,7 @@ export function DesktopHeader({
           className="flex items-center gap-2.5 cursor-pointer shrink-0 select-none group" 
           onClick={() => onTabChange('dashboard')}
         >
-          <div className="w-9 h-9 rounded-xl bg-[#163300] text-[#9FE870] flex items-center justify-center font-black shadow-xs group-hover:scale-105 transition-transform">
-            <Wallet className="w-5 h-5 stroke-[2.2]" />
-          </div>
+          <UzHamyonLogo variant="icon" size="sm" />
           <span className="text-xl font-bold text-[#171B16] tracking-tight">
             UzHamyon
           </span>

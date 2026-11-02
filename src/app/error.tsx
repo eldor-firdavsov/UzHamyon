@@ -2,7 +2,7 @@
 
 import React, { useEffect } from 'react';
 import Link from 'next/link';
-import SpendSenseLogo from '@/components/brand/SpendSenseLogo';
+import UzHamyonLogo from '@/components/brand/UzHamyonLogo';
 import { AlertCircle, RefreshCw, ArrowLeft } from 'lucide-react';
 
 export default function ErrorBoundary({
@@ -21,7 +21,7 @@ export default function ErrorBoundary({
     <div className="min-h-screen flex items-center justify-center bg-[#F1F4F2] px-4 py-12 text-[#17211B]">
       <div className="w-full max-w-md space-y-6 rounded-2xl border border-[#DCE4DE] bg-white p-7 shadow-fintech-card text-center">
         <div className="flex justify-center mb-3">
-          <SpendSenseLogo variant="icon" size="lg" />
+          <UzHamyonLogo variant="icon" size="lg" />
         </div>
 
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-[#C74747]">
