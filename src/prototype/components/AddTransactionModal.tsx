@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, ArrowDownLeft, ArrowUpRight, Check, Calendar } from 'lucide-react';
+import { X, ArrowDownLeft, ArrowUpRight, Check, Calendar, Sparkles } from 'lucide-react';
 import { DEMO_CATEGORIES, type DemoTransaction } from '../demoData';
 import { formatUzbekCurrency } from '../tokens';
+import { predictCategoryFromTitle } from '@/lib/categories/predictCategory';
 
 interface AddTransactionModalProps {
   isOpen: boolean;
@@ -19,22 +20,27 @@ export function AddTransactionModal({
   const [type, setType] = useState<'expense' | 'income'>('expense');
   const [amountStr, setAmountStr] = useState('');
   const [name, setName] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('Auto');
   const [dateStr, setDateStr] = useState('2026-10-31');
 
   if (!isOpen) return null;
 
   const numericAmount = parseInt(amountStr.replace(/\D/g, ''), 10) || 0;
   const currentCategories = DEMO_CATEGORIES[type];
+  const predicted = predictCategoryFromTitle(name, type);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (numericAmount <= 0) return;
 
+    const finalCategory = (!selectedCategory || selectedCategory === 'Auto')
+      ? predicted.category
+      : selectedCategory;
+
     const newTx: DemoTransaction = {
       id: `tx-demo-${Date.now()}`,
       name: name.trim() || (type === 'income' ? 'Qo‘shimcha daromad' : 'Kutilmagan xarajat'),
-      category: selectedCategory || (type === 'income' ? 'Daromad' : 'Umumiy xarajat'),
+      category: finalCategory,
       categoryIcon: type === 'income' ? 'wallet' : 'cart',
       date: dateStr || '2026-10-31',
       time: '12:00',
@@ -48,7 +54,7 @@ export function AddTransactionModal({
     // Reset state
     setAmountStr('');
     setName('');
-    setSelectedCategory('');
+    setSelectedCategory('Auto');
   };
 
   return (
@@ -87,7 +93,7 @@ export function AddTransactionModal({
               type="button"
               onClick={() => {
                 setType('expense');
-                setSelectedCategory('');
+                setSelectedCategory('Auto');
               }}
               className={`flex items-center justify-center gap-1.5 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer ${
                 type === 'expense'
@@ -102,7 +108,7 @@ export function AddTransactionModal({
               type="button"
               onClick={() => {
                 setType('income');
-                setSelectedCategory('');
+                setSelectedCategory('Auto');
               }}
               className={`flex items-center justify-center gap-1.5 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer ${
                 type === 'income'
@@ -145,14 +151,18 @@ export function AddTransactionModal({
             </p>
           </div>
 
-          {/* 3. Description / Merchant */}
+          {/* 3. Title (Nomi) — ALBATTA BO‘LISHI KERAK */}
           <div className="space-y-1.5">
-            <label htmlFor="tx-name-input" className="text-xs font-semibold text-[#171B16]">
-              Nomi yoki qayerga
-            </label>
+            <div className="flex items-center justify-between">
+              <label htmlFor="tx-name-input" className="text-xs font-semibold text-[#171B16]">
+                Nomi (Title) <span className="text-[#D64D4D]">*</span>
+              </label>
+              <span className="text-[11px] text-[#71717A]">Majburiy</span>
+            </div>
             <input
               id="tx-name-input"
               type="text"
+              required
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={type === 'expense' ? 'Masalan: Korzinka, Taksi, Kafe' : 'Masalan: Oylik, Mukofot'}
@@ -162,28 +172,48 @@ export function AddTransactionModal({
 
           {/* 4. Category Selector Chips */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-[#171B16]">
-              Kategoriya
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-[#171B16]">
+                Kategoriya
+              </label>
+              {selectedCategory === 'Auto' && (
+                <span className="text-[11px] font-medium text-[#16A34A] flex items-center gap-1 bg-[#F0FDF4] px-2 py-0.5 rounded-full border border-[#BBF7D0]">
+                  <Sparkles className="h-3 w-3" />
+                  AI: {predicted.category}
+                </span>
+              )}
+            </div>
             <div className="flex flex-wrap gap-1.5">
               {currentCategories.map((cat) => {
                 const isSelected = selectedCategory === cat.name;
+                const isAuto = cat.name === 'Auto';
                 return (
                   <button
                     key={cat.id}
                     type="button"
                     onClick={() => setSelectedCategory(cat.name)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
                       isSelected
-                        ? 'bg-[#163300] text-[#9FE870] font-semibold shadow-xs'
+                        ? isAuto
+                          ? 'bg-[#163300] text-[#9FE870] font-semibold shadow-xs ring-2 ring-[#9FE870]/40'
+                          : 'bg-[#163300] text-[#9FE870] font-semibold shadow-xs'
+                        : isAuto
+                        ? 'bg-[#F0FDF4] text-[#166534] border border-[#BBF7D0] hover:bg-[#DCFCE7]'
                         : 'bg-[#F7F8F5] text-[#697168] hover:text-[#171B16] border border-[#E8EBE5]'
                     }`}
                   >
-                    {cat.name}
+                    {isAuto && <Sparkles className="h-3 w-3 text-[#16A34A]" />}
+                    <span>{isAuto ? 'Auto (AI)' : cat.name}</span>
                   </button>
                 );
               })}
             </div>
+            {selectedCategory === 'Auto' && (
+              <p className="text-[11px] text-[#5C6659] flex items-center gap-1 pt-0.5">
+                <Sparkles className="h-3 w-3 text-[#16A34A] shrink-0" />
+                <span>AI title asosida avtomatik <strong>«{predicted.category}»</strong> toifasini tanlaydi</span>
+              </p>
+            )}
           </div>
 
           {/* 5. Date selection */}
@@ -211,11 +241,11 @@ export function AddTransactionModal({
             </button>
             <button
               type="submit"
-              disabled={numericAmount <= 0}
+              disabled={numericAmount <= 0 || !name.trim()}
               className="w-full py-3 rounded-xl bg-[#9FE870] hover:bg-[#8ED760] text-[#163300] font-bold text-xs sm:text-sm shadow-xs transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
             >
               <Check className="h-4 w-4 stroke-[3]" />
-              <span>Saqlash</span>
+              <span>Tranzaksiya qo‘shish</span>
             </button>
           </div>
         </form>

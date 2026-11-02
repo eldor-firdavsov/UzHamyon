@@ -2,11 +2,12 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { X, Loader2, Check } from 'lucide-react';
+import { X, Loader2, Check, Sparkles } from 'lucide-react';
 import type { Category, TransactionType } from '@/types/database';
 import { cachedFetch, invalidateAllFinancialCaches, CACHE_TTL } from '@/lib/cache/clientCache';
 import { getCategoryDisplayName } from '@/lib/categories/schemas';
 import CategoryIcon from '@/components/categories/CategoryIcon';
+import { predictCategoryFromTitle, matchPredictedToDbCategory } from '@/lib/categories/predictCategory';
 
 export interface FastTransactionModalProps {
   isOpen: boolean;
@@ -23,11 +24,13 @@ export default function FastTransactionModal({
 }: FastTransactionModalProps) {
   const router = useRouter();
   const amountInputRef = useRef<HTMLInputElement>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
 
   // Form State
   const [activeTab, setActiveTab] = useState<'expense' | 'income' | 'transfer'>('expense');
   const [amount, setAmount] = useState('');
-  const [chosenCategoryId, setChosenCategoryId] = useState('');
+  const [title, setTitle] = useState('');
+  const [chosenCategoryId, setChosenCategoryId] = useState('auto');
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [note, setNote] = useState('');
   const currency = 'UZS';
@@ -84,11 +87,15 @@ export default function FastTransactionModal({
   const targetType = activeTab === 'income' ? 'income' : 'expense';
   const filteredCategories = categories.filter((c) => c.type === targetType);
 
+  // AI prediction based on input title (with fallback to note)
+  const predicted = predictCategoryFromTitle(title || note, targetType);
+  const matchedAutoCategory = matchPredictedToDbCategory(predicted.category, filteredCategories);
+
   // Derived effective category ID
-  const effectiveCategoryId =
-    filteredCategories.some((c) => c.id === chosenCategoryId)
-      ? chosenCategoryId
-      : filteredCategories[0]?.id || '';
+  const isAutoCategory = chosenCategoryId === 'auto' || !chosenCategoryId;
+  const effectiveCategoryId = isAutoCategory
+    ? matchedAutoCategory?.id || filteredCategories[0]?.id || ''
+    : chosenCategoryId;
 
   if (!isOpen) return null;
 
@@ -110,26 +117,26 @@ export default function FastTransactionModal({
       return;
     }
 
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      setError('Iltimos, tranzaksiya nomini (title) kiriting.');
+      titleInputRef.current?.focus();
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      const selectedCategory = categories.find((c) => c.id === effectiveCategoryId);
-      const defaultDesc =
-        activeTab === 'transfer'
-          ? 'O‘tkazma'
-          : selectedCategory?.name || (activeTab === 'income' ? 'Daromad' : 'Xarajat');
-
-      const finalDescription = note.trim() || defaultDesc;
       const finalType: TransactionType = activeTab === 'income' ? 'income' : 'expense';
 
       const payload = {
-        description: finalDescription,
+        description: trimmedTitle,
         amount: Math.round(parsedAmount * 100) / 100,
         currency: currency.toUpperCase(),
         type: finalType,
         transaction_date: date || new Date().toISOString().split('T')[0],
         category_id: effectiveCategoryId || undefined,
-        notes: activeTab === 'transfer' ? (note ? `${note} [O‘tkazma]` : 'O‘tkazma') : note.trim() || undefined,
+        notes: note.trim() || undefined,
       };
 
       const res = await fetch('/api/transactions', {
@@ -146,7 +153,9 @@ export default function FastTransactionModal({
 
       setSuccessMessage('Tranzaksiya muvaffaqiyatli saqlandi');
       setAmount('');
+      setTitle('');
       setNote('');
+      setChosenCategoryId('auto');
 
       // Invalidate caches and refresh data
       invalidateAllFinancialCaches();
@@ -216,7 +225,7 @@ export default function FastTransactionModal({
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* 1. Transaction Type (Xarajat, Daromad) */}
+          {/* 1. Xarajat yoki Daromad (Tranzaksiya turi) */}
           <div>
             <label className="block text-sm font-semibold text-[#5C6659] mb-1.5">
               Tranzaksiya turi
@@ -225,7 +234,10 @@ export default function FastTransactionModal({
               <button
                 type="button"
                 id="fast-tx-tab-expense"
-                onClick={() => setActiveTab('expense')}
+                onClick={() => {
+                  setActiveTab('expense');
+                  setChosenCategoryId('auto');
+                }}
                 className={`min-h-[44px] py-2 text-sm font-semibold rounded-lg transition-all ${
                   activeTab === 'expense'
                     ? 'bg-[#D64D4D] text-white shadow-sm'
@@ -237,7 +249,10 @@ export default function FastTransactionModal({
               <button
                 type="button"
                 id="fast-tx-tab-income"
-                onClick={() => setActiveTab('income')}
+                onClick={() => {
+                  setActiveTab('income');
+                  setChosenCategoryId('auto');
+                }}
                 className={`min-h-[44px] py-2 text-sm font-semibold rounded-lg transition-all ${
                   activeTab === 'income'
                     ? 'bg-[#26834A] text-white shadow-sm'
@@ -259,7 +274,7 @@ export default function FastTransactionModal({
             </button>
           </div>
 
-          {/* 2. Amount Field (Focused Immediately, Large, Numeric Keyboard) */}
+          {/* 2. Amount (Summa) */}
           <div>
             <label htmlFor="fast-tx-amount" className="block text-sm font-semibold text-[#5C6659] mb-1.5">
               Summa <span className="text-[#D64D4D]">*</span>
@@ -284,99 +299,133 @@ export default function FastTransactionModal({
             </div>
           </div>
 
-          {/* 3. Category Selector */}
+          {/* 3. Title (Nomi) — ALBATTA BO‘LISHI KERAK */}
           <div>
-            <label htmlFor="fast-tx-category" className="block text-sm font-semibold text-[#5C6659] mb-1.5">
-              Kategoriya
-            </label>
-            <div className="flex items-center gap-2.5">
-              {effectiveCategoryId && (
-                <CategoryIcon
-                  name={getCategoryDisplayName(filteredCategories.find((c) => c.id === effectiveCategoryId)?.name || '')}
-                  type={activeTab === 'income' ? 'in' : 'ex'}
-                  size="sm"
-                />
+            <div className="flex items-center justify-between mb-1.5">
+              <label htmlFor="fast-tx-title" className="block text-sm font-semibold text-[#5C6659]">
+                Nomi (Title) <span className="text-[#D64D4D]">*</span>
+              </label>
+              <span className="text-xs text-[#71717A]">Majburiy</span>
+            </div>
+            <input
+              ref={titleInputRef}
+              id="fast-tx-title"
+              type="text"
+              required
+              placeholder={
+                activeTab === 'expense'
+                  ? 'Masalan: Tushlik, Supermarket, Taksi...'
+                  : 'Masalan: Oylik maosh, Keshbek, Mukofot...'
+              }
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              disabled={isSubmitting}
+              className="w-full min-h-[48px] rounded-xl border border-[#E8EBE5] bg-white px-3.5 py-2.5 text-sm text-[#163300] placeholder-[#8C9886] font-medium focus:border-[#163300] focus:outline-none focus:ring-2 focus:ring-[#9FE870]/30 transition-all"
+            />
+          </div>
+
+          {/* 4. Kategoriya (AI Titlega qarab avtomatik tanlaydi) */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label htmlFor="fast-tx-category" className="block text-sm font-semibold text-[#5C6659]">
+                Kategoriya
+              </label>
+              {isAutoCategory && (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#15803D] bg-[#F0FDF4] px-2 py-0.5 rounded-full border border-[#BBF7D0]">
+                  <Sparkles className="h-3 w-3 text-[#16A34A]" />
+                  AI: {predicted.category}
+                </span>
               )}
+            </div>
+            <div className="flex items-center gap-2.5">
+              <CategoryIcon
+                name={isAutoCategory ? 'Auto' : getCategoryDisplayName(filteredCategories.find((c) => c.id === effectiveCategoryId)?.name || '')}
+                type={activeTab === 'income' ? 'in' : 'ex'}
+                size="sm"
+              />
               <select
                 id="fast-tx-category"
-                value={effectiveCategoryId}
+                value={chosenCategoryId || 'auto'}
                 onChange={(e) => setChosenCategoryId(e.target.value)}
                 disabled={isSubmitting || loadingCategories}
                 className="w-full min-h-[48px] rounded-xl border border-[#E8EBE5] bg-white px-3.5 py-2.5 text-sm text-[#163300] font-semibold focus:border-[#163300] focus:outline-none focus:ring-2 focus:ring-[#9FE870]/30 transition-all"
               >
-                {filteredCategories.length === 0 ? (
-                  <option value="">(Kategoriyalar mavjud emas)</option>
-                ) : (
-                  filteredCategories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {getCategoryDisplayName(cat.name)}
-                    </option>
-                  ))
-                )}
+                <option value="auto">✨ Auto (AI titlega qarab tanlaydi)</option>
+                {filteredCategories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {getCategoryDisplayName(cat.name)}
+                  </option>
+                ))}
               </select>
+            </div>
+            {isAutoCategory && (
+              <p className="text-xs text-[#5C6659] mt-1.5 flex items-center gap-1">
+                <Sparkles className="h-3 w-3 text-[#16A34A] shrink-0" />
+                <span>AI title asosida toifani <strong>«{predicted.category}»</strong> deb tanlaydi</span>
+              </p>
+            )}
+          </div>
+
+          {/* 5. Izoh (va Sana) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="fast-tx-note" className="block text-sm font-semibold text-[#5C6659] mb-1.5">
+                Izoh <span className="text-[#71717A] font-normal">(ixtiyoriy)</span>
+              </label>
+              <input
+                id="fast-tx-note"
+                type="text"
+                placeholder="Qo‘shimcha tafsilotlar..."
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                disabled={isSubmitting}
+                className="w-full min-h-[48px] rounded-xl border border-[#E8EBE5] bg-white px-3.5 py-2.5 text-sm text-[#163300] placeholder-[#8C9886] focus:border-[#163300] focus:outline-none focus:ring-2 focus:ring-[#9FE870]/30 transition-all"
+              />
+            </div>
+            <div>
+              <label htmlFor="fast-tx-date" className="block text-sm font-semibold text-[#5C6659] mb-1.5">
+                Sana
+              </label>
+              <input
+                id="fast-tx-date"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                disabled={isSubmitting}
+                className="w-full min-h-[48px] rounded-xl border border-[#E8EBE5] bg-white px-3.5 py-2.5 text-sm text-[#163300] font-medium focus:border-[#163300] focus:outline-none focus:ring-2 focus:ring-[#9FE870]/30 transition-all"
+              />
             </div>
           </div>
 
-          {/* 4. Date (Defaults to Today) */}
-          <div>
-            <label htmlFor="fast-tx-date" className="block text-sm font-semibold text-[#5C6659] mb-1.5">
-              Sana
-            </label>
-            <input
-              id="fast-tx-date"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              disabled={isSubmitting}
-              className="w-full min-h-[48px] rounded-xl border border-[#E8EBE5] bg-white px-3.5 py-2.5 text-sm text-[#163300] font-medium focus:border-[#163300] focus:outline-none focus:ring-2 focus:ring-[#9FE870]/30 transition-all"
-            />
-          </div>
-
-          {/* 5. Optional Note */}
-          <div>
-            <label htmlFor="fast-tx-note" className="block text-sm font-semibold text-[#5C6659] mb-1.5">
-              Izoh <span className="text-[#5C6659] font-normal">(ixtiyoriy)</span>
-            </label>
-            <input
-              id="fast-tx-note"
-              type="text"
-              placeholder="Masalan: Tushlik, Supermarket, Yoqilg‘i..."
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              disabled={isSubmitting}
-              className="w-full min-h-[48px] rounded-xl border border-[#E8EBE5] bg-white px-3.5 py-2.5 text-sm text-[#163300] placeholder-[#8C9886] focus:border-[#163300] focus:outline-none focus:ring-2 focus:ring-[#9FE870]/30 transition-all"
-            />
-          </div>
-
-          {/* 6. Primary "Saqlash" & Secondary "Bekor qilish" Action Buttons */}
+          {/* 6. Tranzaksiya qo‘shish */}
           <div className="pt-2.5 flex items-center gap-3">
             <button
               type="button"
               id="fast-tx-cancel-btn"
               onClick={onClose}
               disabled={isSubmitting}
-              className="flex-1 min-h-[48px] py-2.5 px-4 rounded-xl border border-[#E8EBE5] bg-white hover:bg-[#F0F2ED] text-[#163300] text-sm font-semibold transition-all disabled:opacity-50"
+              className="min-h-[48px] py-2.5 px-4 rounded-xl border border-[#E8EBE5] bg-white hover:bg-[#F0F2ED] text-[#163300] text-sm font-semibold transition-all disabled:opacity-50"
             >
               Bekor qilish
             </button>
             <button
               type="submit"
               id="fast-tx-submit-btn"
-              disabled={isSubmitting || !amount}
+              disabled={isSubmitting || !amount || !title.trim()}
               className="flex-1 min-h-[48px] flex items-center justify-center gap-2 rounded-xl bg-[#9FE870] hover:bg-[#8ED660] text-[#163300] font-bold py-2.5 px-4 text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm active:scale-98"
             >
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin text-[#163300]" />
-                  <span>Saqlanmoqda...</span>
+                  <span>Qo‘shilmoqda...</span>
                 </>
               ) : successMessage ? (
                 <>
                   <Check className="h-4 w-4 text-[#163300]" />
-                  <span>Saqlandi</span>
+                  <span>Qo‘shildi</span>
                 </>
               ) : (
-                <span>Saqlash</span>
+                <span>Tranzaksiya qo‘shish</span>
               )}
             </button>
           </div>

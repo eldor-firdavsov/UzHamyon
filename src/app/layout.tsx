@@ -1,15 +1,7 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
 import Script from "next/script";
 import TelegramMiniAppInit from "@/components/telegram/TelegramMiniAppInit";
 import "./globals.css";
-
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-  display: "swap",
-  weight: ["400", "500", "600", "700"],
-});
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -37,9 +29,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="uz"
-      className={`${inter.variable} h-full antialiased`}
+      className="h-full antialiased font-sans"
     >
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+          rel="stylesheet"
+        />
         <Script
           src="https://telegram.org/js/telegram-web-app.js"
           strategy="beforeInteractive"

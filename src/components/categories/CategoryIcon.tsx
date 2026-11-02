@@ -17,6 +17,7 @@ import {
   Gift,
   Coins,
   MoreHorizontal,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -173,6 +174,23 @@ export const CATEGORY_DEFINITIONS: Record<string, CategoryMeta> = {
     color: '#C026D3',
     border: '#F5D0FE',
   },
+  // Auto / AI
+  'Auto': {
+    key: 'Auto',
+    name: 'Auto (AI)',
+    icon: Sparkles,
+    bg: '#F0FDF4',
+    color: '#15803D',
+    border: '#86EFAC',
+  },
+  'Avto': {
+    key: 'Avto',
+    name: 'Auto (AI)',
+    icon: Sparkles,
+    bg: '#F0FDF4',
+    color: '#15803D',
+    border: '#86EFAC',
+  },
   // Other Income
   'Boshqa daromad': {
     key: 'Boshqa daromad',
@@ -200,7 +218,7 @@ export function getCategoryMeta(rawName?: string, type: 'in' | 'ex' | 'income' |
   if (!rawName) {
     return (type === 'in' || type === 'income')
       ? CATEGORY_DEFINITIONS['Maosh']
-      : CATEGORY_DEFINITIONS['Boshqa'];
+      : CATEGORY_DEFINITIONS['Auto'];
   }
 
   // Exact match first
@@ -209,6 +227,11 @@ export function getCategoryMeta(rawName?: string, type: 'in' | 'ex' | 'income' |
   }
 
   const lower = rawName.toLowerCase();
+
+  // Auto / AI category detection
+  if (lower === 'auto' || lower === 'avto' || lower.includes('auto') || lower.includes('avto')) {
+    return CATEGORY_DEFINITIONS['Auto'];
+  }
 
   // Income categories
   if (lower.includes('maosh') || lower.includes('salary') || lower.includes('ish haqi')) {

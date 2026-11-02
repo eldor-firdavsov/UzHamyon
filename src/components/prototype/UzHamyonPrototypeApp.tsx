@@ -6,6 +6,7 @@ import MobileNavBar from '@/components/navigation/MobileNavBar';
 import SlidingSegmentedNav from '@/prototype/components/SlidingSegmentedNav';
 import UzHamyonLogo from '@/components/brand/UzHamyonLogo';
 import CategoryIcon, { getCategoryMeta } from '@/components/categories/CategoryIcon';
+import { predictCategoryFromTitle } from '@/lib/categories/predictCategory';
 import {
   Sparkles,
   ArrowUp,
@@ -91,10 +92,12 @@ const CATEGORY_ICONS: Record<string, string> = {
   'Oziq-ovqat': 'M2 3h3l3 12h11l2-8H6M9 20h.01M18 20h.01',
   Transport: 'M5 17h14M7 17l1-9h8l1 9M9 8V5h6v3',
   "Ko'ngilochar": 'M12 3l2.5 6 6.5.5-5 4.3 1.6 6.4L12 16.5 6.4 20.2 8 13.8 3 9.5 9.5 9z',
+  Auto: 'M12 3v3m0 12v3m9-9h-3M6 12H3m15.364-6.364l-2.121 2.121M8.757 15.243l-2.121 2.121m0-11.485l2.121 2.121m6.486 6.486l2.121 2.121',
   Boshqa: 'M5 12h.01M12 12h.01M19 12h.01',
 };
 
 const EXPENSE_CATEGORIES = [
+  'Auto',
   'Oziq-ovqat',
   'Transport',
   'Uy-joy',
@@ -106,14 +109,13 @@ const EXPENSE_CATEGORIES = [
   'Salomatlik',
   "Ta'lim",
   'Shaxsiy parvarish',
-  'Boshqa',
 ];
 const INCOME_CATEGORIES = [
+  'Auto',
   'Maosh',
   'Frilans',
   'Investitsiyalar',
   "Sovg'alar",
-  'Boshqa daromad',
 ];
 
 const UZBEK_MONTH_NAMES = [
@@ -722,14 +724,26 @@ export default function UzHamyonPrototypeApp({
     setAiSendCount(newSendCount);
     setAiLastQuery(trimmed);
 
+    const financialContextSummary = `Foydalanuvchining joriy moliyaviy holati:
+- Faol oy: ${monthLabel} ${year}
+- Oylik daromad: ${formatNumber(monthIncome)} so'm
+- Oylik xarajat: ${formatNumber(monthExpense)} so'm
+- Eng ko'p xarajat qilingan toifa: ${topExpenseCategory || "Mavjud emas"} (${topExpenseCategory ? formatNumber(categoryExpenses[topExpenseCategory]) + " so'm" : ''})
+- Maqsadlarga jamg'arilgan: ${formatNumber(totalSavedAcrossGoals)} so'm
+- Jami tranzaksiyalar soni: ${transactions.length} ta`;
+
     try {
       const res = await fetch('/api/ai/advisor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: trimmed }),
+        body: JSON.stringify({
+          question: trimmed,
+          message: trimmed,
+          context: financialContextSummary,
+        }),
       });
       const data = await res.json();
-      const reply = data.reply || data.answer || generateAIResponse(trimmed);
+      const reply = data.answer || data.reply || data.response?.answer || data.response?.replyText || generateAIResponse(trimmed);
       setAiLoading(false);
       setAiError(false);
       setConversations((prev) =>
@@ -764,14 +778,26 @@ export default function UzHamyonPrototypeApp({
     setAiLoading(true);
     setAiSendCount((prev) => prev + 1);
 
+    const financialContextSummary = `Foydalanuvchining joriy moliyaviy holati:
+- Faol oy: ${monthLabel} ${year}
+- Oylik daromad: ${formatNumber(monthIncome)} so'm
+- Oylik xarajat: ${formatNumber(monthExpense)} so'm
+- Eng ko'p xarajat qilingan toifa: ${topExpenseCategory || "Mavjud emas"}
+- Maqsadlarga jamg'arilgan: ${formatNumber(totalSavedAcrossGoals)} so'm
+- Jami tranzaksiyalar soni: ${transactions.length} ta`;
+
     try {
       const res = await fetch('/api/ai/advisor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: aiLastQuery }),
+        body: JSON.stringify({
+          question: aiLastQuery,
+          message: aiLastQuery,
+          context: financialContextSummary,
+        }),
       });
       const data = await res.json();
-      const reply = data.reply || data.answer || generateAIResponse(aiLastQuery);
+      const reply = data.answer || data.reply || data.response?.answer || data.response?.replyText || generateAIResponse(aiLastQuery);
       setAiLoading(false);
       setAiError(false);
       setConversations((prev) =>
@@ -806,7 +832,7 @@ export default function UzHamyonPrototypeApp({
     setFormData({
       type: 'ex',
       amount: '',
-      cat: '',
+      cat: 'Auto',
       desc: '',
       date: `${year}-${padTwo(month)}-${month === 11 ? '02' : '01'}`,
     });
@@ -827,10 +853,15 @@ export default function UzHamyonPrototypeApp({
 
   const handleSaveTx = async () => {
     const amt = parseNumber(formData.amount);
-    const cat = formData.cat;
     const date = formData.date;
     const desc = (formData.desc || '').trim();
     const type = (formData.type || 'ex') as 'in' | 'ex';
+
+    // If Auto is selected, AI dynamically resolves category from title/description
+    const predicted = predictCategoryFromTitle(desc, type);
+    const cat = (!formData.cat || formData.cat === 'Auto' || formData.cat === 'Boshqa')
+      ? predicted.category
+      : formData.cat;
 
     if (amt <= 0 || !cat || !date) return;
 
@@ -846,6 +877,7 @@ export default function UzHamyonPrototypeApp({
           description: desc || cat,
           amount: amt,
           type: type === 'in' ? 'income' : 'expense',
+          category: cat,
           transaction_date: date,
         }),
       }).catch(console.error);
@@ -862,7 +894,7 @@ export default function UzHamyonPrototypeApp({
       setTransactions((prev) => [...prev, newTx]);
       setYear(parseInt(date.slice(0, 4), 10));
       setMonth(parseInt(date.slice(5, 7), 10));
-      triggerToast('Tranzaksiya qo‘shildi');
+      triggerToast(`Tranzaksiya qo‘shildi: ${cat}`);
       fetch('/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -870,6 +902,7 @@ export default function UzHamyonPrototypeApp({
           description: desc || cat,
           amount: amt,
           type: type === 'in' ? 'income' : 'expense',
+          category: cat,
           currency: 'UZS',
           transaction_date: date,
         }),
@@ -1051,7 +1084,6 @@ export default function UzHamyonPrototypeApp({
 
   const isSaveTxDisabled =
     parseNumber(formData.amount) <= 0 ||
-    !formData.cat ||
     !formData.date ||
     formData.date < START_DATE ||
     formData.date > TODAY_DATE;
@@ -2487,100 +2519,177 @@ export default function UzHamyonPrototypeApp({
             </div>
 
             {/* ── SHEET: Add / Edit Transaction ── */}
-            {activeSheet === 'tx' && (
-              <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-                <div className="fxb">
-                  <SlidingSegmentedNav
-                    options={[
-                      {
-                        id: 'in',
-                        label: '+ Daromad',
-                        activeBg: '#EAF5EC',
-                        activeColor: '#26834A',
-                      },
-                      {
-                        id: 'ex',
-                        label: '− Xarajat',
-                        activeBg: '#FCEEEE',
-                        activeColor: '#B33A3A',
-                      },
-                    ]}
-                    value={formData.type}
-                    onChange={(val) => setFormData((prev) => ({ ...prev, type: val, cat: '' }))}
-                    style={{ marginTop: '8px' }}
-                  />
+            {activeSheet === 'tx' && (() => {
+              const txType = (formData.type || 'ex') as 'in' | 'ex';
+              const isAutoActive = !formData.cat || formData.cat === 'Auto';
+              const livePredicted = predictCategoryFromTitle(formData.desc || '', txType);
 
-                  <label className="lb" htmlFor="tx-amount">
-                    Summa (so&apos;m)
-                  </label>
-                  <input
-                    id="tx-amount"
-                    className="in num"
-                    inputMode="numeric"
-                    placeholder="0"
-                    value={formData.amount || ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, amount: e.target.value }))}
-                  />
+              return (
+                <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                  <div className="fxb">
+                    <SlidingSegmentedNav
+                      options={[
+                        {
+                          id: 'in',
+                          label: '+ Daromad',
+                          activeBg: '#EAF5EC',
+                          activeColor: '#26834A',
+                        },
+                        {
+                          id: 'ex',
+                          label: '− Xarajat',
+                          activeBg: '#FCEEEE',
+                          activeColor: '#B33A3A',
+                        },
+                      ]}
+                      value={formData.type}
+                      onChange={(val) => setFormData((prev) => ({ ...prev, type: val, cat: 'Auto' }))}
+                      style={{ marginTop: '8px' }}
+                    />
 
-                  <div className="lb">Kategoriya</div>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    {(formData.type === 'in' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map((catName) => (
-                      <button
-                        key={catName}
-                        type="button"
-                        className={`ch ${formData.cat === catName ? 'on' : ''}`}
-                        onClick={() => setFormData((prev) => ({ ...prev, cat: catName }))}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                    <label className="lb" htmlFor="tx-amount">
+                      Summa (so&apos;m)
+                    </label>
+                    <input
+                      id="tx-amount"
+                      className="in num"
+                      inputMode="numeric"
+                      placeholder="0"
+                      value={formData.amount || ''}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, amount: e.target.value }))}
+                    />
+
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '14px', marginBottom: '6px' }}>
+                      <div className="lb" style={{ margin: 0 }}>Kategoriya</div>
+                      {isAutoActive && (
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            color: '#15803D',
+                            background: '#F0FDF4',
+                            padding: '2px 9px',
+                            borderRadius: '999px',
+                            border: '1px solid #BBF7D0',
+                          }}
+                        >
+                          <Sparkles size={12} style={{ color: '#16A34A' }} />
+                          AI: {livePredicted.category}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      {(formData.type === 'in' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map((catName) => {
+                        const isAuto = catName === 'Auto';
+                        const isSelected = isAuto ? isAutoActive : formData.cat === catName;
+                        return (
+                          <button
+                            key={catName}
+                            type="button"
+                            className={`ch ${isSelected ? 'on' : ''}`}
+                            onClick={() => setFormData((prev) => ({ ...prev, cat: catName }))}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              cursor: 'pointer',
+                              ...(isAuto && isSelected
+                                ? {
+                                    backgroundColor: '#163300',
+                                    color: '#9FE870',
+                                    borderColor: '#9FE870',
+                                    fontWeight: 600,
+                                  }
+                                : isAuto
+                                ? {
+                                    backgroundColor: '#F0FDF4',
+                                    color: '#15803D',
+                                    borderColor: '#BBF7D0',
+                                    fontWeight: 500,
+                                  }
+                                : {}),
+                            }}
+                          >
+                            {isAuto ? (
+                              <Sparkles size={14} style={{ color: isSelected ? '#9FE870' : '#16A34A' }} />
+                            ) : (
+                              <CategoryIcon name={catName} size="xs" showBackground={false} />
+                            )}
+                            <span>{isAuto ? 'Auto (AI)' : catName}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {isAutoActive && (
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '8px 12px',
+                          borderRadius: '10px',
+                          background: '#F0FDF4',
+                          border: '1px solid #BBF7D0',
+                          color: '#166534',
+                          fontSize: '11px',
+                          fontWeight: 500,
+                          marginTop: '8px',
+                        }}
                       >
-                        <CategoryIcon name={catName} size="xs" showBackground={false} />
-                        <span>{catName}</span>
-                      </button>
-                    ))}
+                        <Sparkles size={13} style={{ color: '#16A34A', flexShrink: 0 }} />
+                        <span>
+                          AI izohga qarab toifani avtomatik tanlaydi: <strong>«{livePredicted.category}»</strong>
+                        </span>
+                      </div>
+                    )}
+
+                    <label className="lb" htmlFor="tx-date">
+                      Sana
+                    </label>
+                    <input
+                      id="tx-date"
+                      className="in"
+                      type="date"
+                      min={START_DATE}
+                      max={TODAY_DATE}
+                      value={formData.date || ''}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, date: e.target.value }))}
+                    />
+
+                    <label className="lb" htmlFor="tx-desc">
+                      Izoh {isAutoActive && <span style={{ color: '#16A34A', fontWeight: 500, fontSize: '11px' }}>(AI toifani shu orqali aniqlaydi)</span>}
+                    </label>
+                    <input
+                      id="tx-desc"
+                      className="in"
+                      placeholder={formData.type === 'in' ? 'Masalan: Oylik maosh, Bonus...' : 'Masalan: Korzinka, Taksi, Evos lavash...'}
+                      value={formData.desc || ''}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, desc: e.target.value }))}
+                    />
                   </div>
 
-                  <label className="lb" htmlFor="tx-date">
-                    Sana
-                  </label>
-                  <input
-                    id="tx-date"
-                    className="in"
-                    type="date"
-                    min={START_DATE}
-                    max={TODAY_DATE}
-                    value={formData.date || ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, date: e.target.value }))}
-                  />
-
-                  <label className="lb" htmlFor="tx-desc">
-                    Izoh (ixtiyoriy)
-                  </label>
-                  <input
-                    id="tx-desc"
-                    className="in"
-                    placeholder="Qisqacha izoh..."
-                    value={formData.desc || ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, desc: e.target.value }))}
-                  />
-                </div>
-
-                <div className="fxf">
-                  <button className="p" disabled={isSaveTxDisabled} onClick={handleSaveTx}>
-                    Saqlash
-                  </button>
-                  {editId && (
-                    <button
-                      className="d"
-                      onClick={() => {
-                        setConfirmConfig({ k: 'tx', id: editId });
-                        setActiveSheet('confirm');
-                      }}
-                    >
-                      O&apos;chirish
+                  <div className="fxf">
+                    <button className="p" disabled={isSaveTxDisabled} onClick={handleSaveTx}>
+                      Saqlash
                     </button>
-                  )}
+                    {editId && (
+                      <button
+                        className="d"
+                        onClick={() => {
+                          setConfirmConfig({ k: 'tx', id: editId });
+                          setActiveSheet('confirm');
+                        }}
+                      >
+                        O&apos;chirish
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* ── SHEET: Add / Edit Budget ── */}
             {activeSheet === 'budget' && (
@@ -2596,7 +2705,7 @@ export default function UzHamyonPrototypeApp({
                     onChange={(e) => setFormData((prev) => ({ ...prev, cat: e.target.value }))}
                   >
                     <option value="">Tanlang...</option>
-                    {EXPENSE_CATEGORIES.map((catName) => (
+                    {EXPENSE_CATEGORIES.filter((c) => c !== 'Auto').map((catName) => (
                       <option key={catName} value={catName}>
                         {catName}
                       </option>

@@ -927,18 +927,15 @@ export default function OnboardingWizard({
         {/* STEP 7 — PERSONALIZED FINANCIAL RESULTS                                   */}
         {/* ========================================================================= */}
         {step === 7 && (
-          <div id="onboarding-step-7" className="space-y-6">
-            <div className="space-y-1.5 text-center sm:text-left">
-              <div className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-[#EBEEE8] text-[#163300] mb-1">
+          <div id="onboarding-step-7" className="space-y-5">
+            <div className="space-y-1 text-center sm:text-left">
+              <div className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-[#EBEEE8] text-[#163300] mb-0.5">
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>Shaxsiy moliyaviy prognoz</span>
               </div>
               <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-[#163300]">
-                Moliyaviy imkoniyatlaringizni ko‘ring
+                Moliyaviy imkoniyatlaringiz
               </h2>
-              <p className="text-xs sm:text-sm text-[#52525B]">
-                UzHamyon bilan moliyaviy holatingizni yaxshiroq tushunib, maqsadlaringiz sari harakat qilishingiz mumkin.
-              </p>
             </div>
 
             {/* Income & Expense Summary Strip */}
@@ -959,7 +956,7 @@ export default function OnboardingWizard({
 
             {/* Potential Savings or Helpful Notice */}
             {potentialSavings > 0 ? (
-              <div className="space-y-4">
+              <div className="space-y-3.5">
                 <div className="rounded-2xl bg-[#163300] text-white p-4 sm:p-5 flex items-center justify-between">
                   <div>
                     <p className="text-xs text-[#9FE870] font-medium">Potensial oylik jamg‘arma</p>
@@ -972,61 +969,44 @@ export default function OnboardingWizard({
                   </div>
                 </div>
 
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wider text-[#71717A]">
-                    Vaqt bo‘yicha jamg‘arish istiqboli
+                    Jamg‘arish istiqboli
                   </p>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="grid grid-cols-2 gap-2.5">
                     {/* 1 Month */}
-                    <div className="rounded-2xl border border-[#E5E7EB] bg-[#F8F9FA] p-3.5 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-[#163300]">1 oydan so‘ng</span>
-                        <span className="text-xs font-mono font-bold text-[#18181B]">
-                          ~{formatWithSpaces(potentialSavings * 1)} so‘m
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-[#52525B] leading-tight">
-                        Xarajatlaringiz qayerga ketayotganini yaxshiroq tushuna boshlaysiz.
+                    <div className="rounded-2xl border border-[#E5E7EB] bg-[#F8F9FA] p-3">
+                      <span className="text-[11px] font-medium text-[#71717A] block">1 oydan so‘ng</span>
+                      <p className="text-sm sm:text-base font-bold text-[#18181B] mt-0.5">
+                        ~{formatWithSpaces(potentialSavings * 1)} so‘m
                       </p>
                     </div>
 
                     {/* 3 Months */}
-                    <div className="rounded-2xl border border-[#E5E7EB] bg-[#F8F9FA] p-3.5 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-[#163300]">3 oydan so‘ng</span>
-                        <span className="text-xs font-mono font-bold text-[#18181B]">
-                          ~{formatWithSpaces(potentialSavings * 3)} so‘m
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-[#52525B] leading-tight">
-                        Ortiqcha xarajatlarni aniqlash va kamaytirish imkoniyatiga ega bo‘lasiz.
+                    <div className="rounded-2xl border border-[#E5E7EB] bg-[#F8F9FA] p-3">
+                      <span className="text-[11px] font-medium text-[#71717A] block">3 oydan so‘ng</span>
+                      <p className="text-sm sm:text-base font-bold text-[#18181B] mt-0.5">
+                        ~{formatWithSpaces(potentialSavings * 3)} so‘m
                       </p>
                     </div>
 
                     {/* 6 Months */}
-                    <div className="rounded-2xl border border-[#E5E7EB] bg-[#F8F9FA] p-3.5 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-[#163300]">6 oydan so‘ng</span>
-                        <span className="text-xs font-mono font-bold text-[#18181B]">
-                          ~{formatWithSpaces(potentialSavings * 6)} so‘m
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-[#52525B] leading-tight">
-                        Jamg‘arish odatini shakllantirishni boshlashingiz mumkin.
+                    <div className="rounded-2xl border border-[#E5E7EB] bg-[#F8F9FA] p-3">
+                      <span className="text-[11px] font-medium text-[#71717A] block">6 oydan so‘ng</span>
+                      <p className="text-sm sm:text-base font-bold text-[#18181B] mt-0.5">
+                        ~{formatWithSpaces(potentialSavings * 6)} so‘m
                       </p>
                     </div>
 
                     {/* 12 Months */}
-                    <div className="rounded-2xl border border-[#163300]/20 bg-[#F3F8F2] p-3.5 space-y-1">
+                    <div className="rounded-2xl border border-[#163300]/20 bg-[#F3F8F2] p-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-[#163300]">12 oydan so‘ng</span>
-                        <span className="text-xs font-mono font-bold text-[#163300]">
-                          ~{formatWithSpaces(potentialSavings * 12)} so‘m
-                        </span>
+                        <span className="text-[11px] font-semibold text-[#163300]">1 yildan so‘ng</span>
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-[#163300]/10 text-[#163300]">12 oy</span>
                       </div>
-                      <p className="text-[11px] text-[#52525B] leading-tight">
-                        Rejangizga amal qilsangiz, sezilarli jamg‘armaga ega bo‘lishingiz mumkin.
+                      <p className="text-sm sm:text-base font-bold text-[#163300] mt-0.5">
+                        ~{formatWithSpaces(potentialSavings * 12)} so‘m
                       </p>
                     </div>
                   </div>
@@ -1043,7 +1023,7 @@ export default function OnboardingWizard({
                       Xarajatlar daromadga teng yoki yuqori
                     </h3>
                     <p className="text-[#52525B] leading-relaxed">
-                      Hozirda ko‘rsatilgan oylik xarajatlaringiz daromadingizdan ko‘proq yoki unga teng ko‘rinmoqda. UzHamyon yordamida qaysi xarajatlarni optimallashtirish mumkinligini aniqlab, asta-sekin ijobiy balansga chiqishingiz mumkin.
+                      Oylik xarajatlaringiz daromadingizdan ko‘proq yoki unga teng. UzHamyon orqali xarajatlarni optimallashtirib, jamg‘arishni boshlashingiz mumkin.
                     </p>
                   </div>
                 </div>
@@ -1062,8 +1042,8 @@ export default function OnboardingWizard({
             )}
 
             {/* Disclaimer */}
-            <p className="text-[11px] text-[#71717A] leading-relaxed text-center sm:text-left">
-              Hisob-kitoblar siz kiritgan ma&apos;lumotlarga asoslangan taxminiy prognozdir. Haqiqiy natijalar daromad va xarajatlaringizga bog‘liq.
+            <p className="text-[11px] text-[#71717A] text-center">
+              * Kiritilgan ma&apos;lumotlar asosida taxminiy hisob-kitob
             </p>
 
             {/* Primary CTA */}

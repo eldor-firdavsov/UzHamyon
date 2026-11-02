@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Loader2, Coins, Calendar, Tag, Building2, FileText } from 'lucide-react';
+import { X, Loader2, Coins, Calendar, Tag, Building2, FileText, Sparkles } from 'lucide-react';
 import { Category, TransactionWithCategory, TransactionType } from '@/types/database';
 import { getCategoryDisplayName } from '@/lib/categories/schemas';
 import CategoryIcon from '@/components/categories/CategoryIcon';
+import { predictCategoryFromTitle, matchPredictedToDbCategory } from '@/lib/categories/predictCategory';
 
 interface TransactionModalProps {
   isOpen: boolean;
@@ -42,12 +43,18 @@ function TransactionModalForm({
   const [transactionDate, setTransactionDate] = useState(
     transactionToEdit?.transaction_date || new Date().toISOString().split('T')[0]
   );
-  const [categoryId, setCategoryId] = useState<string>(transactionToEdit?.category_id || '');
+  const [categoryId, setCategoryId] = useState<string>(transactionToEdit?.category_id || 'auto');
   const [merchant, setMerchant] = useState(transactionToEdit?.merchant || '');
   const [notes, setNotes] = useState(transactionToEdit?.notes || '');
   const [formError, setFormError] = useState<string | null>(null);
 
   const compatibleCategories = categories.filter((c) => c.type === type);
+  const isAutoCategory = categoryId === 'auto' || (!categoryId && !isEditing);
+  const predicted = predictCategoryFromTitle(description || merchant || notes || '', type);
+  const matchedAutoCategory = matchPredictedToDbCategory(predicted.category, compatibleCategories);
+  const effectiveCatId = isAutoCategory
+    ? (matchedAutoCategory?.id || null)
+    : (categoryId || null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,11 +72,10 @@ function TransactionModalForm({
       return;
     }
 
-    // If description is empty, use category name or type
-    let finalDescription = description.trim();
-    if (!finalDescription) {
-      const selectedCat = categories.find((c) => c.id === categoryId);
-      finalDescription = selectedCat ? selectedCat.name : type === 'expense' ? 'Xarajat' : 'Daromad';
+    const trimmedTitle = description.trim();
+    if (!trimmedTitle) {
+      setFormError('Iltimos, tranzaksiya nomini (title) kiriting.');
+      return;
     }
 
     if (!transactionDate) {
@@ -78,12 +84,12 @@ function TransactionModalForm({
     }
 
     const res = await onSave({
-      description: finalDescription,
+      description: trimmedTitle,
       amount: parsedAmount,
       currency: currency.toUpperCase().trim(),
       type,
       transaction_date: transactionDate,
-      category_id: categoryId ? categoryId : null,
+      category_id: effectiveCatId,
       merchant: merchant.trim() ? merchant.trim() : null,
       notes: notes.trim() ? notes.trim() : null,
     });
@@ -137,7 +143,7 @@ function TransactionModalForm({
 
       {/* Form */}
       <form onSubmit={handleSubmit} className="mt-5 space-y-4">
-        {/* Type Selector (Chiqim / Kirim) */}
+        {/* 1. Tranzaksiya turi (Chiqim / Kirim) */}
         <div>
           <label className="block text-sm font-medium text-[#47544C] mb-1.5">
             Tranzaksiya turi
@@ -148,7 +154,7 @@ function TransactionModalForm({
               id="type-expense-btn"
               onClick={() => {
                 setType('expense');
-                setCategoryId('');
+                if (!isEditing) setCategoryId('auto');
               }}
               className={`min-h-[44px] py-2 px-3 text-sm font-semibold rounded-xl border transition-all ${
                 type === 'expense'
@@ -163,7 +169,7 @@ function TransactionModalForm({
               id="type-income-btn"
               onClick={() => {
                 setType('income');
-                setCategoryId('');
+                if (!isEditing) setCategoryId('auto');
               }}
               className={`min-h-[44px] py-2 px-3 text-sm font-semibold rounded-xl border transition-all ${
                 type === 'income'
@@ -176,7 +182,7 @@ function TransactionModalForm({
           </div>
         </div>
 
-        {/* Amount */}
+        {/* 2. Summa (Amount) */}
         <div>
           <label htmlFor="amount-input" className="block text-sm font-medium text-[#47544C] mb-1.5">
             Summa (so‘m) <span className="text-[#C74747]">*</span>
@@ -199,30 +205,59 @@ function TransactionModalForm({
           </div>
         </div>
 
-        {/* Category */}
+        {/* 3. Title (Nomi) — ALBATTA BO‘LISHI KERAK */}
         <div>
-          <label htmlFor="category-select" className="block text-sm font-medium text-[#47544C] mb-1.5">
-            Kategoriya
-          </label>
-          <div className="flex items-center gap-2.5">
-            {categoryId && (
-              <CategoryIcon
-                name={getCategoryDisplayName(compatibleCategories.find((c) => c.id === categoryId)?.name || '')}
-                type={type === 'income' ? 'in' : 'ex'}
-                size="sm"
-              />
+          <div className="flex items-center justify-between mb-1.5">
+            <label htmlFor="description-input" className="block text-sm font-medium text-[#47544C]">
+              Nomi (Title) <span className="text-[#C74747]">*</span>
+            </label>
+            <span className="text-xs text-[#71717A]">Majburiy</span>
+          </div>
+          <input
+            id="description-input"
+            type="text"
+            required
+            placeholder={
+              type === 'expense'
+                ? 'Masalan: Tushlik, Supermarket, Yoqilg‘i...'
+                : 'Masalan: Oylik maosh, Keshbek, Mukofot...'
+            }
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white px-3.5 py-2.5 text-sm text-[#17211B] placeholder-[#5A675F] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all font-medium"
+          />
+        </div>
+
+        {/* 4. Kategoriya (AI Titlega qarab avtomatik tanlaydi) */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label htmlFor="category-select" className="block text-sm font-medium text-[#47544C]">
+              Kategoriya
+            </label>
+            {isAutoCategory && (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#15803D] bg-[#F0FDF4] px-2 py-0.5 rounded-full border border-[#BBF7D0]">
+                <Sparkles className="h-3 w-3 text-[#16A34A]" />
+                AI: {predicted.category}
+              </span>
             )}
+          </div>
+          <div className="flex items-center gap-2.5">
+            <CategoryIcon
+              name={isAutoCategory ? 'Auto' : getCategoryDisplayName(compatibleCategories.find((c) => c.id === effectiveCatId)?.name || '')}
+              type={type === 'income' ? 'in' : 'ex'}
+              size="sm"
+            />
             <div className="relative flex-1">
               <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#5A675F]">
                 <Tag className="h-4 w-4" />
               </span>
               <select
                 id="category-select"
-                value={categoryId}
+                value={categoryId || 'auto'}
                 onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white pl-10 pr-3.5 py-2.5 text-sm text-[#17211B] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all"
+                className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white pl-10 pr-3.5 py-2.5 text-sm text-[#17211B] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all font-semibold"
               >
-                <option value="">Kategoriyasiz</option>
+                <option value="auto">✨ Auto (AI titlega qarab tanlaydi)</option>
                 {compatibleCategories.map((c) => (
                   <option key={c.id} value={c.id}>
                     {getCategoryDisplayName(c.name)}
@@ -231,67 +266,19 @@ function TransactionModalForm({
               </select>
             </div>
           </div>
+          {isAutoCategory && (
+            <p className="text-xs text-[#5A675F] mt-1.5 flex items-center gap-1">
+              <Sparkles className="h-3 w-3 text-[#16A34A] shrink-0" />
+              <span>AI title asosida avtomatik <strong>«{predicted.category}»</strong> toifasini tanlaydi</span>
+            </p>
+          )}
         </div>
 
-        {/* Date */}
-        <div>
-          <label htmlFor="date-input" className="block text-sm font-medium text-[#47544C] mb-1.5">
-            Sana <span className="text-[#C74747]">*</span>
-          </label>
-          <div className="relative">
-            <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#5A675F]">
-              <Calendar className="h-4 w-4" />
-            </span>
-            <input
-              id="date-input"
-              type="date"
-              required
-              value={transactionDate}
-              onChange={(e) => setTransactionDate(e.target.value)}
-              className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white pl-10 pr-3.5 py-2.5 text-sm text-[#17211B] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all"
-            />
-          </div>
-        </div>
-
-        {/* Description / Note */}
-        <div>
-          <label htmlFor="description-input" className="block text-sm font-medium text-[#47544C] mb-1.5">
-            Tavsif (ixtiyoriy)
-          </label>
-          <input
-            id="description-input"
-            type="text"
-            placeholder="Masalan: Tushlik, Oylik maosh..."
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white px-3.5 py-2.5 text-sm text-[#17211B] placeholder-[#5A675F] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all"
-          />
-        </div>
-
-        {/* Merchant & Notes */}
+        {/* 5. Izoh & Sana */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label htmlFor="merchant-input" className="block text-sm font-medium text-[#47544C] mb-1.5">
-              Savdo nuqtasi
-            </label>
-            <div className="relative">
-              <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#5A675F]">
-                <Building2 className="h-4 w-4" />
-              </span>
-              <input
-                id="merchant-input"
-                type="text"
-                placeholder="Masalan: Korzinka"
-                value={merchant}
-                onChange={(e) => setMerchant(e.target.value)}
-                className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white pl-10 pr-3.5 py-2.5 text-sm text-[#17211B] placeholder-[#5A675F] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all"
-              />
-            </div>
-          </div>
-
-          <div>
             <label htmlFor="notes-input" className="block text-sm font-medium text-[#47544C] mb-1.5">
-              Qo‘shimcha izoh
+              Izoh <span className="text-[#71717A] font-normal">(ixtiyoriy)</span>
             </label>
             <div className="relative">
               <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#5A675F]">
@@ -300,16 +287,55 @@ function TransactionModalForm({
               <input
                 id="notes-input"
                 type="text"
-                placeholder="Qayd..."
+                placeholder="Qayd yoki tafsilot..."
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white pl-10 pr-3.5 py-2.5 text-sm text-[#17211B] placeholder-[#5A675F] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all"
               />
             </div>
           </div>
+
+          <div>
+            <label htmlFor="date-input" className="block text-sm font-medium text-[#47544C] mb-1.5">
+              Sana <span className="text-[#C74747]">*</span>
+            </label>
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#5A675F]">
+                <Calendar className="h-4 w-4" />
+              </span>
+              <input
+                id="date-input"
+                type="date"
+                required
+                value={transactionDate}
+                onChange={(e) => setTransactionDate(e.target.value)}
+                className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white pl-10 pr-3.5 py-2.5 text-sm text-[#17211B] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all"
+              />
+            </div>
+          </div>
         </div>
 
-        {/* Actions */}
+        {/* Qo'shimcha: Savdo nuqtasi (ixtiyoriy) */}
+        <div>
+          <label htmlFor="merchant-input" className="block text-sm font-medium text-[#47544C] mb-1.5">
+            Savdo nuqtasi <span className="text-[#71717A] font-normal">(ixtiyoriy)</span>
+          </label>
+          <div className="relative">
+            <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#5A675F]">
+              <Building2 className="h-4 w-4" />
+            </span>
+            <input
+              id="merchant-input"
+              type="text"
+              placeholder="Masalan: Korzinka, Makro, Shell..."
+              value={merchant}
+              onChange={(e) => setMerchant(e.target.value)}
+              className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white pl-10 pr-3.5 py-2.5 text-sm text-[#17211B] placeholder-[#5A675F] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all"
+            />
+          </div>
+        </div>
+
+        {/* 6. Tranzaksiya qo‘shish */}
         <div className="pt-4 border-t border-[#D5DED7] flex items-center justify-end gap-3">
           <button
             type="button"
@@ -323,11 +349,17 @@ function TransactionModalForm({
           <button
             type="submit"
             id="save-transaction-btn"
-            disabled={isSaving}
+            disabled={isSaving || !description.trim()}
             className="inline-flex items-center gap-2 rounded-xl bg-[#176B45] px-5 py-2.5 min-h-[44px] text-sm font-semibold text-white hover:bg-[#125536] transition-colors disabled:opacity-50 shadow-fintech-card"
           >
             {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-            <span>{isSaving ? 'Saqlanmoqda...' : 'Saqlash'}</span>
+            <span>
+              {isSaving
+                ? 'Saqlanmoqda...'
+                : isEditing
+                ? 'O‘zgarishlarni saqlash'
+                : 'Tranzaksiya qo‘shish'}
+            </span>
           </button>
         </div>
       </form>

@@ -185,17 +185,52 @@ app.post('/api/ai/advisor', async (c) => {
       return c.json({ simulation: simRes.data }, 200);
     }
 
-    const { question, conversationId } = body;
+    const question = (body.question || body.message || body.prompt || '').trim();
+    const conversationId = body.conversationId;
     if (!question) {
       return c.json({ error: 'question is required' }, 400);
     }
 
     const result = await askFinancialAdvisor(question, conversationId, client);
     if (result.error) {
+      // If unauthenticated (e.g. prototype preview or guest visitor), provide live OpenRouter AI response
+      if (result.status === 401 || result.error.includes('Avtorizatsiya')) {
+        const { generateAIContent } = await import('../src/lib/ai/aiClient.ts');
+        const systemInstruction = `Siz UzHamyon — O‘zbekistondagi eng zamonaviy shaxsiy moliya va budjet boshqaruvi platformasining sun’iy intellekt moliyaviy maslahatchisisiz.
+Foydalanuvchining savoliga o‘zbek tilida aniq, samimiy, tushunarli, dalillarga asoslangan va professional tarzda javob bering.
+Agar hisob-kitob, tejash, xarajatlar yoki budjet haqida so‘ralsa, O‘zbekiston sharoitiga mos amaliy raqamlar va tavsiyalar keltiring.
+${body.context ? `\nFoydalanuvchining joriy moliyaviy konteksti:\n${body.context}` : ''}`;
+
+        const aiRes = await generateAIContent(question, systemInstruction);
+        const replyText = aiRes.text || 'Kechirasiz, hozirda javobni shakllantirishda xatolik yuz berdi. Iltimos qaytadan urinib ko‘ring.';
+
+        return c.json(
+          {
+            response: {
+              conversationId: 'demo-guest',
+              messageId: 'msg-' + Date.now(),
+              answer: replyText,
+              isAiFallback: aiRes.isFallback,
+              evidence: { model: aiRes.model },
+            },
+            answer: replyText,
+            reply: replyText,
+          },
+          200
+        );
+      }
+
       return c.json({ error: result.error }, (result.status as any) || 400);
     }
 
-    return c.json({ response: result.data }, 200);
+    return c.json(
+      {
+        response: result.data,
+        answer: result.data?.answer,
+        reply: result.data?.answer,
+      },
+      200
+    );
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Server error in AI Advisor';
     return c.json({ error: message }, 500);

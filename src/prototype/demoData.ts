@@ -301,6 +301,7 @@ export const DEMO_SAVINGS_GOALS: DemoSavingsGoal[] = [
 // Categories for Add Transaction Modal
 export const DEMO_CATEGORIES = {
   expense: [
+    { id: 'cat-auto', name: 'Auto', icon: 'sparkles' },
     { id: 'cat-food', name: 'Oziq-ovqat', icon: 'cart' },
     { id: 'cat-transport', name: 'Transport & Taksi', icon: 'car' },
     { id: 'cat-cafe', name: 'Kafe & Restoran', icon: 'coffee' },
@@ -309,9 +310,9 @@ export const DEMO_CATEGORIES = {
     { id: 'cat-shopping', name: 'Kiyim & Xarid', icon: 'shopping' },
   ],
   income: [
+    { id: 'cat-auto-inc', name: 'Auto', icon: 'sparkles' },
     { id: 'cat-salary', name: 'Oylik maosh', icon: 'wallet' },
     { id: 'cat-freelance', name: 'Frilans / Loyiha', icon: 'laptop' },
     { id: 'cat-invest', name: 'Investitsiya & Depozit', icon: 'trending-up' },
-    { id: 'cat-other-inc', name: 'Boshqa tushum', icon: 'plus-circle' },
   ],
 };

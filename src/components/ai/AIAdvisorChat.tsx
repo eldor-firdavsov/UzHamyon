@@ -416,7 +416,7 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
         refreshConversations();
       }
 
-      const replyContent = (data.response?.answer || data.response?.replyText || '').trim();
+      const replyContent = (data.response?.answer || data.answer || data.reply || data.response?.replyText || '').trim();
       if (!replyContent) {
         throw new Error('AI yordamchi javobi bo‘sh qaytdi');
       }
