@@ -17,73 +17,102 @@ export function FinancialOverviewBlock({
   periodExpenses,
   activeMonthLabel,
 }: FinancialOverviewBlockProps) {
+  const formattedTotal = totalLifetimeIncome.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+
   return (
-    <section 
-      aria-label="Moliyaviy ko‘rsatkichlar"
-      className="rounded-[20px] bg-white p-5 sm:p-6 border border-[#E8EBE5]/80 shadow-[0_1px_4px_rgba(23,27,22,0.03)]"
-    >
-      {/* ── Top: Main Financial Figure ── */}
-      <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-[#697168]">
-              Jami qayd etilgan daromad
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-[#F0F9E9] px-2 py-0.5 text-[10px] font-semibold text-[#163300] border border-[#9FE870]/40">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#26834A]" aria-hidden="true" />
-              Barcha vaqt
-            </span>
-          </div>
+    <section aria-label="Moliyaviy ko‘rsatkichlar" className="w-full">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 sm:gap-4 items-stretch">
+        {/* ── TYPE A: HERO CARD (Takes 7 cols on lg:, full width on mobile) ── */}
+        <div className="lg:col-span-7 relative overflow-hidden rounded-[26px] bg-gradient-to-br from-[#163300] via-[#1b3d02] to-[#122800] p-6 sm:p-7 text-white shadow-[0_12px_36px_rgba(22,51,0,0.18)] border border-[#2d580a]/60 flex flex-col justify-between">
+          {/* Subtle decorative geometric background curves & lighting */}
+          <div 
+            className="absolute -right-16 -top-16 h-64 w-64 rounded-full border-[32px] border-white/[0.04] pointer-events-none" 
+            aria-hidden="true" 
+          />
+          <div 
+            className="absolute right-12 -bottom-20 h-48 w-48 rounded-full bg-[#9FE870]/[0.08] blur-2xl pointer-events-none" 
+            aria-hidden="true" 
+          />
 
-          <div className="font-mono text-3xl sm:text-4xl font-bold tracking-tight text-[#171B16] tabular-nums leading-none">
-            {formatUzbekCurrency(totalLifetimeIncome)}
+          <div className="relative z-10 space-y-4">
+            {/* Header Row */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#9FE870]">
+                  Jami qayd etilgan daromad
+                </span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-white/10 text-[#9FE870] border border-[#9FE870]/30 backdrop-blur-xs">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#9FE870] animate-pulse" />
+                  Barcha vaqt
+                </span>
+              </div>
+
+              <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-xs font-semibold text-white/90 border border-white/10">
+                <TrendingUp className="w-3.5 h-3.5 text-[#9FE870]" />
+                <span>Faol hisob</span>
+              </div>
+            </div>
+
+            {/* ── HERO FINANCIAL NUMBER (38-44px Mobile, 48-56px Desktop) ── */}
+            <div className="pt-1">
+              <div className="flex items-baseline flex-wrap gap-x-2">
+                <span className="font-mono text-[38px] sm:text-[44px] lg:text-[52px] font-extrabold tracking-tight text-white tabular-nums leading-none drop-shadow-xs">
+                  {formattedTotal}
+                </span>
+                <span className="font-mono text-xl sm:text-2xl lg:text-[28px] font-bold text-[#9FE870] tracking-normal">
+                  so‘m
+                </span>
+              </div>
+              
+              <p className="mt-2 text-xs sm:text-sm text-white/70 max-w-md font-medium">
+                Ilovada hisob ochilgandan buyon kiritilgan umumiy daromad mablag‘i
+              </p>
+            </div>
           </div>
-          
-          <p className="mt-1 text-xs text-[#697168]">
-            Ilovada hisob ochilgandan buyon kiritilgan umumiy tushum
-          </p>
         </div>
 
-        {/* Wise Green Subtle Accent Badge on Desktop */}
-        <div className="hidden sm:flex items-center gap-1.5 self-start px-2.5 py-1 rounded-lg bg-[#F7F8F5] text-xs font-medium text-[#163300] border border-[#E8EBE5]">
-          <TrendingUp className="w-3.5 h-3.5 text-[#26834A]" />
-          <span>Ijobiy dinamika</span>
-        </div>
-      </div>
-
-      {/* ── Divider: Clean whitespace and subtle divider (NO nested cards) ── */}
-      <div className="mt-5 pt-4 border-t border-[#E8EBE5]/60">
-        <div className="grid grid-cols-2 gap-4 sm:gap-8">
-          {/* Unified Period Income Column */}
-          <div className="space-y-1">
-            <div className="flex items-center gap-1.5 text-xs font-medium text-[#697168]">
-              <span className="w-5 h-5 rounded-full bg-[#EDF7F0] text-[#26834A] flex items-center justify-center shrink-0">
-                <ArrowDownLeft className="h-3 w-3 stroke-[2.5]" />
+        {/* ── TYPE B: METRIC CARDS (Takes 5 cols on lg:, 2-cols side-by-side on mobile) ── */}
+        <div className="lg:col-span-5 grid grid-cols-2 lg:grid-cols-1 gap-3 sm:gap-4">
+          {/* Income Card: Subtle Emerald Wash */}
+          <div className="rounded-[22px] bg-[#EDF8F1] p-4 sm:p-5 border border-[#C5E9D2] shadow-[0_2px_8px_rgba(38,131,74,0.06)] flex flex-col justify-between transition-transform hover:-translate-y-0.5">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[#1E7440]">
+                Davr daromadi
               </span>
-              <span>Davr daromadi</span>
+              <div className="w-7 h-7 rounded-full bg-[#26834A] text-white flex items-center justify-center shadow-xs">
+                <ArrowDownLeft className="h-4 w-4 stroke-[2.5]" />
+              </div>
             </div>
-            <div className="font-mono text-lg sm:text-xl font-bold text-[#26834A] tabular-nums">
-              +{formatUzbekCurrency(periodIncome)}
+
+            <div>
+              <div className="font-mono text-lg sm:text-xl lg:text-[24px] font-extrabold text-[#1E7440] tabular-nums tracking-tight">
+                +{formatUzbekCurrency(periodIncome)}
+              </div>
+              <span className="text-[11px] font-medium text-[#26834A]/80 block mt-0.5">
+                {activeMonthLabel}
+              </span>
             </div>
-            <span className="text-[11px] text-[#959E94] block">
-              {activeMonthLabel}
-            </span>
           </div>
 
-          {/* Unified Period Expense Column */}
-          <div className="space-y-1 border-l border-[#E8EBE5]/60 pl-4 sm:pl-8">
-            <div className="flex items-center gap-1.5 text-xs font-medium text-[#697168]">
-              <span className="w-5 h-5 rounded-full bg-[#FDF1F1] text-[#D64D4D] flex items-center justify-center shrink-0">
-                <ArrowUpRight className="h-3 w-3 stroke-[2.5]" />
+          {/* Expense Card: Subtle Coral/Red Wash */}
+          <div className="rounded-[22px] bg-[#FDF2F2] p-4 sm:p-5 border border-[#F8C8C8] shadow-[0_2px_8px_rgba(214,77,77,0.06)] flex flex-col justify-between transition-transform hover:-translate-y-0.5">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[#C53B3B]">
+                Davr xarajati
               </span>
-              <span>Davr xarajati</span>
+              <div className="w-7 h-7 rounded-full bg-[#D64D4D] text-white flex items-center justify-center shadow-xs">
+                <ArrowUpRight className="h-4 w-4 stroke-[2.5]" />
+              </div>
             </div>
-            <div className="font-mono text-lg sm:text-xl font-bold text-[#D64D4D] tabular-nums">
-              -{formatUzbekCurrency(periodExpenses)}
+
+            <div>
+              <div className="font-mono text-lg sm:text-xl lg:text-[24px] font-extrabold text-[#C53B3B] tabular-nums tracking-tight">
+                -{formatUzbekCurrency(periodExpenses)}
+              </div>
+              <span className="text-[11px] font-medium text-[#D64D4D]/80 block mt-0.5">
+                {activeMonthLabel}
+              </span>
             </div>
-            <span className="text-[11px] text-[#959E94] block">
-              {activeMonthLabel}
-            </span>
           </div>
         </div>
       </div>

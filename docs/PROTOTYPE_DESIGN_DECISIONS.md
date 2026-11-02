@@ -1,96 +1,67 @@
-# UzHamyon — Mobil va Desktop Dizayn Prototipi (Design Decisions)
+# UzHamyon — Kuchaytirilgan Vizual Identika va Moliyaviy Iyerarxiya
 
-Ushbu hujjat **UzHamyon** ilovasi uchun Wise uslubidagi mobil-first va to‘liq moslashuvchan (responsive) desktop dizayn prototipining (`design-prototype` tarmog‘i) yangilangan vizual qarorlari, soddalashtirilgan kartalar tizimi, tipografik iyerarxiyasi hamda desktop adaptatsiyasini bayon qiladi.
-
----
-
-## 1. Loyiha Izolyatsiyasi va Nol Regressiya (Isolation & Zero Regression)
-
-1. **Alohida Git Tarmog‘i:**
-   - Barcha prototip kodlari faqat `design-prototype` Git tarmog‘ida joylashgan. Asosiy `main` tarmog‘i o‘zgarishsiz qoldirilgan.
-2. **Nol Ishlab Chiqarish O‘zgarishi:**
-   - Mavjud Supabase ma’lumotlar bazasi, jadvallar, RLS qoidalari, autentifikatsiya tizimi, API marshrutlari va moliyaviy hisob-kitoblar logikasiga **umuman tegilmadi**.
-3. **Avtonom Demo Ma’lumotlar:**
-   - Toshkent/O‘zbekiston moliyaviy kontekstiga to‘liq mos keladigan mustaqil demo ma’lumotlar (`src/prototype/demoData.ts`).
-4. **Izolyatsiyalangan Marshrut:**
-   - Prototip `http://localhost:3000/prototype` manzilida ishlaydi va avtorizatsiya talab qilmasdan bevosita ko‘rish va sinash imkonini beradi.
+Ushbu hujjat **UzHamyon** prototipining (`design-prototype` tarmog‘i) yangilangan vizual tili, qat’iy uch bosqichli karta arxitekturasi va pul miqdorini bosh qahramonga aylantirgan boyitilgan fintech dizayn tizimini bayon qiladi.
 
 ---
 
-## 2. Vizual Qayta Ishlash va Ortiqcha Kartalarni Qisqartirish (Visual Refinement)
+## 1. Asosiy Muammoning Yechimi: Mablag‘lar Bosh Qahramonga Aylantirildi
 
-Foydalanuvchi mulohazalariga muvofiq, interfeysdagi ortiqcha ramkalar, chegaralar va ko‘p qatlamli (nested) kartalar to‘liq tozalanib, **bo‘shliq (whitespace)** va **to‘g‘ri tipografiya** orqali sokin, yengil hamda diqqatni faqat moliyaviy ma’lumotlarga qaratuvchi muhit yaratildi:
+Oldingi o‘ta minimalist versiyada barcha ma’lumotlar bir xil oq kartochkalarda ko‘rinib, vizual xarakter yo‘qolgan edi. Yangi tizimda mablag‘lar birinchi nigohdayoq ko‘zga tashlanadi:
 
-- **Sokin Neytral Folar:**
-  - Jami daromad kartasidagi qizg‘ish/baquvvat neon yashil fon o‘rniga, oq fon (`#FFFFFF`), nozik soch tolasi chegarasi (`#E8EBE5`/60) va mayin yashil aksentli nishoncha tanlandi.
-  - Barcha bo‘limlar alohida rang-barang fonlar bilan raqobatlashmaydi; neytral `#F7F8F5` foni va oq asosiy yuzalar orqali tabiiy guruhlanadi.
-- **Ichma-ich kartalardan (Nested Cards) to‘liq voz kechish:**
-  - `FinancialOverviewBlock`: Jami daromad va davr daromadi/xarajati endi alohida 3 ta kartada emas, balki bitta yaxlit, xotirjam va toza panel ichida nozik ajratgich bilan birlashtirildi.
-  - `MonthlyCashFlowBlock`: Har bir qator alohida kulrang quti emas, balki qulay, havodor ro‘yxat qatorlari ko‘rinishiga keltirildi.
-  - `RecentTransactionsBlock`: Har bir tranzaksiya qutisi o‘rniga mayin ajratuvchi chiziqlarga ega minimalist ro‘yxat tuzilmasi.
-  - `AIRecommendationBlock`: Ichki qora/kulrang qutichadan voz kechilib, chap tomonda nozik zumrad chiziq (`border-l-4 border-l-[#26834A]`) bilan ajratilgan toza sirt.
-  - `SavingsGoalsBlock`: Ichki alohida kartochkalar o‘rniga ixcham, ingichka (6px) progress chizig‘iga ega toza qatorlar.
-- **Yashil rangning o‘rni:** Yashil faqat ma’noli aksentlar (ijobiy tushumlar, birlamchi harakat tugmasi, progress ko‘rsatkichi) uchun saqlandi.
+- **Bosh Summa (Hero Amount):**
+  - O‘lcham: Mobil ekranda **44px**, Desktop ekranda **52px** (`font-mono`, `font-extrabold`).
+  - To‘q o‘rmon yashil (`#163300`) boy fonga ega **Type A Hero Karta** ichida joylashtirildi.
+  - Valyuta belgisi (`so‘m`) ikkinchi darajali qilib alohida neon-yashil rangda ajratildi.
+  - Orqa fonda suv belgili yoylar va mayin nur effektlari mavjud.
 
 ---
 
-## 3. Desktop Adaptatsiyasi (1440px Birlamchi Standart)
+## 2. Uch Bosqichli Karta Dizayn Tizimi (3 Card Treatments)
 
-Ilova faqat mobil emas, balki to‘laqonli zamonaviy desktop fintech mahsuloti darajasiga ko‘tarildi:
+Endi har bir bo‘lim bir xil kulrang ramkali oq quti emas:
 
-### Desktop Navigatsiya (`DesktopHeader.tsx`)
-- Ekranning yuqori qismida yopishib turuvchi (sticky) qulay navigatsiya paneli (faqat `lg:` va undan katta ekranlarda ko‘rinadi):
-  - **Chapda:** `UzHamyon` logotipi (yashil hamyon ramzi) va `Demo rejim` nishoni.
-  - **Markazda:** Asosiy 4 ta bo‘lim: **Bosh sahifa**, **Faoliyat**, **Tahlil**, **AI**. Faol holat to‘q yashil (`#163300`) fon va oq matn bilan yaqqol ajratilgan.
-  - **O‘ngda:** Wise Lime (`#9FE870`) rangidagi **"+ Yangi amal"** bosh tugmasi, xabarnoma qo‘ng‘irog‘i va foydalanuvchi profili (`AQ` / Aziz Qodirov).
-- **Mobil navigatsiya:** Suzuvchi pastki bar (`FloatingMobileNav`) desktopda butunlay yashiriladi (`lg:hidden`).
+### 1. Type A: Qahramon Karta (Hero Card — Asosiy Daromad)
+- **Foni:** Boy to‘q yashil gradient (`from-[#163300] via-[#1b3d02] to-[#122800]`).
+- **Xarakteri:** Mutlaq yuqori kontrast, oq shrift, Wise neon-yashil (`#9FE870`) nishonlar va nurlar.
+- **Vazifasi:** Ilovaning moliyaviy markazi, eng kuchli vizual langar.
 
-### Desktop Kompozitsiyasi (Grid Layout)
-- **Maksimal Kenglik Cheklovi (`max-w-7xl` — 1280px):** 1920px yoki 1600px ekranlarda ham kontent cheksiz cho‘zilib ketmaydi, ekranning markazida xotirjam joylashadi.
-- **Sarlavha Qatori:** "Moliyaviy holat" sarlavhasi, sana filtri ("📅 Oktabr 2026") va kontekstual amal tugmasi.
-- **Yuqori Blok:** Jami qayd etilgan daromad va davr daromadi/xarajatlari birlashgan keng formatli sirt.
-- **Ikki Ustunli Balanslangan Grid (`12 ustunli`):**
-  - **Asosiy Chap Ustun (7-8 ustun):**
-    1. *Pul oqimi grafigi:* Kengroq maydon, nozik chiziqli gorizontal to‘r, ustunlar ustiga borganda/bosilganda aniq ko‘rsatkich.
-    2. *Kirim va chiqimlar oqimi:* Daromad, xarajat va sof qoldiqning ixcham tahlili.
-  - **Qo‘llab-quvvatlovchi O‘ng Ustun (4-5 ustun):**
-    1. *So‘nggi amallar:* 5 ta tranzaksiyadan iborat ixcham toza ro‘yxat.
-    2. *AI tavsiyasi:* Chalg‘itmaydigan, to‘g‘ridan-to‘g‘ri matn va harakat tugmasiga ega qulay blok.
-    3. *Jamg‘arma maqsadlari:* Ixcham progress ko‘rsatkichlari va bosganda mablag‘ kiritish oynasi.
+### 2. Type B: Metrik Kartalar (Metric Cards — Daromad va Xarajat)
+- **Foni:** Rang bilan nozik bo‘yalgan sirtlar (subtle tinted backgrounds):
+  - **Davr daromadi:** Yumshoq yalpiz/zumrad tus (`bg-[#EDF8F1]`, chegara `border-[#C5E9D2]`, matn `#1E7440`).
+  - **Davr xarajati:** Yumshoq marjon/qizil tus (`bg-[#FDF2F2]`, chegara `border-[#F8C8C8]`, matn `#C53B3B`).
+- **Xarakteri:** Katta `24px`–`26px` tabular raqamlar, doiraviy rangli semantik piktogrammalar.
+- **Joylashuvi:** Mobilda yonma-yon 2 ustunda, desktopda esa yuqori boshqaruv panelida Hero Card yonida uyg‘un integratsiya qilingan.
 
----
-
-## 4. Tipografik Iyerarxiya
-
-- **Shrift:** Inter.
-- **Asosiy Raqamlar:** `font-mono`, `tabular-nums`, `font-bold` (32px–40px). Raqamlar bir-birini siljitmaydi, o‘qish oson.
-- **Bo‘lim Sarlavhalari:** `font-semibold` (14px–16px), `tracking-tight`.
-- **Yorliqlar va Matnlar:** `font-medium` (12px–13px), `text-[#697168]`.
-- **Ikkinchi Darajali Izohlar:** `text-[10px]–[11px]`, `text-[#959E94]`.
+### 3. Type C: Mazmun Sirtlari (Content Surfaces — Grafik, Amallar, AI, Jamg‘armalar)
+- **Foni:** Yengil ko‘tarilgan (elevated) oq sirtlar (`bg-white`), mayin soyalar (`shadow-[0_4px_20px_rgba(23,27,22,0.04)]`) va aniq chegara.
+- **Bo‘limlar:**
+  - **Pul oqimi grafigi:** Kengaygan maydon, gorizontal to‘r chiziqlari, qulay ustunlar va ixcham davr tanlagichi.
+  - **Kirim va chiqimlar oqimi:** Oylik daromad, xarajat va alohida ajratilgan yashil fondagi **Sof farq (qoldiq)** bloki.
+  - **So‘nggi amallar:** O‘ziga xos toifa piktogrammalari, toza tipografiya va aniq tabular summalar.
+  - **AI tavsiyasi:** O‘ziga xos brendlashtirilgan ko‘rinish — chap chetida zumrad rangli tasma, mayin yashil gradient va qora/lime rangli harakat tugmasi.
+  - **Jamg‘arma maqsadlari:** Ko‘zga yaqqol tashlanadigan qalin (10px) gradientli progress chizig‘i, aniq foiz nishoni va yig‘ilgan/maqsad summalar.
 
 ---
 
-## 5. Sinovdan O‘tkazilgan Viewportlar va Skrinshotlar
+## 3. Oldingi va Yangi Dizayn Taqqoslovi (Before vs. After)
 
-Quyidagi barcha talab qilingan o‘lchamlarda to‘liq skrinshotlar olindi va gorizontal siljish (overflow) yo‘qligi tekshirildi:
-
-| Viewport | Turi | Fayl | Xulosasi |
-|---|---|---|---|
-| **320px** | Kichik mobil | `docs/prototype-preview/mobile_320px.png` | Matnlar qisqarishsiz toza sig‘adi, 0 horizontal scroll |
-| **375px** | Klassik mobil | `docs/prototype-preview/mobile_375px.png` | Mutanosib bo‘shliqlar va ixcham kartalar |
-| **390px** | Asosiy mobil | `docs/prototype-preview/mobile_390px.png` / `mobile_390px_full.png` | Asosiy mobil standart, toza va xotirjam ko‘rinish |
-| **430px** | Katta mobil | `docs/prototype-preview/mobile_430px.png` | Kengaytirilgan qulay ekran |
-| **1024px** | Planshet / Kichik desktop | `docs/prototype-preview/desktop_1024px.png` | Desktop header va ko‘p ustunli tartibga muammosiz o‘tish |
-| **1280px** | Standart desktop | `docs/prototype-preview/desktop_1280px.png` | Ideal ikki ustunli nisbat |
-| **1440px** | Asosiy desktop | `docs/prototype-preview/desktop_1440px.png` / `desktop_1440px_full.png` | Mukammal fintech kompozitsiyasi va bo‘shliqlar |
-| **1600px** | Katta desktop | `docs/prototype-preview/desktop_1600px.png` | Markazlashgan tartib |
-| **1920px** | Full HD monitor | `docs/prototype-preview/desktop_1920px.png` | 1280px chegarasida chiroyli chekka masofalar |
+| O‘lchov | Oldingi (Minimalist) | Yangi (Kuchaytirilgan Identika) |
+| :--- | :--- | :--- |
+| **Bosh Summa Kontrasti** | Oq fonga qora oddiy matn (boshqa kartalardan deyarli ajralmas edi) | **To‘q yashil (#163300) Hero kartada 52px oq va neon-yashil raqamlar** |
+| **Kirim/Chiqim Kartalari** | Oddiy oq kartochkalar | **Yumshoq zumrad (#EDF8F1) va qizil (#FDF2F2) nozik rangli sirtlar** |
+| **Kartalar Farqi** | Barcha 6 ta blok bir xil oq to‘rtburchak edi | **3 xil darajadagi (Type A, B, C) qat’iy vizual tabaqalanish** |
+| **Grafik Ko‘rinishi** | Yupqa va kichik ustunlar | **Keng formatli, gorizontal yo‘naltiruvchi chiziqli va qalin ustunlar** |
+| **Jamg‘arma Progressi** | Yupqa 6px chiziq | **Qalin (10px) gradientli, yaqqol ko‘rinuvchi progress chizig‘i** |
+| **AI Bloki** | Oddiy oq karta | **Chap tasmali, mayin yashil gradientli brend bloki** |
 
 ---
 
-## 6. Mavjud Interaktivlik
+## 4. Skrinshotlar Arxiv va Havolalari
 
-- **Yangi amal qo‘shish (+):** Mobil floating bar yoki Desktop headerdagi "+ Yangi amal" tugmasi orqali slide-up sheet ochiladi, kiritilgan summa va toifa ro‘yxatga qo‘shiladi hamda barcha ko‘rsatkichlar qayta hisoblanadi.
-- **Jamg‘arma to‘ldirish:** Har bir maqsad ustiga bosganda modal darcha ochiladi va "+200 000 so‘m kiritish" orqali progress bar to‘ldiriladi.
-- **Grafik davrlari:** "Joriy oy", "3 oy", "Jami" tugmalari orqali ustunlar animatsiyalanadi.
-- **Bo‘limlar almashinuvi:** Bosh sahifa, Faoliyat, Tahlil, AI o‘rtasida tezkor o‘tish.
+- **Yangi Desktop (1440px):** [new_desktop_1440px.png](file:///home/eldor_firdavsov/Desktop/SpendSense/docs/prototype-preview/new_desktop_1440px.png)
+- **Yangi Desktop (To‘liq sahifa):** [new_desktop_1440px_full.png](file:///home/eldor_firdavsov/Desktop/SpendSense/docs/prototype-preview/new_desktop_1440px_full.png)
+- **Oldingi Desktop (Taqqoslov uchun):** [before_desktop_1440px.png](file:///home/eldor_firdavsov/Desktop/SpendSense/docs/prototype-preview/before_desktop_1440px.png)
+- **Yangi Mobil (390px):** [new_mobile_390px.png](file:///home/eldor_firdavsov/Desktop/SpendSense/docs/prototype-preview/new_mobile_390px.png)
+- **Yangi Mobil (To‘liq sahifa):** [new_mobile_390px_full.png](file:///home/eldor_firdavsov/Desktop/SpendSense/docs/prototype-preview/new_mobile_390px_full.png)
+- **Oldingi Mobil (Taqqoslov uchun):** [before_mobile_390px.png](file:///home/eldor_firdavsov/Desktop/SpendSense/docs/prototype-preview/before_mobile_390px.png)
+- **Boshqa o‘lchamlar:** `mobile_320px.png`, `mobile_375px.png`, `mobile_430px.png`, `desktop_1024px.png`, `desktop_1280px.png`, `desktop_1920px.png`.
