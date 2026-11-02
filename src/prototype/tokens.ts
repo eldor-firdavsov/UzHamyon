@@ -63,10 +63,7 @@ export const PROTOTYPE_TOKENS = {
 
 export function formatUzbekCurrency(amount: number, options?: { showSign?: boolean; isExpense?: boolean }): string {
   const absAmount = Math.abs(amount);
-  const formatted = new Intl.NumberFormat('uz-UZ', {
-    maximumFractionDigits: 0,
-  }).format(absAmount).replace(/,/g, ' ');
-
+  const formatted = absAmount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
   const sign = options?.showSign ? (options.isExpense || amount < 0 ? '-' : '+') : '';
-  return `${sign}${formatted} soʻm`;
+  return `${sign}${formatted} so‘m`;
 }
