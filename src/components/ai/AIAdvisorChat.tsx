@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { MessageBubbleSkeleton } from '@/components/ui/Skeleton';
 import { cachedFetch, peekCache } from '@/lib/cache/clientCache';
+import UzHamyonLogo from '@/components/brand/UzHamyonLogo';
 
 let messageCounter = 0;
 function generateId(prefix: string) {
@@ -480,15 +481,13 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
   };
 
   return (
-    <div className="relative max-w-4xl xl:max-w-5xl mx-auto w-full flex flex-col h-full flex-1 min-h-0 rounded-2xl sm:rounded-3xl border border-[#D5DED7] bg-white shadow-fintech-card overflow-hidden">
+    <div className="relative max-w-4xl xl:max-w-5xl mx-auto w-full flex flex-col h-full flex-1 min-h-0 rounded-2xl sm:rounded-3xl border border-[#E5E7EB] bg-white shadow-fintech-card overflow-hidden">
       {/* ── Top Floating Minimal Header ── */}
-      <header className="px-5 sm:px-8 py-3.5 border-b border-[#D5DED7] bg-white flex items-center justify-between gap-3 shrink-0 z-10">
+      <header className="px-5 sm:px-8 py-3.5 border-b border-[#E8EBE5] bg-white flex items-center justify-between gap-3 shrink-0 z-10">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-[#17211B] text-white flex items-center justify-center shadow-xs">
-            <WavingHandIcon className="h-4 w-4 text-white" />
-          </div>
+          <UzHamyonLogo variant="icon" size="sm" />
           <div>
-            <span className="font-bold text-sm text-[#17211B]">SpendSense AI</span>
+            <span className="font-bold text-sm text-[#171B16]">UzHamyon AI</span>
           </div>
         </div>
 
@@ -497,10 +496,10 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
           <button
             type="button"
             onClick={startNewChat}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#F7F9F7] hover:bg-[#EBF1ED] border border-[#D5DED7] text-xs font-semibold text-[#17211B] transition-all shadow-xs active:scale-95"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#F5F6F8] hover:bg-[#E4E4E7] border border-[#E5E7EB] text-xs font-medium text-[#18181B] transition-all shadow-xs active:scale-95"
             title="Yangi suhbat boshlash"
           >
-            <Plus className="h-3.5 w-3.5 text-[#176B45]" />
+            <Plus className="h-3.5 w-3.5 text-[#059669]" />
             <span className="hidden sm:inline">Yangi suhbat</span>
           </button>
 
@@ -513,8 +512,8 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
             }}
             className={`min-h-[34px] px-3 rounded-xl border transition-all text-xs font-medium flex items-center gap-1.5 ${
               historyOpen
-                ? 'bg-[#176B45] border-[#176B45] text-white'
-                : 'bg-[#F7F9F7] hover:bg-[#EBF1ED] border-[#D5DED7] text-[#47544C]'
+                ? 'bg-[#18181B] border-[#18181B] text-white'
+                : 'bg-[#F5F6F8] hover:bg-[#E4E4E7] border-[#E5E7EB] text-[#52525B]'
             }`}
             title="Suhbatlar tarixi"
           >
@@ -526,16 +525,16 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
 
       {/* ── Slide-in History Drawer ── */}
       {historyOpen && (
-        <div className="border-b border-[#D5DED7] bg-[#F7F9F7] p-4 sm:p-5 space-y-3 animate-in slide-in-from-top-2 duration-150 shrink-0 z-20">
+        <div className="border-b border-[#E5E7EB] bg-[#F9FAFB] p-4 sm:p-5 space-y-3 animate-in slide-in-from-top-2 duration-150 shrink-0 z-20">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-[#17211B]">
-              <History className="h-4 w-4 text-[#176B45]" />
+            <div className="flex items-center gap-2 text-[#18181B]">
+              <History className="h-4 w-4 text-[#059669]" />
               <h3 className="text-sm font-semibold">Oldingi suhbatlar</h3>
             </div>
             <button
               type="button"
-              onClick={() => setHistoryOpen(false)}
-              className="text-[#47544C] hover:text-[#17211B] p-1.5 rounded-lg"
+              onClick={setHistoryOpen.bind(null, false)}
+              className="text-[#71717A] hover:text-[#18181B] p-1.5 rounded-lg"
               aria-label="Yopish"
             >
               <X className="h-4 w-4" />
@@ -543,7 +542,7 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
           </div>
 
           {conversations.length === 0 ? (
-            <p className="text-xs sm:text-sm text-[#5A675F] py-2">Hali saqlangan suhbatlar mavjud emas.</p>
+            <p className="text-xs sm:text-sm text-[#71717A] py-2">Hali saqlangan suhbatlar mavjud emas.</p>
           ) : (
             <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
               {conversations.map((c) => (
@@ -553,12 +552,12 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
                   onClick={() => loadConversation(c.id)}
                   className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs sm:text-sm transition-colors flex items-center justify-between truncate ${
                     activeConversationId === c.id
-                      ? 'bg-[#176B45] text-white font-medium shadow-xs'
-                      : 'text-[#47544C] hover:text-[#17211B] hover:bg-white border border-transparent hover:border-[#D5DED7]'
+                      ? 'bg-[#18181B] text-white font-medium shadow-xs'
+                      : 'text-[#52525B] hover:text-[#18181B] hover:bg-white border border-transparent hover:border-[#E5E7EB]'
                   }`}
                 >
                   <span className="truncate">{c.title || 'Moliyaviy maslahat'}</span>
-                  <span className={`text-xs shrink-0 ml-2 ${activeConversationId === c.id ? 'text-white/80' : 'text-[#5A675F]'}`}>
+                  <span className={`text-xs shrink-0 ml-2 ${activeConversationId === c.id ? 'text-white/80' : 'text-[#71717A]'}`}>
                     {c.created_at ? new Date(c.created_at).toLocaleDateString('uz-UZ') : ''}
                   </span>
                 </button>
@@ -570,16 +569,16 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
 
       {/* ── Slide-in Simulation Drawer ── */}
       {simOpen && (
-        <div className="border-b border-[#D5DED7] bg-[#F7F9F7] p-4 sm:p-5 space-y-3.5 animate-in slide-in-from-top-2 duration-150 shrink-0 z-20">
+        <div className="border-b border-[#E5E7EB] bg-[#F9FAFB] p-4 sm:p-5 space-y-3.5 animate-in slide-in-from-top-2 duration-150 shrink-0 z-20">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-[#17211B]">
-              <Sliders className="h-4 w-4 text-[#176B45]" />
+            <div className="flex items-center gap-2 text-[#18181B]">
+              <Sliders className="h-4 w-4 text-[#059669]" />
               <h3 className="text-sm font-semibold">Xarajatni qisqartirish simulyatori (What-If)</h3>
             </div>
             <button
               type="button"
-              onClick={() => setSimOpen(false)}
-              className="text-[#47544C] hover:text-[#17211B] p-1.5 rounded-lg"
+              onClick={setSimOpen.bind(null, false)}
+              className="text-[#71717A] hover:text-[#18181B] p-1.5 rounded-lg"
               aria-label="Yopish"
             >
               <X className="h-4 w-4" />
@@ -588,7 +587,7 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
 
           <form onSubmit={handleSimulate} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label htmlFor="sim-category-input" className="block text-[#47544C] text-xs mb-1.5 font-medium">
+              <label htmlFor="sim-category-input" className="block text-[#52525B] text-xs mb-1.5 font-medium">
                 Kategoriya
               </label>
               <input
@@ -597,14 +596,14 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
                 value={simCategory}
                 onChange={(e) => setSimCategory(e.target.value)}
                 placeholder="Masalan: Oziq-ovqat"
-                className="w-full bg-white border border-[#D5DED7] rounded-xl px-3.5 py-2 text-[#17211B] focus:outline-none focus:border-[#176B45] focus:ring-2 focus:ring-[#176B45]/20 text-sm min-h-[44px] transition-all"
+                className="w-full bg-white border border-[#E5E7EB] rounded-xl px-3.5 py-2 text-[#18181B] focus:outline-none focus:border-[#059669] focus:ring-2 focus:ring-[#059669]/20 text-sm min-h-[44px] transition-all"
               />
             </div>
 
             <div>
-              <div className="flex justify-between text-xs text-[#47544C] mb-1.5 font-medium">
+              <div className="flex justify-between text-xs text-[#52525B] mb-1.5 font-medium">
                 <span>Qisqartirish foizi:</span>
-                <span className="font-mono text-[#176B45] font-bold">{simPercent}%</span>
+                <span className="font-mono text-[#059669] font-bold">{simPercent}%</span>
               </div>
               <input
                 id="sim-percent-slider"
@@ -615,7 +614,7 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
                 step="5"
                 value={simPercent}
                 onChange={(e) => setSimPercent(Number(e.target.value))}
-                className="w-full accent-[#176B45] cursor-pointer mt-2"
+                className="w-full accent-[#059669] cursor-pointer mt-2"
               />
             </div>
 
@@ -624,7 +623,7 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
                 id="run-simulation-btn"
                 type="submit"
                 disabled={simLoading}
-                className="w-full min-h-[44px] py-2.5 rounded-xl bg-[#176B45] hover:bg-[#125536] text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-fintech-card"
+                className="w-full min-h-[44px] py-2.5 rounded-xl bg-[#18181B] hover:bg-[#27272A] text-white font-medium text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-xs"
               >
                 {simLoading && <Loader2 className="h-4 w-4 animate-spin" />}
                 <span>Hisoblash</span>
@@ -633,11 +632,11 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
           </form>
 
           {simResult && (
-            <div className="p-4 rounded-xl bg-white border border-[#D5DED7] text-sm flex flex-wrap items-center justify-between gap-2 shadow-fintech-card">
-              <div className="text-xs sm:text-sm text-[#47544C]">
-                Oylik tejash: <strong className="text-[#176B45] font-mono font-bold tabular-nums">+{Math.round(simResult.monthlySavings ?? simResult.projectedMonthlySavings ?? 0).toLocaleString('uz-UZ')} soʻm</strong> | Yillik: <strong className="text-[#176B45] font-mono font-bold tabular-nums">+{Math.round(simResult.annualizedSavings ?? simResult.projectedAnnualSavings ?? 0).toLocaleString('uz-UZ')} soʻm</strong>
+            <div className="p-4 rounded-xl bg-white border border-[#E5E7EB] text-sm flex flex-wrap items-center justify-between gap-2 shadow-fintech-card">
+              <div className="text-xs sm:text-sm text-[#52525B]">
+                Oylik tejash: <strong className="text-[#059669] font-mono font-bold tabular-nums">+{Math.round(simResult.monthlySavings ?? simResult.projectedMonthlySavings ?? 0).toLocaleString('uz-UZ')} soʻm</strong> | Yillik: <strong className="text-[#059669] font-mono font-bold tabular-nums">+{Math.round(simResult.annualizedSavings ?? simResult.projectedAnnualSavings ?? 0).toLocaleString('uz-UZ')} soʻm</strong>
               </div>
-              <p className="text-sm text-[#47544C] w-full leading-relaxed pt-1">
+              <p className="text-sm text-[#52525B] w-full leading-relaxed pt-1">
                 {simResult.explanation}
               </p>
             </div>
@@ -649,54 +648,54 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex-1 p-4 sm:p-6 sm:px-8 overflow-y-auto space-y-5 bg-[#F7F9F7]/50"
+        className="flex-1 p-4 sm:p-6 sm:px-8 overflow-y-auto space-y-5 bg-[#F7F8F5]"
       >
-        {/* ── SayHalo Inspired Hero Welcome Screen (In SpendSense Brand System) ── */}
+        {/* ── SayHalo Inspired Hero Welcome Screen (In UzHamyon Brand System) ── */}
         {messages.length === 0 && !loadingHistory && (
           <div className="min-h-full flex flex-col items-center justify-center py-3 sm:py-8 text-center animate-in fade-in-50 duration-200">
-            {/* Top Squircle Avatar Icon with waving hand */}
-            <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-[18px] sm:rounded-[22px] bg-[#17211B] shadow-fintech-card flex items-center justify-center text-white mb-3 sm:mb-5 transform hover:scale-105 transition-all duration-300">
-              <WavingHandIcon className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
+            {/* Top Squircle Avatar Icon with UzHamyon Logo */}
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-[20px] sm:rounded-[22px] bg-white border border-[#E8EBE5] shadow-xs flex items-center justify-center p-2 mb-3 sm:mb-4 transform hover:scale-105 transition-all duration-300">
+              <UzHamyonLogo variant="icon" size="lg" />
             </div>
 
             {/* Greeting */}
-            <p className="text-[#5A675F] text-base sm:text-xl font-medium tracking-tight mb-1 sm:mb-2">
+            <p className="text-[#697168] text-sm sm:text-base font-semibold tracking-tight mb-1">
               Salom, {userName || 'Foydalanuvchi'}
             </p>
 
             {/* Main Headline */}
-            <h1 className="text-xl sm:text-4xl font-bold text-[#17211B] tracking-tight mb-2 sm:mb-3 max-w-xl mx-auto">
+            <h1 className="text-xl sm:text-3xl lg:text-4xl font-bold text-[#171B16] tracking-tight mb-2 max-w-xl mx-auto">
               Sizga qanday yordam bera olaman?
             </h1>
 
             {/* Subtitle */}
-            <p className="text-xs sm:text-base text-[#47544C] max-w-md mx-auto leading-relaxed mb-4 sm:mb-8 px-2">
+            <p className="text-xs sm:text-sm text-[#697168] max-w-md mx-auto leading-relaxed mb-6 sm:mb-8 px-2 font-medium">
               Moliyaviy savollaringizga javob berish va shaxsiy tavsiyalar berishga tayyorman. Boshlaymizmi?
             </p>
 
             {/* 3 Quick Prompt Cards (Single 3-column Grid on Mobile & Desktop) */}
-            <div className="grid grid-cols-3 gap-2 sm:gap-4 w-full max-w-3xl mx-auto">
+            <div className="grid grid-cols-3 gap-2.5 sm:gap-4 w-full max-w-3xl mx-auto">
               {QUICK_PROMPT_CARDS.map((card, idx) => (
                 <button
                   key={idx}
                   type="button"
                   onClick={() => handleSend(card.query)}
-                  className="bg-white rounded-xl sm:rounded-3xl p-2.5 sm:p-5 md:p-6 shadow-fintech-card border border-[#D5DED7] hover:border-[#176B45] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer flex flex-col justify-between text-left group active:scale-[0.98]"
+                  className="bg-white rounded-[20px] p-3 sm:p-5 shadow-[0_2px_8px_rgba(23,27,22,0.04)] border border-[#E8EBE5] hover:border-[#9FE870] hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 cursor-pointer flex flex-col justify-between text-left group active:scale-[0.98]"
                 >
-                  <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl bg-[#17211B] group-hover:bg-[#176B45] text-white flex items-center justify-center mb-2.5 sm:mb-4 transition-colors shadow-xs shrink-0">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-[#F0F9E9] group-hover:bg-[#163300] text-[#163300] group-hover:text-[#9FE870] flex items-center justify-center mb-3 transition-colors shadow-2xs shrink-0 border border-[#9FE870]/30">
                     {card.icon === 'wave' ? (
-                      <WavingHandIcon className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+                      <WavingHandIcon className="h-4 w-4 sm:h-5 sm:w-5" />
                     ) : card.icon === 'plane' ? (
-                      <Plane className="h-4 w-4 sm:h-5 sm:w-5 text-white rotate-45" />
+                      <Plane className="h-4 w-4 sm:h-5 sm:w-5 rotate-45" />
                     ) : (
-                      <Sliders className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+                      <Sliders className="h-4 w-4 sm:h-5 sm:w-5" />
                     )}
                   </div>
                   <div className="min-w-0 flex-1 flex flex-col justify-between">
-                    <h4 className="font-bold text-[11px] sm:text-base text-[#17211B] group-hover:text-[#176B45] transition-colors leading-tight line-clamp-2">
+                    <h4 className="font-bold text-xs sm:text-sm text-[#171B16] group-hover:text-[#163300] transition-colors leading-tight line-clamp-2">
                       {card.title}
                     </h4>
-                    <p className="text-[10px] sm:text-xs text-[#5A675F] mt-1 sm:mt-1.5 font-medium leading-tight line-clamp-1 sm:line-clamp-2">
+                    <p className="text-[11px] sm:text-xs text-[#697168] mt-1 font-normal leading-tight line-clamp-1 sm:line-clamp-2">
                       {card.subtitle}
                     </p>
                   </div>
@@ -717,7 +716,7 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
 
         {/* ── Active Conversation Messages ── */}
         {messages.length > 0 && (
-          <div className="max-w-3xl mx-auto w-full space-y-5">
+          <div className="max-w-3xl mx-auto w-full space-y-4 sm:space-y-5">
             {messages.map((m) => {
               const isUser = m.role === 'user';
               const isExpanded = !!expandedEvidence[m.id];
@@ -725,23 +724,23 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
               return (
                 <div
                   key={m.id}
-                  className={`flex gap-3 text-sm leading-relaxed ${
+                  className={`flex gap-2.5 sm:gap-3 text-sm leading-relaxed ${
                     isUser ? 'justify-end' : 'justify-start'
                   }`}
                 >
                   {/* AI Avatar */}
                   {!isUser && (
-                    <div className="w-9 h-9 rounded-xl bg-[#17211B] text-white flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
-                      <WavingHandIcon className="h-5 w-5 text-white" />
+                    <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white border border-[#E8EBE5] flex items-center justify-center p-1 shrink-0 mt-0.5 shadow-2xs">
+                      <UzHamyonLogo variant="icon" size="sm" />
                     </div>
                   )}
 
                   {/* Message Bubble Card */}
                   <div
-                    className={`max-w-[88%] sm:max-w-[80%] rounded-2xl p-5 sm:p-6 space-y-3 ${
+                    className={`max-w-[88%] sm:max-w-[80%] rounded-[20px] p-4 sm:p-5 space-y-3 ${
                       isUser
-                        ? 'bg-[#176B45] text-white rounded-tr-xs shadow-fintech-card'
-                        : 'bg-white border border-[#D5DED7] text-[#17211B] rounded-tl-xs shadow-fintech-card'
+                        ? 'bg-[#163300] text-white rounded-tr-xs shadow-xs'
+                        : 'bg-white border border-[#E8EBE5] text-[#171B16] rounded-tl-xs shadow-[0_2px_8px_rgba(23,27,22,0.04)]'
                     }`}
                   >
                     {isUser ? (
@@ -752,37 +751,37 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
 
                     {/* Pending Action Confirmation Card */}
                     {!isUser && m.evidence?.pending_action?.status === 'pending' && (
-                      <div className="mt-3 p-4 rounded-xl bg-[#F7F9F7] border border-[#D5DED7] space-y-3 shadow-xs">
+                      <div className="mt-3 p-3.5 rounded-xl bg-[#F9FAFB] border border-[#E5E7EB] space-y-3 shadow-2xs">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-[#176B45] uppercase tracking-wider">
+                          <span className="text-xs font-semibold text-[#059669] uppercase tracking-wider">
                             Amalni tasdiqlash
                           </span>
                           {m.evidence.pending_action.params.amount && (
-                            <span className="text-sm font-mono font-bold tabular-nums text-[#17211B] bg-white px-2.5 py-1 rounded-lg border border-[#D5DED7]">
+                            <span className="text-xs sm:text-sm font-mono font-semibold tabular-nums text-[#18181B] bg-white px-2.5 py-1 rounded-lg border border-[#E5E7EB]">
                               {Number(m.evidence.pending_action.params.amount).toLocaleString('uz-UZ')} {m.evidence.pending_action.params.currency || 'UZS'}
                             </span>
                           )}
                         </div>
 
-                        <div className="text-xs sm:text-sm text-[#47544C] space-y-1">
+                        <div className="text-xs sm:text-sm text-[#52525B] space-y-1">
                           {m.evidence.pending_action.params.category_name && (
-                            <div>Kategoriya: <span className="text-[#17211B] font-semibold">{m.evidence.pending_action.params.category_name}</span></div>
+                            <div>Kategoriya: <span className="text-[#18181B] font-medium">{m.evidence.pending_action.params.category_name}</span></div>
                           )}
                           {m.evidence.pending_action.params.description && (
-                            <div>Tavsif: <span className="text-[#17211B] font-semibold">{m.evidence.pending_action.params.description}</span></div>
+                            <div>Tavsif: <span className="text-[#18181B] font-medium">{m.evidence.pending_action.params.description}</span></div>
                           )}
                           {m.evidence.pending_action.params.date && (
-                            <div>Sana: <span className="text-[#17211B] font-mono tabular-nums">{m.evidence.pending_action.params.date}</span></div>
+                            <div>Sana: <span className="text-[#18181B] font-mono tabular-nums">{m.evidence.pending_action.params.date}</span></div>
                           )}
                         </div>
 
-                        <div className="flex items-center gap-2 pt-2.5 border-t border-[#D5DED7]">
+                        <div className="flex items-center gap-2 pt-2 border-t border-[#E5E7EB]">
                           <button
                             id="confirm-ai-action-btn"
                             type="button"
                             disabled={loading}
                             onClick={() => handleSend('Ha, tasdiqlayman')}
-                            className="min-h-[40px] px-4 py-2 rounded-xl bg-[#176B45] hover:bg-[#125536] text-white font-semibold text-xs sm:text-sm transition-colors disabled:opacity-50 shadow-xs"
+                            className="min-h-[38px] px-4 py-1.5 rounded-xl bg-[#059669] hover:bg-[#047857] text-white font-medium text-xs sm:text-sm transition-colors disabled:opacity-50 shadow-xs"
                           >
                             Tasdiqlash
                           </button>
@@ -791,7 +790,7 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
                             type="button"
                             disabled={loading}
                             onClick={() => handleSend('Bekor qil')}
-                            className="min-h-[40px] px-4 py-2 rounded-xl border border-[#D5DED7] bg-white hover:bg-[#F7F9F7] text-[#47544C] text-xs sm:text-sm font-medium transition-colors disabled:opacity-50"
+                            className="min-h-[38px] px-4 py-1.5 rounded-xl border border-[#E5E7EB] bg-white hover:bg-[#F9FAFB] text-[#52525B] text-xs sm:text-sm font-medium transition-colors disabled:opacity-50"
                           >
                             Bekor qilish
                           </button>
@@ -801,7 +800,7 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
 
                     {/* Grounded Evidence References */}
                     {!isUser && m.evidence && (
-                      <div className="pt-2.5 border-t border-[#D5DED7] mt-2.5">
+                      <div className="pt-2 border-t border-[#E5E7EB] mt-2">
                         <button
                           type="button"
                           onClick={() =>
@@ -810,9 +809,9 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
                               [m.id]: !prev[m.id],
                             }))
                           }
-                          className="inline-flex items-center gap-1.5 text-xs text-[#5A675F] hover:text-[#176B45] transition-colors font-medium"
+                          className="inline-flex items-center gap-1.5 text-xs text-[#71717A] hover:text-[#059669] transition-colors font-medium"
                         >
-                          <ShieldCheck className="h-4 w-4 text-[#176B45]" />
+                          <ShieldCheck className="h-4 w-4 text-[#059669]" />
                           <span>
                             {m.evidence.is_fallback
                               ? 'Aniq moliyaviy qoidalar asosida'
@@ -826,8 +825,8 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
                         </button>
 
                         {isExpanded && m.evidence.grounded_context && (
-                          <div className="mt-2.5 p-3 rounded-xl bg-[#F7F9F7] font-mono text-xs text-[#47544C] overflow-x-auto border border-[#D5DED7] leading-relaxed shadow-xs">
-                            <p className="text-[#17211B] font-semibold mb-1">BAZA MA’LUMOTLARI:</p>
+                          <div className="mt-2 p-3 rounded-xl bg-[#F9FAFB] font-mono text-xs text-[#52525B] overflow-x-auto border border-[#E5E7EB] leading-relaxed shadow-2xs">
+                            <p className="text-[#18181B] font-semibold mb-1">BAZA MA’LUMOTLARI:</p>
                             <pre className="whitespace-pre-wrap">{m.evidence.grounded_context}</pre>
                           </div>
                         )}
@@ -836,15 +835,15 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
 
                     {/* Retry on Error */}
                     {!isUser && m.isError && m.retryPrompt && (
-                      <div className="pt-2.5 border-t border-[#D5DED7] mt-2.5">
+                      <div className="pt-2 border-t border-[#E5E7EB] mt-2">
                         <button
                           id={`retry-btn-${m.id}`}
                           type="button"
                           disabled={loading}
                           onClick={() => handleSend(m.retryPrompt)}
-                          className="inline-flex items-center gap-2 min-h-[38px] px-3.5 py-1.5 rounded-xl bg-white border border-[#D5DED7] hover:border-[#176B45] hover:text-[#176B45] text-[#17211B] text-xs sm:text-sm font-semibold transition-all shadow-xs disabled:opacity-50"
+                          className="inline-flex items-center gap-2 min-h-[38px] px-3.5 py-1.5 rounded-xl bg-white border border-[#E5E7EB] hover:border-[#059669] hover:text-[#059669] text-[#18181B] text-xs sm:text-sm font-medium transition-all shadow-2xs disabled:opacity-50"
                         >
-                          <RefreshCw className="h-3.5 w-3.5 text-[#176B45]" />
+                          <RefreshCw className="h-3.5 w-3.5 text-[#059669]" />
                           <span>Qaytadan urinish</span>
                         </button>
                       </div>
@@ -853,8 +852,8 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
 
                   {/* User Avatar */}
                   {isUser && (
-                    <div className="h-9 w-9 rounded-xl bg-white border border-[#D5DED7] flex items-center justify-center text-[#17211B] shrink-0 mt-0.5 shadow-xs">
-                      <User className="h-4 w-4 text-[#47544C]" />
+                    <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-xl bg-white border border-[#E5E7EB] flex items-center justify-center text-[#18181B] shrink-0 mt-0.5 shadow-2xs">
+                      <User className="h-4 w-4 text-[#71717A]" />
                     </div>
                   )}
                 </div>
@@ -865,14 +864,14 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
 
         {/* Loading Indicator */}
         {loading && (
-          <div className="max-w-3xl mx-auto w-full flex items-center gap-3 text-[#47544C] text-sm">
-            <div className="w-9 h-9 rounded-xl bg-[#17211B] text-white flex items-center justify-center shrink-0 shadow-xs">
-              <WavingHandIcon className="h-5 w-5 text-white" />
+          <div className="max-w-3xl mx-auto w-full flex items-center gap-2.5 sm:gap-3 text-[#52525B] text-sm">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#18181B] text-white flex items-center justify-center shrink-0 shadow-2xs">
+              <WavingHandIcon className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
             </div>
-            <div className="px-5 py-3.5 rounded-2xl rounded-tl-xs bg-white border border-[#D5DED7] flex items-center gap-2.5 shadow-fintech-card">
-              <Loader2 className="h-4 w-4 animate-spin text-[#176B45]" />
-              <span className="text-xs sm:text-sm text-[#47544C] font-medium">
-                SpendSense tahlil qilmoqda...
+            <div className="px-4 py-3 rounded-2xl rounded-tl-xs bg-white border border-[#E5E7EB] flex items-center gap-2.5 shadow-fintech-card">
+              <Loader2 className="h-4 w-4 animate-spin text-[#059669]" />
+              <span className="text-xs sm:text-sm text-[#52525B] font-medium">
+                Tahlil qilinmoqda...
               </span>
             </div>
           </div>
@@ -882,7 +881,7 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
       </div>
 
       {/* ── Chatbot Bottom Floating Input Dock (Responsive on All Devices) ── */}
-      <footer className="p-2 sm:p-3.5 md:p-4 bg-white border-t border-[#D5DED7] shrink-0">
+      <footer className="p-2.5 sm:p-3.5 md:p-4 bg-white border-t border-[#E8EBE5] shrink-0">
         <div className="w-full max-w-3xl mx-auto flex items-center gap-1.5 sm:gap-2.5 min-w-0">
           {/* Settings / Tools Icon Button */}
           <div className="relative shrink-0">
@@ -891,8 +890,8 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
               onClick={() => setToolsMenuOpen((prev) => !prev)}
               className={`w-9 h-9 sm:w-11 sm:h-11 rounded-full transition-all flex items-center justify-center shadow-xs active:scale-95 cursor-pointer shrink-0 ${
                 toolsMenuOpen || historyOpen || simOpen
-                  ? 'bg-[#176B45] text-white'
-                  : 'bg-[#17211B] hover:bg-[#125536] text-white'
+                  ? 'bg-[#163300] text-[#9FE870]'
+                  : 'bg-[#163300] hover:bg-[#234A05] text-[#9FE870]'
               }`}
               title="Qo‘shimcha vositalar va sozlamalar"
               aria-label="Sozlamalar"
@@ -902,15 +901,15 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
 
             {/* Quick Settings / Tools Popover */}
             {toolsMenuOpen && (
-              <div className="absolute bottom-12 sm:bottom-14 left-0 w-60 sm:w-64 bg-white border border-[#D5DED7] rounded-2xl shadow-xl p-2 space-y-1 animate-in slide-in-from-bottom-2 duration-150 z-30">
+              <div className="absolute bottom-12 sm:bottom-14 left-0 w-60 sm:w-64 bg-white border border-[#E8EBE5] rounded-2xl shadow-xl p-2 space-y-1 animate-in slide-in-from-bottom-2 duration-150 z-30">
                 <button
                   type="button"
                   onClick={() => {
                     startNewChat();
                   }}
-                  className="w-full text-left px-3 py-2 rounded-xl text-xs sm:text-sm font-medium text-[#17211B] hover:bg-[#F7F9F7] flex items-center gap-2.5 transition-colors"
+                  className="w-full text-left px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold text-[#171B16] hover:bg-[#F7F8F5] flex items-center gap-2.5 transition-colors cursor-pointer"
                 >
-                  <Plus className="h-4 w-4 text-[#176B45]" />
+                  <Plus className="h-4 w-4 text-[#26834A]" />
                   <span>Yangi suhbat</span>
                 </button>
 
@@ -921,9 +920,9 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
                     setSimOpen(false);
                     setToolsMenuOpen(false);
                   }}
-                  className="w-full text-left px-3 py-2 rounded-xl text-xs sm:text-sm font-medium text-[#17211B] hover:bg-[#F7F9F7] flex items-center gap-2.5 transition-colors"
+                  className="w-full text-left px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold text-[#171B16] hover:bg-[#F7F8F5] flex items-center gap-2.5 transition-colors cursor-pointer"
                 >
-                  <History className="h-4 w-4 text-[#176B45]" />
+                  <History className="h-4 w-4 text-[#26834A]" />
                   <span>Suhbatlar tarixi</span>
                 </button>
 
@@ -934,9 +933,9 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
                     setHistoryOpen(false);
                     setToolsMenuOpen(false);
                   }}
-                  className="w-full text-left px-3 py-2 rounded-xl text-xs sm:text-sm font-medium text-[#17211B] hover:bg-[#F7F9F7] flex items-center gap-2.5 transition-colors"
+                  className="w-full text-left px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold text-[#171B16] hover:bg-[#F7F8F5] flex items-center gap-2.5 transition-colors cursor-pointer"
                 >
-                  <Sliders className="h-4 w-4 text-[#176B45]" />
+                  <Sliders className="h-4 w-4 text-[#26834A]" />
                   <span>What-If simulyatori</span>
                 </button>
               </div>
@@ -944,7 +943,7 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
           </div>
 
           {/* Elongated Pill Input Container */}
-          <div className="flex-1 min-w-0 min-h-[42px] sm:min-h-[50px] rounded-full bg-white border border-[#D5DED7] shadow-fintech-card focus-within:border-[#176B45] focus-within:ring-4 focus-within:ring-[#176B45]/10 px-2 sm:px-4 py-1 flex items-center gap-1 sm:gap-2.5 transition-all">
+          <div className="flex-1 min-w-0 min-h-[42px] sm:min-h-[50px] rounded-full bg-white border border-[#E8EBE5] shadow-xs focus-within:border-[#9FE870] focus-within:ring-2 focus-within:ring-[#9FE870]/20 px-2 sm:px-4 py-1 flex items-center gap-1 sm:gap-2.5 transition-all">
             {/* Link / Simulation Tool Icon */}
             <button
               type="button"
@@ -952,7 +951,7 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
                 setSimOpen((prev) => !prev);
                 setHistoryOpen(false);
               }}
-              className="text-[#5A675F] hover:text-[#176B45] p-1 sm:p-1.5 rounded-full transition-colors shrink-0"
+              className="text-[#697168] hover:text-[#163300] p-1 sm:p-1.5 rounded-full transition-colors shrink-0 cursor-pointer"
               title="What-If simulyatorini ochish"
             >
               <Link2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 rotate-45" />
@@ -975,21 +974,21 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
                   }
                 }
               }}
-              className="flex-1 min-w-0 bg-transparent text-xs sm:text-sm md:text-base text-[#17211B] placeholder-[#5A675F] focus:outline-none px-1"
+              className="flex-1 min-w-0 bg-transparent text-xs sm:text-sm md:text-base text-[#171B16] placeholder-[#959E94] focus:outline-none px-1"
             />
 
-            {/* SpendSense Signature Brand Green Send Button */}
+            {/* UzHamyon Signature Send Button */}
             <button
               id="advisor-send-btn"
               type="button"
               disabled={loading || !input.trim()}
               onClick={() => handleSend()}
-              className="h-8 w-8 sm:h-9 sm:w-auto px-0 sm:px-4 py-0 sm:py-2 rounded-full bg-[#176B45] hover:bg-[#125536] text-white text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 shadow-fintech-card transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+              className="h-8 w-8 sm:h-9 sm:w-auto px-0 sm:px-4 py-0 sm:py-2 rounded-full bg-[#9FE870] hover:bg-[#8ED760] text-[#163300] text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed shrink-0 cursor-pointer"
               title="Yuborish"
               aria-label="Yuborish"
             >
               {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                <Loader2 className="h-4 w-4 animate-spin shrink-0 text-[#163300]" />
               ) : (
                 <>
                   <span className="hidden sm:inline">Yuborish</span>

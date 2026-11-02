@@ -1,1440 +1,1089 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+
 import {
   ArrowRight,
   ArrowLeft,
   Check,
-  Sparkles,
-  TrendingUp,
-  Target,
-  Home,
+  CheckCircle,
   Car,
-  Laptop,
-  Plane,
-  GraduationCap,
+  Home,
+  PiggyBank,
+  TrendingDown,
+  Compass,
   ShieldCheck,
-  Briefcase,
+  Target,
+  Utensils,
+  Zap,
+  Wifi,
+  HeartPulse,
+  GraduationCap,
+  Film,
+  ShoppingBag,
+  MoreHorizontal,
   Loader2,
   AlertCircle,
-  HelpCircle,
-  Edit2,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  User,
+  Sparkles,
 } from 'lucide-react';
+import UzHamyonLogo from '@/components/brand/UzHamyonLogo';
 import CurrencyInput, { formatWithSpaces } from './CurrencyInput';
-import { saveOnboardingStepAction, completeOnboardingAction } from '@/app/onboarding/actions';
-
-interface GoalTemplate {
-  key: string;
-  defaultName: string;
-  defaultAmount: number;
-  icon: React.ComponentType<{ className?: string }>;
-  description: string;
-}
-
-const GOAL_TEMPLATES: GoalTemplate[] = [
-  {
-    key: 'home',
-    defaultName: 'Uy sotib olish',
-    defaultAmount: 250000000,
-    icon: Home,
-    description: 'Boshlang‘ich to‘lov yoki yangi xonadon uchun jamg‘arma',
-  },
-  {
-    key: 'car',
-    defaultName: 'Avtomobil olish',
-    defaultAmount: 100000000,
-    icon: Car,
-    description: 'Yangi yoki oilaviy avtotransport vositasi uchun',
-  },
-  {
-    key: 'tech',
-    defaultName: 'Telefon yoki noutbuk',
-    defaultAmount: 15000000,
-    icon: Laptop,
-    description: 'Ish, o‘qish yoki qulaylik uchun zamonaviy gadjet',
-  },
-  {
-    key: 'travel',
-    defaultName: 'Sayohat jamg‘armasi',
-    defaultAmount: 20000000,
-    icon: Plane,
-    description: 'Oilaviy ta’til yoki yangi mamlakatlarni kashf etish',
-  },
-  {
-    key: 'education',
-    defaultName: 'Ta’lim va kurslar',
-    defaultAmount: 12000000,
-    icon: GraduationCap,
-    description: 'Kasbiy rivojlanish, chet tili yoki oliygoh to‘lovi',
-  },
-  {
-    key: 'emergency',
-    defaultName: 'Favqulodda zaxira jamg‘armasi',
-    defaultAmount: 15000000,
-    icon: ShieldCheck,
-    description: '3–6 oylik xarajatlar uchun moliyaviy xavfsizlik yostig‘i',
-  },
-  {
-    key: 'business',
-    defaultName: 'Biznes boshlash',
-    defaultAmount: 50000000,
-    icon: Briefcase,
-    description: 'Yangi daromad manbai va shaxsiy loyihalar sarmoyasi',
-  },
-  {
-    key: 'other',
-    defaultName: 'Boshqa shaxsiy maqsad',
-    defaultAmount: 10000000,
-    icon: Target,
-    description: 'Siz uchun muhim bo‘lgan har qanday maxsus maqsad',
-  },
-];
-
-interface ConfiguredGoal {
-  key: string;
-  name: string;
-  target_amount: number;
-  target_date?: string | null;
-}
+import {
+  saveOnboardingStepAction,
+  completeOnboardingAction,
+  createOnboardingAccountAction,
+} from '@/app/onboarding/actions';
+import {
+  ONBOARDING_GOAL_OPTIONS,
+  ONBOARDING_EXPENSE_CATEGORIES,
+} from '@/lib/onboarding/schemas';
 
 interface OnboardingWizardProps {
+  currentUser?: { id: string; email: string } | null;
   initialFirstName?: string;
-  initialLastName?: string;
   initialStep?: number;
   initialData?: Record<string, unknown> | null;
+  initialIncome?: number;
+  initialExpenses?: number;
 }
 
 export default function OnboardingWizard({
+  currentUser = null,
   initialFirstName = '',
-  initialLastName = '',
-  initialStep = 0,
+  initialStep = 1,
   initialData = null,
+  initialIncome = 0,
+  initialExpenses = 0,
 }: OnboardingWizardProps) {
-  const router = useRouter();
 
-  // Wizard state
-  const [step, setStep] = useState<number>(initialStep);
+
+  // If user already authenticated, minimum step is 1, but if step 1 is requested, they can view Welcome
+  const [step, setStep] = useState<number>(() => {
+    if (initialStep >= 1 && initialStep <= 7) return initialStep;
+    return currentUser ? 3 : 1;
+  });
+
+  const [user, setUser] = useState<{ id: string; email: string } | null>(currentUser);
+
+  // Step 2 (Account Creation) State
+  const [accountEmail, setAccountEmail] = useState<string>(currentUser?.email || '');
+  const [accountPassword, setAccountPassword] = useState<string>('');
+  const [accountConfirmPassword, setAccountConfirmPassword] = useState<string>('');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState<boolean>(false);
+  const [accountErrors, setAccountErrors] = useState<Record<string, string>>({});
+  const [isCreatingAccount, setIsCreatingAccount] = useState<boolean>(false);
+  const [verificationPending, setVerificationPending] = useState<boolean>(false);
+
+  // Step 3 (User Name) State
   const [firstName, setFirstName] = useState<string>(
-    (initialData?.first_name as string) || initialFirstName || ''
+    initialFirstName || (initialData?.first_name as string) || ''
   );
-  const [lastName, setLastName] = useState<string>(
-    (initialData?.last_name as string) || initialLastName || ''
+
+  // Step 4 (Financial Goals) State
+  const [selectedGoals, setSelectedGoals] = useState<string[]>(() => {
+    if (Array.isArray(initialData?.goals)) return initialData.goals as string[];
+    if (Array.isArray(initialData?.selected_goal_keys)) return initialData.selected_goal_keys as string[];
+    return ['savings'];
+  });
+  const [customGoal, setCustomGoal] = useState<string>(
+    (initialData?.custom_goal as string) || ''
   );
+
+  // Step 5 (Monthly Income) State
   const [monthlyIncome, setMonthlyIncome] = useState<number>(
-    Number(initialData?.declared_monthly_income) || 0
-  );
-  const [monthlyExpenses, setMonthlyExpenses] = useState<number>(
-    Number(initialData?.declared_monthly_expenses) || 0
+    initialIncome || Number(initialData?.declared_monthly_income) || 0
   );
 
-  // Reduction target state
-  const [reductionChoice, setReductionChoice] = useState<'5' | '10' | '15' | '20' | 'custom'>(
-    (initialData?.reduction_choice as '5' | '10' | '15' | '20' | 'custom') || '10'
-  );
-  const [customReductionPercent, setCustomReductionPercent] = useState<number>(
-    Number(initialData?.custom_reduction_percent) || 10
-  );
+  // Step 6 (Monthly Expenses) State
+  const [categoryExpenses, setCategoryExpenses] = useState<Record<string, number>>(() => {
+    const saved = initialData?.category_expenses as Record<string, number> | undefined;
+    if (saved && typeof saved === 'object') return saved;
+    const defaults: Record<string, number> = {};
+    ONBOARDING_EXPENSE_CATEGORIES.forEach((c) => {
+      defaults[c.id] = c.defaultAmount;
+    });
+    return defaults;
+  });
 
-  // Goals state
-  const [selectedGoalKeys, setSelectedGoalKeys] = useState<string[]>(
-    (initialData?.selected_goal_keys as string[]) || []
-  );
-  const [configuredGoals, setConfiguredGoals] = useState<Record<string, ConfiguredGoal>>(
-    (initialData?.configured_goals as Record<string, ConfiguredGoal>) || {}
-  );
-  const [isConfiguringGoals, setIsConfiguringGoals] = useState<boolean>(false);
-  const [activeConfigGoalKey, setActiveConfigGoalKey] = useState<string>('');
-
-  // Status state
+  // Global action status
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [stepError, setStepError] = useState<string | null>(null);
+  const [generalError, setGeneralError] = useState<string | null>(null);
 
-  // Calculate actual reduction percentage and resulting amounts
-  const reductionPercent =
-    reductionChoice === 'custom'
-      ? Math.min(100, Math.max(0, customReductionPercent))
-      : parseInt(reductionChoice, 10) || 0;
+  // Calculated totals
+  const totalExpenses = Object.values(categoryExpenses).reduce((acc, val) => acc + (val || 0), 0);
+  const potentialSavings = monthlyIncome - totalExpenses;
 
-  const potentialMonthlySavings = Math.round((monthlyExpenses * reductionPercent) / 100);
-  const targetMonthlyExpenses = Math.max(0, monthlyExpenses - potentialMonthlySavings);
-
-  // Active goal being configured in Step 5 parameter view
-  const currentConfigKey =
-    activeConfigGoalKey && selectedGoalKeys.includes(activeConfigGoalKey)
-      ? activeConfigGoalKey
-      : selectedGoalKeys[0] || '';
-  const currentConfigGoal = currentConfigKey
-    ? configuredGoals[currentConfigKey] || {
-        key: currentConfigKey,
-        name:
-          GOAL_TEMPLATES.find((t) => t.key === currentConfigKey)?.defaultName ||
-          'Jamg‘arma maqsadi',
-        target_amount:
-          GOAL_TEMPLATES.find((t) => t.key === currentConfigKey)?.defaultAmount || 10000000,
-        target_date: null,
-      }
-    : null;
-  const currentGoalIndex = selectedGoalKeys.indexOf(currentConfigKey);
-  const isLastConfigGoal =
-    currentGoalIndex === selectedGoalKeys.length - 1 || currentGoalIndex === -1;
-
-  // 1-Year Projected Results & Metrics
-  const monthlyNetSurplus = Math.max(0, monthlyIncome - targetMonthlyExpenses);
-  const annualSavingsPotential = monthlyNetSurplus * 12;
-  const annualExpenseSavings = potentialMonthlySavings * 12;
-  const projectedAnnualTotal =
-    annualSavingsPotential > 0 ? annualSavingsPotential : annualExpenseSavings;
-
-  const totalGoalsTargetAmount = selectedGoalKeys.reduce((acc, k) => {
-    return acc + (configuredGoals[k]?.target_amount || 0);
-  }, 0);
-
-  const annualGoalCoveragePercent =
-    totalGoalsTargetAmount > 0
-      ? Math.min(100, Math.round((projectedAnnualTotal / totalGoalsTargetAmount) * 100))
-      : 0;
-
-  // Auto-sync draft state on step transition
-  const persistDraft = async (nextStep: number) => {
+  // Background draft sync
+  const persistDraft = async (nextStep: number, extraData?: Record<string, unknown>) => {
+    if (!user) return;
     try {
-      const draftPayload = {
+      const payload: Record<string, unknown> = {
         first_name: firstName,
-        last_name: lastName,
         declared_monthly_income: monthlyIncome,
-        declared_monthly_expenses: monthlyExpenses,
-        reduction_choice: reductionChoice,
-        custom_reduction_percent: customReductionPercent,
-        target_expense_reduction_percent: reductionPercent,
-        target_monthly_expenses: targetMonthlyExpenses,
-        selected_goal_keys: selectedGoalKeys,
-        configured_goals: configuredGoals,
+        declared_monthly_expenses: totalExpenses,
+        goals: selectedGoals,
+        custom_goal: customGoal,
+        category_expenses: categoryExpenses,
+        ...extraData,
       };
-      await saveOnboardingStepAction(nextStep, draftPayload);
+      await saveOnboardingStepAction(nextStep, payload);
     } catch {
-      // Background draft save failure should not block user progression
+      // Draft save error should not block UI flow
     }
   };
 
-  // Step 1 Validation
-  const handleNextFromStep1 = () => {
-    setStepError(null);
+  // Step Navigation Handlers
+  const handleWelcomeNext = () => {
+    setGeneralError(null);
+    if (user) {
+      setStep(3);
+      persistDraft(3);
+    } else {
+      setStep(2);
+    }
+  };
+
+  const handleAccountCreationSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setGeneralError(null);
+    setAccountErrors({});
+
+    const errors: Record<string, string> = {};
+    if (!accountEmail.trim() || !accountEmail.includes('@')) {
+      errors.email = 'Haqiqiy elektron pochta manzilini kiriting';
+    }
+    if (!accountPassword || accountPassword.length < 8) {
+      errors.password = 'Parol kamida 8 ta belgidan iborat bo‘lishi kerak';
+    }
+    if (accountPassword !== accountConfirmPassword) {
+      errors.confirmPassword = 'Kiritilgan parollar bir-biriga mos kelmadi';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setAccountErrors(errors);
+      return;
+    }
+
+    setIsCreatingAccount(true);
+    try {
+      const formData = new FormData();
+      formData.set('email', accountEmail.trim());
+      formData.set('password', accountPassword);
+      formData.set('confirmPassword', accountConfirmPassword);
+
+      const res = await createOnboardingAccountAction(null, formData);
+
+      if (!res.success) {
+        if (res.fieldErrors) {
+          const mapped: Record<string, string> = {};
+          Object.entries(res.fieldErrors).forEach(([k, msgs]) => {
+            if (msgs?.[0]) mapped[k] = msgs[0];
+          });
+          setAccountErrors(mapped);
+        }
+        setGeneralError(res.error || 'Hisob yaratishda xatolik yuz berdi');
+        setIsCreatingAccount(false);
+        return;
+      }
+
+      if (res.data?.requiresVerification) {
+        setVerificationPending(true);
+        setIsCreatingAccount(false);
+        return;
+      }
+
+      if (res.data?.userId) {
+        setUser({ id: res.data.userId, email: res.data.email });
+      }
+
+      setStep(3);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Kutilmagan xatolik yuz berdi';
+      setGeneralError(msg);
+    } finally {
+      setIsCreatingAccount(false);
+    }
+  };
+
+  const handleNameNext = () => {
+    setGeneralError(null);
     if (!firstName.trim()) {
-      setStepError('Iltimos, ismingizni kiriting');
+      setGeneralError('Iltimos, ismingizni kiriting');
       return;
     }
-    if (!lastName.trim()) {
-      setStepError('Iltimos, familiyangizni kiriting');
-      return;
-    }
-    const next = 2;
-    setStep(next);
-    persistDraft(next);
-  };
-
-  // Step 2 Validation (Income)
-  const handleNextFromStep2 = () => {
-    setStepError(null);
-    const next = 3;
-    setStep(next);
-    persistDraft(next);
-  };
-
-  // Step 3 Validation (Spending)
-  const handleNextFromStep3 = () => {
-    setStepError(null);
     const next = 4;
     setStep(next);
-    persistDraft(next);
+    persistDraft(next, { first_name: firstName.trim() });
   };
 
-  // Step 4 Validation (Reduction)
-  const handleNextFromStep4 = () => {
-    setStepError(null);
+  const toggleGoal = (goalId: string) => {
+    setSelectedGoals((prev) => {
+      if (prev.includes(goalId)) {
+        // Prevent deselecting if it's the only one
+        if (prev.length === 1) return prev;
+        return prev.filter((id) => id !== goalId);
+      }
+      return [...prev, goalId];
+    });
+  };
+
+  const handleGoalsNext = () => {
+    setGeneralError(null);
+    if (selectedGoals.length === 0) {
+      setGeneralError('Kamida bitta maqsadni tanlang');
+      return;
+    }
     const next = 5;
     setStep(next);
-    persistDraft(next);
+    persistDraft(next, { goals: selectedGoals, custom_goal: customGoal });
   };
 
-  // Step 5 Validation & Handlers (Goals)
-  const toggleGoalSelection = (tpl: GoalTemplate) => {
-    const isSelected = selectedGoalKeys.includes(tpl.key);
-    if (isSelected) {
-      setSelectedGoalKeys((prev) => prev.filter((k) => k !== tpl.key));
-    } else {
-      setSelectedGoalKeys((prev) => [...prev, tpl.key]);
-      if (!configuredGoals[tpl.key]) {
-        setConfiguredGoals((prev) => ({
-          ...prev,
-          [tpl.key]: {
-            key: tpl.key,
-            name: tpl.defaultName,
-            target_amount: tpl.defaultAmount,
-            target_date: null,
-          },
-        }));
-      }
+  const handleIncomeNext = () => {
+    setGeneralError(null);
+    if (monthlyIncome < 0) {
+      setGeneralError('Daromad manfiy bo‘lishi mumkin emas');
+      return;
     }
+    const next = 6;
+    setStep(next);
+    persistDraft(next, { declared_monthly_income: monthlyIncome });
   };
 
-  const updateGoalField = (key: string, updates: Partial<ConfiguredGoal>) => {
-    setConfiguredGoals((prev) => ({
+  const handleCategoryAmountChange = (catId: string, val: number) => {
+    setCategoryExpenses((prev) => ({
       ...prev,
-      [key]: {
-        ...prev[key],
-        ...updates,
-      },
+      [catId]: Math.max(0, val),
     }));
   };
 
-  const handleNextFromStep5 = () => {
-    setStepError(null);
-    // If user has selected goals and is on selection view, advance to parameter adjustment
-    if (selectedGoalKeys.length > 0 && !isConfiguringGoals) {
-      // Ensure all selected goals have configured state initialized
-      setConfiguredGoals((prev) => {
-        const nextCfg = { ...prev };
-        selectedGoalKeys.forEach((k) => {
-          if (!nextCfg[k]) {
-            const tpl = GOAL_TEMPLATES.find((t) => t.key === k);
-            nextCfg[k] = {
-              key: k,
-              name: tpl?.defaultName || 'Jamg‘arma maqsadi',
-              target_amount: tpl?.defaultAmount || 10000000,
-              target_date: null,
-            };
-          }
-        });
-        return nextCfg;
-      });
-      setActiveConfigGoalKey(selectedGoalKeys[0]);
-      setIsConfiguringGoals(true);
-      return;
-    }
-
-    // Advance to Step 6
-    const next = 6;
+  const handleExpensesNext = () => {
+    setGeneralError(null);
+    const next = 7;
     setStep(next);
-    setIsConfiguringGoals(false);
-    persistDraft(next);
+    persistDraft(next, {
+      declared_monthly_expenses: totalExpenses,
+      category_expenses: categoryExpenses,
+    });
   };
 
-  // Step 6 Final Submission
-  const handleFinalSubmit = async () => {
+  const handleCompleteOnboarding = async () => {
+    setGeneralError(null);
     setIsSubmitting(true);
-    setStepError(null);
 
-    const goalsToCommit = selectedGoalKeys
-      .map((k) => configuredGoals[k])
-      .filter((g) => Boolean(g && g.name && g.target_amount > 0));
+    try {
+      const res = await completeOnboardingAction({
+        first_name: firstName.trim() || 'Foydalanuvchi',
+        declared_monthly_income: monthlyIncome,
+        declared_monthly_expenses: totalExpenses,
+        goals: selectedGoals,
+        custom_goal: customGoal.trim() || null,
+        category_expenses: categoryExpenses,
+      });
 
-    const payload = {
-      first_name: firstName.trim(),
-      last_name: lastName.trim(),
-      declared_monthly_income: monthlyIncome,
-      declared_monthly_expenses: monthlyExpenses,
-      target_expense_reduction_percent: reductionPercent,
-      target_monthly_expenses: targetMonthlyExpenses,
-      goals: goalsToCommit,
-    };
+      if (!res.success) {
+        setGeneralError(res.error || 'Ma’lumotlarni saqlashda xatolik yuz berdi');
+        setIsSubmitting(false);
+        return;
+      }
 
-    const result = await completeOnboardingAction(payload);
-    if (!result.success) {
-      setStepError(result.error || 'Ma’lumotlarni saqlashda xatolik yuz berdi');
+      // Hard navigation to dashboard so all server components reload fresh
+      window.location.href = '/dashboard';
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Jarayonni yakunlashda xatolik yuz berdi';
+      setGeneralError(msg);
       setIsSubmitting(false);
+    }
+  };
+
+  // Back button navigation
+  const handleBack = () => {
+    setGeneralError(null);
+    if (step <= 1) return;
+    if (step === 3 && user && !accountPassword) {
+      // If user came into onboarding already authenticated, jumping back from step 3 goes to step 1
+      setStep(1);
       return;
     }
+    setStep((prev) => prev - 1);
+  };
 
-    // Success: seamlessly navigate to empty dashboard
-    router.push('/dashboard');
-    router.refresh();
+  // Helper icon renderer for goals
+  const renderGoalIcon = (iconName: string) => {
+    switch (iconName) {
+      case 'Car':
+        return <Car className="w-5 h-5" />;
+      case 'Home':
+        return <Home className="w-5 h-5" />;
+      case 'PiggyBank':
+        return <PiggyBank className="w-5 h-5" />;
+      case 'TrendingDown':
+        return <TrendingDown className="w-5 h-5" />;
+      case 'Compass':
+        return <Compass className="w-5 h-5" />;
+      case 'ShieldCheck':
+        return <ShieldCheck className="w-5 h-5" />;
+      case 'CheckCircle':
+        return <CheckCircle className="w-5 h-5" />;
+      case 'Target':
+      default:
+        return <Target className="w-5 h-5" />;
+    }
+  };
+
+  // Helper icon renderer for categories
+  const renderCategoryIcon = (iconName: string) => {
+    switch (iconName) {
+      case 'Home':
+        return <Home className="w-4 h-4 text-[#163300]" />;
+      case 'Utensils':
+        return <Utensils className="w-4 h-4 text-[#163300]" />;
+      case 'Car':
+        return <Car className="w-4 h-4 text-[#163300]" />;
+      case 'Zap':
+        return <Zap className="w-4 h-4 text-[#163300]" />;
+      case 'Wifi':
+        return <Wifi className="w-4 h-4 text-[#163300]" />;
+      case 'HeartPulse':
+        return <HeartPulse className="w-4 h-4 text-[#163300]" />;
+      case 'GraduationCap':
+        return <GraduationCap className="w-4 h-4 text-[#163300]" />;
+      case 'Film':
+        return <Film className="w-4 h-4 text-[#163300]" />;
+      case 'ShoppingBag':
+        return <ShoppingBag className="w-4 h-4 text-[#163300]" />;
+      case 'MoreHorizontal':
+      default:
+        return <MoreHorizontal className="w-4 h-4 text-[#163300]" />;
+    }
   };
 
   return (
-    <div className="w-full max-w-lg mx-auto">
-      {/* Main Screen Card */}
-      <div className="bg-white rounded-2xl sm:rounded-3xl border border-[#DCE4DE] p-4 sm:p-7 shadow-fintech-card relative overflow-hidden transition-all duration-300">
-        {/* Compact Integrated Step Progress (Steps 1 to 6) */}
-        {step > 0 && (
-          <div className="mb-4 sm:mb-5">
-            <div className="flex items-center justify-between text-xs font-semibold text-[#5A675F] mb-1.5">
-              <span>Qadam {step} / 6</span>
-              <span className="text-[#176B45] font-mono">{Math.round((step / 6) * 100)}%</span>
+    <div className="w-full">
+      {/* Onboarding Shell Card */}
+      <div className="bg-white rounded-3xl border border-[#E5E7EB] shadow-sm p-6 sm:p-8 relative">
+        {/* Top Header: Back Button & Step Indicator */}
+        <div className="flex items-center justify-between mb-6 min-h-[36px]">
+          {step > 1 ? (
+            <button
+              id="onboarding-back-button"
+              type="button"
+              onClick={handleBack}
+              disabled={isSubmitting || isCreatingAccount}
+              className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-[#52525B] hover:text-[#18181B] transition-colors p-1.5 -ml-1.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#163300]/20"
+              aria-label="Orqaga qaytish"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Orqaga</span>
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <UzHamyonLogo variant="icon" size="sm" />
+              <span className="font-semibold text-sm tracking-tight text-[#163300]">UzHamyon</span>
             </div>
-            <div className="h-1.5 w-full bg-[#E5EBE6] rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-[#176B45] to-[#218653] rounded-full transition-all duration-300 ease-out"
-                style={{ width: `${Math.round((step / 6) * 100)}%` }}
-              />
-            </div>
-          </div>
-        )}
+          )}
 
-        {stepError && (
+          {step > 1 && (
+            <div className="flex items-center gap-2">
+              <span
+                id="onboarding-step-indicator"
+                className="text-xs font-semibold px-2.5 py-1 rounded-full bg-[#EBEEE8] text-[#163300]"
+              >
+                {step} / 7
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Global Error Banner */}
+        {generalError && (
           <div
             id="onboarding-error-banner"
-            className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-[#C74747] text-xs flex items-center gap-2"
+            className="mb-5 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 p-3.5 text-xs sm:text-sm text-[#DC2626] animate-fadeIn"
           >
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            <span>{stepError}</span>
+            <AlertCircle className="w-4 h-4 shrink-0 text-[#DC2626] mt-0.5" />
+            <span className="font-medium leading-relaxed">{generalError}</span>
           </div>
         )}
 
-        {/* =========================================================================
-            SCREEN 0: WELCOME
-           ========================================================================= */}
-        {step === 0 && (
-          <div className="space-y-4 sm:space-y-5 animate-in fade-in duration-200">
-            {/* Visual Emblem */}
-            <div className="flex justify-center">
-              <div className="relative">
-                <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-gradient-to-br from-[#176B45] via-[#218653] to-[#0E442B] flex items-center justify-center text-white shadow-fintech-elevated">
-                  <Sparkles className="h-7 w-7 sm:h-8 sm:w-8 text-[#9EE5B8]" />
-                </div>
-                <div className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-[#10B981] border-2 border-white flex items-center justify-center text-white text-[10px] font-bold">
-                  ✓
-                </div>
-              </div>
+        {/* ========================================================================= */}
+        {/* STEP 1 — WELCOME SCREEN                                                   */}
+        {/* ========================================================================= */}
+        {step === 1 && (
+          <div id="onboarding-step-1" className="text-center py-4 space-y-6">
+            <div className="flex justify-center mb-2">
+              <UzHamyonLogo variant="full" size="lg" />
             </div>
 
-            {/* Typography */}
-            <div className="text-center space-y-1.5">
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#17211B]">
-                Moliyaviy nazoratni qo‘lga oling.
+            <div className="space-y-3 max-w-md mx-auto">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#163300] leading-snug">
+                Xarajatlaringizni nazorat qiling. Ko‘proq pul jamg‘aring.
               </h1>
-              <p className="text-xs sm:text-sm text-[#47544C] max-w-md mx-auto leading-relaxed">
-                SpendSense AI sizga daromad va xarajatlaringizni tushunish, budjet tuzish va moliyaviy maqsadlaringizga erishishda yordam beradi.
+              <p className="text-sm sm:text-base text-[#52525B] leading-relaxed">
+                Pul qayerga ketayotganini tushuning, moliyaviy maqsadlaringizni belgilang va jamg‘arishni boshlang.
               </p>
             </div>
 
-            {/* Fintech Value Highlights */}
-            <div className="grid grid-cols-1 gap-2 sm:gap-2.5 pt-0.5">
-              <div className="flex items-center gap-3 p-2.5 sm:p-3 rounded-xl bg-[#F7F9F7] border border-[#D5DED7]">
-                <div className="h-8 w-8 rounded-lg bg-[#DDF3E5] text-[#176B45] flex items-center justify-center shrink-0">
-                  <TrendingUp className="h-4 w-4" />
-                </div>
-                <div className="min-w-0 text-left">
-                  <div className="text-xs sm:text-sm font-semibold text-[#17211B]">Aniq pul oqimi va hisob-kitob</div>
-                  <div className="text-[11px] sm:text-xs text-[#47544C] truncate">Daromad va xarajatlaringiz doimo aniq va nazorat ostida</div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 p-2.5 sm:p-3 rounded-xl bg-[#F7F9F7] border border-[#D5DED7]">
-                <div className="h-8 w-8 rounded-lg bg-[#E0E7FF] text-[#4B75E8] flex items-center justify-center shrink-0">
-                  <Target className="h-4 w-4" />
-                </div>
-                <div className="min-w-0 text-left">
-                  <div className="text-xs sm:text-sm font-semibold text-[#17211B]">Maqsadli jamg‘arma rejalari</div>
-                  <div className="text-[11px] sm:text-xs text-[#47544C] truncate">Uy, avtomobil yoki orzuingizdagi xaridlar uchun maqsadlar</div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 p-2.5 sm:p-3 rounded-xl bg-[#F7F9F7] border border-[#D5DED7]">
-                <div className="h-8 w-8 rounded-lg bg-[#F3E8FF] text-[#8664D8] flex items-center justify-center shrink-0">
-                  <Sparkles className="h-4 w-4" />
-                </div>
-                <div className="min-w-0 text-left">
-                  <div className="text-xs sm:text-sm font-semibold text-[#17211B]">Shaxsiy AI moliyaviy maslahatchi</div>
-                  <div className="text-[11px] sm:text-xs text-[#47544C] truncate">Mablag‘ingizni optimallashtirish bo‘yicha aniq tavsiyalar</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Action CTA */}
-            <div className="space-y-2 pt-1">
+            <div className="pt-4 max-w-sm mx-auto">
               <button
-                id="onboarding-welcome-start-btn"
+                id="welcome-start-button"
                 type="button"
-                onClick={() => {
-                  setStep(1);
-                  persistDraft(1);
-                }}
-                className="w-full min-h-[44px] flex items-center justify-center gap-2 py-2.5 px-6 rounded-xl bg-[#176B45] hover:bg-[#125536] text-white font-semibold text-sm sm:text-base transition-all shadow-xs active:scale-[0.99]"
+                onClick={handleWelcomeNext}
+                className="w-full min-h-[52px] rounded-2xl bg-[#163300] hover:bg-[#1f4700] text-[#9FE870] font-semibold text-base flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.99] focus:outline-none focus:ring-4 focus:ring-[#9FE870]/30"
               >
                 <span>Boshlash</span>
-                <ArrowRight className="h-4 w-4" />
-              </button>
-              <p className="text-center text-xs text-[#5A675F]">
-                Bu bir necha daqiqa vaqt oladi.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* =========================================================================
-            SCREEN 1: PERSONAL INFORMATION
-           ========================================================================= */}
-        {step === 1 && (
-          <div className="space-y-6 animate-in fade-in duration-200">
-            <div className="space-y-1.5">
-              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#17211B]">
-                Avval tanishib olaylik.
-              </h1>
-              <p className="text-base sm:text-lg text-[#47544C]">
-                Ism va familiyangizni kiriting.
-              </p>
-            </div>
-
-            <div className="space-y-4 pt-2">
-              <div>
-                <label htmlFor="first_name" className="block text-xs font-semibold uppercase tracking-wider text-[#47544C] mb-2">
-                  Ism *
-                </label>
-                <input
-                  id="first_name"
-                  type="text"
-                  autoComplete="given-name"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  placeholder="Ali"
-                  className="w-full min-h-[48px] rounded-2xl border-2 border-[#D5DED7] bg-white px-4 py-3 text-base font-medium text-[#17211B] placeholder-[#8C9890] focus:border-[#176B45] focus:outline-none focus:ring-4 focus:ring-[#176B45]/15 transition-all"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="last_name" className="block text-xs font-semibold uppercase tracking-wider text-[#47544C] mb-2">
-                  Familiya *
-                </label>
-                <input
-                  id="last_name"
-                  type="text"
-                  autoComplete="family-name"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  placeholder="Valiyev"
-                  className="w-full min-h-[48px] rounded-2xl border-2 border-[#D5DED7] bg-white px-4 py-3 text-base font-medium text-[#17211B] placeholder-[#8C9890] focus:border-[#176B45] focus:outline-none focus:ring-4 focus:ring-[#176B45]/15 transition-all"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between gap-3 pt-4 border-t border-[#D5DED7]">
-              <button
-                type="button"
-                onClick={() => setStep(0)}
-                className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2.5 rounded-xl border border-[#D5DED7] bg-white text-sm font-medium text-[#47544C] hover:text-[#17211B] hover:bg-[#F7F9F7] transition-colors"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                <span>Orqaga</span>
-              </button>
-
-              <button
-                id="onboarding-step1-next-btn"
-                type="button"
-                onClick={handleNextFromStep1}
-                className="inline-flex items-center gap-2 min-h-[44px] px-6 py-2.5 rounded-xl bg-[#176B45] hover:bg-[#125536] text-white text-sm font-semibold transition-all shadow-xs active:scale-[0.99]"
-              >
-                <span>Davom etish</span>
-                <ArrowRight className="h-4 w-4" />
+                <ArrowRight className="w-5 h-5" />
               </button>
             </div>
           </div>
         )}
 
-        {/* =========================================================================
-            SCREEN 2: MONTHLY INCOME
-           ========================================================================= */}
+        {/* ========================================================================= */}
+        {/* STEP 2 — ACCOUNT CREATION                                                 */}
+        {/* ========================================================================= */}
         {step === 2 && (
-          <div className="space-y-6 animate-in fade-in duration-200">
-            <div className="space-y-1.5">
-              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#17211B]">
-                Oylik daromadingiz qancha?
-              </h1>
-              <p className="text-base sm:text-lg text-[#47544C]">
-                Daromadingizni bilish moliyaviy rejangizni to‘g‘ri tuzishga yordam beradi.
+          <div id="onboarding-step-2" className="space-y-6">
+            <div className="space-y-1.5 text-center sm:text-left">
+              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-[#163300]">
+                Hisobingizni yarating
+              </h2>
+              <p className="text-xs sm:text-sm text-[#52525B]">
+                UzHamyon hisobini oching va moliyaviy ma’lumotlaringiz xavfsiz saqlansin.
               </p>
             </div>
 
-            <div className="space-y-4 pt-2">
-              <CurrencyInput
-                id="onboarding-monthly-income-input"
-                value={monthlyIncome}
-                onChange={setMonthlyIncome}
-                placeholder="6 000 000"
-                autoFocus
-              />
-
-              <p className="text-sm sm:text-base text-[#47544C] flex items-start gap-2 leading-relaxed bg-[#F7F9F7] p-3.5 rounded-xl border border-[#D5DED7]">
-                <HelpCircle className="h-4 w-4 text-[#176B45] shrink-0 mt-0.5" />
-                <span>
-                  Bu ma’lumot rejalashtirish uchun ishlatiladi. Haqiqiy daromad sifatida tranzaksiyaga qo‘shilmaydi.
-                </span>
-              </p>
-
-              {/* Quick Preset Pills */}
-              <div className="space-y-2 pt-1">
-                <span className="text-xs font-semibold text-[#5A675F] uppercase tracking-wider">
-                  Tezkor tanlov:
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { label: 'Hozircha 0 so‘m', val: 0 },
-                    { label: '3 000 000 so‘m', val: 3000000 },
-                    { label: '6 000 000 so‘m', val: 6000000 },
-                    { label: '10 000 000 so‘m', val: 10000000 },
-                    { label: '15 000 000 so‘m', val: 15000000 },
-                  ].map((preset) => (
-                    <button
-                      key={preset.val}
-                      type="button"
-                      onClick={() => setMonthlyIncome(preset.val)}
-                      className={`min-h-[36px] px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold border transition-all ${
-                        monthlyIncome === preset.val
-                          ? 'bg-[#176B45] text-white border-[#176B45] shadow-xs'
-                          : 'bg-white text-[#17211B] border-[#D5DED7] hover:bg-[#F7F9F7]'
-                      }`}
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
+            {user ? (
+              <div className="rounded-2xl border border-[#D8DED3] bg-[#F8F9FA] p-5 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-[#163300] text-[#9FE870] flex items-center justify-center font-bold">
+                    ✓
+                  </div>
+                  <div>
+                    <p className="text-xs text-[#52525B] font-medium">Siz tizimga kirdingiz</p>
+                    <p className="text-sm font-semibold text-[#18181B]">{user.email}</p>
+                  </div>
                 </div>
+                <button
+                  id="account-logged-in-continue-button"
+                  type="button"
+                  onClick={() => {
+                    setStep(3);
+                    persistDraft(3);
+                  }}
+                  className="w-full min-h-[48px] rounded-xl bg-[#163300] hover:bg-[#1f4700] text-[#9FE870] font-semibold text-sm flex items-center justify-center gap-2 transition-all"
+                >
+                  <span>Davom etish</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
               </div>
-            </div>
-
-            <div className="flex items-center justify-between gap-3 pt-4 border-t border-[#D5DED7]">
-              <button
-                type="button"
-                onClick={() => setStep(1)}
-                className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2.5 rounded-xl border border-[#D5DED7] bg-white text-sm font-medium text-[#47544C] hover:text-[#17211B] hover:bg-[#F7F9F7] transition-colors"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                <span>Orqaga</span>
-              </button>
-
-              <button
-                id="onboarding-step2-next-btn"
-                type="button"
-                onClick={handleNextFromStep2}
-                className="inline-flex items-center gap-2 min-h-[44px] px-6 py-2.5 rounded-xl bg-[#176B45] hover:bg-[#125536] text-white text-sm font-semibold transition-all shadow-xs active:scale-[0.99]"
-              >
-                <span>Davom etish</span>
-                <ArrowRight className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* =========================================================================
-            SCREEN 3: CURRENT MONTHLY SPENDING
-           ========================================================================= */}
-        {step === 3 && (
-          <div className="space-y-6 animate-in fade-in duration-200">
-            <div className="space-y-1.5">
-              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#17211B]">
-                Bir oyda qancha mablag‘ sarflaysiz?
-              </h1>
-              <p className="text-base sm:text-lg text-[#47544C]">
-                Odatda bir oyda xarajatlaringiz uchun qancha pul ketadi?
-              </p>
-            </div>
-
-            <div className="space-y-4 pt-2">
-              <CurrencyInput
-                id="onboarding-monthly-expenses-input"
-                value={monthlyExpenses}
-                onChange={setMonthlyExpenses}
-                placeholder="5 000 000"
-                autoFocus
-              />
-
-              <p className="text-sm sm:text-base text-[#47544C] flex items-start gap-2 leading-relaxed bg-[#F7F9F7] p-3.5 rounded-xl border border-[#D5DED7]">
-                <HelpCircle className="h-4 w-4 text-[#176B45] shrink-0 mt-0.5" />
-                <span>
-                  Uy-joy, oziq-ovqat, transport va boshqa kundalik xarajatlaringizni hisobga oling. (0 kiritish mumkin).
-                </span>
-              </p>
-
-              {/* Quick Preset Pills */}
-              <div className="space-y-2 pt-1">
-                <span className="text-xs font-semibold text-[#5A675F] uppercase tracking-wider">
-                  Tezkor tanlov:
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { label: '0 so‘m', val: 0 },
-                    { label: '2 500 000 so‘m', val: 2500000 },
-                    { label: '5 000 000 so‘m', val: 5000000 },
-                    { label: '8 000 000 so‘m', val: 8000000 },
-                    { label: '12 000 000 so‘m', val: 12000000 },
-                  ].map((preset) => (
-                    <button
-                      key={preset.val}
-                      type="button"
-                      onClick={() => setMonthlyExpenses(preset.val)}
-                      className={`min-h-[36px] px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold border transition-all ${
-                        monthlyExpenses === preset.val
-                          ? 'bg-[#176B45] text-white border-[#176B45] shadow-xs'
-                          : 'bg-white text-[#17211B] border-[#D5DED7] hover:bg-[#F7F9F7]'
-                      }`}
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between gap-3 pt-4 border-t border-[#D5DED7]">
-              <button
-                type="button"
-                onClick={() => setStep(2)}
-                className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2.5 rounded-xl border border-[#D5DED7] bg-white text-sm font-medium text-[#47544C] hover:text-[#17211B] hover:bg-[#F7F9F7] transition-colors"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                <span>Orqaga</span>
-              </button>
-
-              <button
-                id="onboarding-step3-next-btn"
-                type="button"
-                onClick={handleNextFromStep3}
-                className="inline-flex items-center gap-2 min-h-[44px] px-6 py-2.5 rounded-xl bg-[#176B45] hover:bg-[#125536] text-white text-sm font-semibold transition-all shadow-xs active:scale-[0.99]"
-              >
-                <span>Davom etish</span>
-                <ArrowRight className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* =========================================================================
-            SCREEN 4: SPENDING REDUCTION TARGET
-           ========================================================================= */}
-        {step === 4 && (
-          <div className="space-y-6 animate-in fade-in duration-200">
-            <div className="space-y-1.5">
-              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#17211B]">
-                Xarajatlaringizni qanchaga kamaytirmoqchisiz?
-              </h1>
-              <p className="text-base sm:text-lg text-[#47544C]">
-                Kichik o‘zgarishlar ham katta natija berishi mumkin.
-              </p>
-            </div>
-
-            {monthlyExpenses === 0 ? (
-              <div className="p-5 rounded-2xl bg-[#F7F9F7] border border-[#D5DED7] space-y-3">
-                <div className="flex items-center gap-2 text-sm font-semibold text-[#17211B]">
-                  <HelpCircle className="h-4 w-4 text-[#176B45]" />
-                  <span>Xarajat ko‘rsatilmagan (0 so‘m)</span>
-                </div>
-                <p className="text-sm sm:text-base text-[#47544C] leading-relaxed">
-                  Oylik xarajat 0 so‘m bo‘lgani sababli, xarajatlarni qisqartirish rejasini keyinchalik hisobingizga tranzaksiyalar qo‘shganingizda belgilashingiz mumkin.
+            ) : verificationPending ? (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 space-y-3 text-center">
+                <Mail className="w-8 h-8 text-emerald-600 mx-auto" />
+                <h3 className="text-base font-semibold text-emerald-900">
+                  Pochtani tasdiqlash xabari yuborildi
+                </h3>
+                <p className="text-xs sm:text-sm text-emerald-800 leading-relaxed">
+                  <strong>{accountEmail}</strong> manziliga tasdiqlash havolasi yuborildi. Iltimos, pochtangizni tekshirib havolani bosing va qayta kiring.
                 </p>
+                <div className="pt-2">
+                  <a
+                    href="/login"
+                    className="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-[#163300] text-[#9FE870] text-xs font-semibold"
+                  >
+                    Kirish sahifasiga o‘tish
+                  </a>
+                </div>
               </div>
             ) : (
-              <div className="space-y-5">
-                {/* Current expense context */}
-                <div className="flex items-center justify-between p-4 rounded-2xl bg-[#F7F9F7] border border-[#D5DED7]">
-                  <span className="text-xs sm:text-sm font-medium text-[#47544C]">Hozirgi oylik xarajatingiz:</span>
-                  <span className="text-sm sm:text-base font-mono font-semibold tabular-nums text-[#17211B]">
-                    {formatWithSpaces(monthlyExpenses)} so‘m
-                  </span>
-                </div>
-
-                {/* Percentage options */}
-                <div className="space-y-2">
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-[#47544C]">
-                    Qisqartirish darajasini tanlang:
+              <form onSubmit={handleAccountCreationSubmit} className="space-y-4">
+                <div>
+                  <label
+                    htmlFor="onboarding-email"
+                    className="block text-xs sm:text-sm font-medium text-[#18181B] mb-1.5"
+                  >
+                    Elektron pochta manzili
                   </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-                    {(
-                      [
-                        { key: '5', label: '5%', recommended: false },
-                        { key: '10', label: '10%', recommended: true },
-                        { key: '15', label: '15%', recommended: false },
-                        { key: '20', label: '20%', recommended: false },
-                        { key: 'custom', label: 'O‘zim', recommended: false },
-                      ] as const
-                    ).map((opt) => (
-                      <button
-                        key={opt.key}
-                        type="button"
-                        onClick={() => setReductionChoice(opt.key)}
-                        className={`min-h-[52px] p-3 rounded-2xl border text-center transition-all ${
-                          reductionChoice === opt.key
-                            ? 'bg-[#176B45] text-white border-[#176B45] shadow-xs font-semibold'
-                            : 'bg-white text-[#17211B] border-[#D5DED7] hover:bg-[#F7F9F7] font-medium'
-                        }`}
-                      >
-                        <div className="text-sm sm:text-base">{opt.label}</div>
-                        {opt.recommended && (
-                          <div className={`text-xs mt-0.5 font-semibold ${reductionChoice === opt.key ? 'text-[#9EE5B8]' : 'text-[#176B45]'}`}>
-                            Tavsiya
-                          </div>
-                        )}
-                      </button>
-                    ))}
+                  <div className="relative">
+                    <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#71717A]" />
+                    <input
+                      id="onboarding-email"
+                      type="email"
+                      autoComplete="email"
+                      required
+                      value={accountEmail}
+                      onChange={(e) => setAccountEmail(e.target.value)}
+                      placeholder="siz@example.com"
+                      className="w-full min-h-[48px] rounded-xl border border-[#E5E7EB] bg-white py-2.5 pl-10 pr-3.5 text-sm text-[#18181B] placeholder-[#71717A] focus:border-[#163300] focus:outline-none focus:ring-2 focus:ring-[#163300]/15 transition-all"
+                    />
                   </div>
+                  {accountErrors.email && (
+                    <p className="mt-1 text-xs text-[#DC2626] font-medium">{accountErrors.email}</p>
+                  )}
                 </div>
 
-                {/* Custom percentage input if selected */}
-                {reductionChoice === 'custom' && (
-                  <div className="p-4 rounded-2xl bg-[#F7F9F7] border border-[#D5DED7] space-y-2">
-                    <label htmlFor="custom-percent-input" className="block text-xs sm:text-sm font-medium text-[#17211B]">
-                      Ixtiyoriy foizni kiriting (1% dan 50% gacha):
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        id="custom-percent-input"
-                        type="number"
-                        min="1"
-                        max="50"
-                        value={customReductionPercent}
-                        onChange={(e) => setCustomReductionPercent(Number(e.target.value) || 0)}
-                        className="w-28 min-h-[44px] rounded-xl border border-[#D5DED7] bg-white px-3 py-2 text-sm font-semibold font-mono tabular-nums text-[#17211B] focus:border-[#176B45] focus:outline-none"
-                      />
-                      <span className="text-sm font-semibold text-[#47544C]">%</span>
-                    </div>
+                <div>
+                  <label
+                    htmlFor="onboarding-password"
+                    className="block text-xs sm:text-sm font-medium text-[#18181B] mb-1.5"
+                  >
+                    Parol
+                  </label>
+                  <div className="relative">
+                    <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#71717A]" />
+                    <input
+                      id="onboarding-password"
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      required
+                      value={accountPassword}
+                      onChange={(e) => setAccountPassword(e.target.value)}
+                      placeholder="Kamida 8 ta belgi"
+                      className="w-full min-h-[48px] rounded-xl border border-[#E5E7EB] bg-white py-2.5 pl-10 pr-11 text-sm text-[#18181B] placeholder-[#71717A] focus:border-[#163300] focus:outline-none focus:ring-2 focus:ring-[#163300]/15 transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      aria-label={showPassword ? 'Parolni yashirish' : 'Parolni ko‘rsatish'}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#71717A] hover:text-[#18181B] p-1.5 rounded-lg focus:outline-none"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
                   </div>
-                )}
-
-                {/* Clear, Spacious Calculation Summary Breakdown */}
-                <div className="space-y-3 pt-1">
-                  {/* Item 1: Target Monthly Expense */}
-                  <div className="p-4 rounded-2xl bg-[#F7F9F7] border border-[#D5DED7] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                    <div className="space-y-1">
-                      <div className="text-sm font-semibold text-[#17211B]">
-                        Maqsadli oylik xarajat
-                      </div>
-                      <div className="text-xs text-[#5A675F] flex items-center gap-1.5 flex-wrap">
-                        <span>Belgilangan maqsad:</span>
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-[#DDF3E5] text-[#176B45] font-semibold text-xs">
-                          -{reductionPercent}% kamaytirish
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-left sm:text-right pt-2 sm:pt-0 border-t sm:border-t-0 border-[#D5DED7]/60">
-                      <div className="font-mono font-bold text-base sm:text-xl tabular-nums text-[#17211B]">
-                        {formatWithSpaces(targetMonthlyExpenses)} so‘m
-                      </div>
-                      <div className="text-xs text-[#5A675F]">
-                        oylik xarajat limiti
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Item 2: Potential Monthly Savings Hero Card */}
-                  <div className="p-4 sm:p-5 rounded-2xl bg-[#DDF3E5]/50 border-2 border-[#176B45]/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-[#176B45] text-white flex items-center justify-center shrink-0 shadow-2xs">
-                        <Sparkles className="h-5 w-5 text-[#9EE5B8]" />
-                      </div>
-                      <div>
-                        <div className="text-sm sm:text-base font-bold text-[#17211B]">
-                          Oylik potentsial tejash
-                        </div>
-                        <div className="text-xs text-[#47544C] mt-0.5">
-                          Har oy jamg‘armangizga qoladi
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="text-left sm:text-right pl-13 sm:pl-0">
-                      <div className="font-mono font-extrabold text-lg sm:text-2xl tabular-nums text-[#176B45] whitespace-nowrap">
-                        +{formatWithSpaces(potentialMonthlySavings)} so‘m
-                      </div>
-                      <div className="text-xs font-semibold text-[#176B45]">
-                        har oy tejaladi
-                      </div>
-                    </div>
-                  </div>
+                  {accountErrors.password && (
+                    <p className="mt-1 text-xs text-[#DC2626] font-medium">{accountErrors.password}</p>
+                  )}
                 </div>
+
+                <div>
+                  <label
+                    htmlFor="onboarding-confirm-password"
+                    className="block text-xs sm:text-sm font-medium text-[#18181B] mb-1.5"
+                  >
+                    Parolni tasdiqlang
+                  </label>
+                  <div className="relative">
+                    <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#71717A]" />
+                    <input
+                      id="onboarding-confirm-password"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      required
+                      value={accountConfirmPassword}
+                      onChange={(e) => setAccountConfirmPassword(e.target.value)}
+                      placeholder="Parolni qayta kiriting"
+                      className="w-full min-h-[48px] rounded-xl border border-[#E5E7EB] bg-white py-2.5 pl-10 pr-11 text-sm text-[#18181B] placeholder-[#71717A] focus:border-[#163300] focus:outline-none focus:ring-2 focus:ring-[#163300]/15 transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      aria-label={showConfirmPassword ? 'Parolni yashirish' : 'Parolni ko‘rsatish'}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#71717A] hover:text-[#18181B] p-1.5 rounded-lg focus:outline-none"
+                    >
+                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {accountErrors.confirmPassword && (
+                    <p className="mt-1 text-xs text-[#DC2626] font-medium">{accountErrors.confirmPassword}</p>
+                  )}
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    id="account-creation-submit-button"
+                    type="submit"
+                    disabled={isCreatingAccount}
+                    className="w-full min-h-[48px] rounded-xl bg-[#163300] hover:bg-[#1f4700] text-[#9FE870] font-semibold text-sm flex items-center justify-center gap-2 transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isCreatingAccount ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Hisob yaratilmoqda...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Hisob yaratish</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <p className="text-center text-xs text-[#52525B] pt-1">
+                  Hisobingiz bormi?{' '}
+                  <a
+                    href="/login"
+                    className="font-semibold text-[#163300] hover:underline"
+                  >
+                    Kirish
+                  </a>
+                </p>
+              </form>
+            )}
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* STEP 3 — USER NAME                                                        */}
+        {/* ========================================================================= */}
+        {step === 3 && (
+          <div id="onboarding-step-3" className="space-y-6">
+            <div className="space-y-1.5 text-center sm:text-left">
+              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-[#163300]">
+                Sizni qanday chaqiraylik?
+              </h2>
+              <p className="text-xs sm:text-sm text-[#52525B]">
+                Ismingizni kiriting. UzHamyon sizga shunday murojaat qiladi.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label
+                  htmlFor="user-name-input"
+                  className="block text-xs sm:text-sm font-medium text-[#18181B] mb-1.5"
+                >
+                  Ismingiz yoki murojaat nomi
+                </label>
+                <div className="relative">
+                  <User className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-[#71717A]" />
+                  <input
+                    id="user-name-input"
+                    type="text"
+                    autoFocus
+                    required
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="Masalan: Sardor"
+                    className="w-full min-h-[50px] rounded-xl border border-[#E5E7EB] bg-white py-2.5 pl-11 pr-3.5 text-base text-[#18181B] placeholder-[#71717A] focus:border-[#163300] focus:outline-none focus:ring-2 focus:ring-[#163300]/15 transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  id="user-name-continue-button"
+                  type="button"
+                  onClick={handleNameNext}
+                  className="w-full min-h-[48px] rounded-xl bg-[#163300] hover:bg-[#1f4700] text-[#9FE870] font-semibold text-sm flex items-center justify-center gap-2 transition-all shadow-xs active:scale-[0.99]"
+                >
+                  <span>Davom etish</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* STEP 4 — FINANCIAL GOALS                                                  */}
+        {/* ========================================================================= */}
+        {step === 4 && (
+          <div id="onboarding-step-4" className="space-y-6">
+            <div className="space-y-1.5 text-center sm:text-left">
+              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-[#163300]">
+                Moliyaviy maqsadingiz nima?
+              </h2>
+              <p className="text-xs sm:text-sm text-[#52525B]">
+                UzHamyon sizga nimaga erishishda yordam berishini tanlang.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {ONBOARDING_GOAL_OPTIONS.map((g) => {
+                const isSelected = selectedGoals.includes(g.id);
+                return (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => toggleGoal(g.id)}
+                    className={`flex items-center gap-3 p-3.5 rounded-2xl border text-left transition-all ${
+                      isSelected
+                        ? 'border-[#163300] bg-[#F3F8F2] text-[#163300] font-medium shadow-xs'
+                        : 'border-[#E5E7EB] bg-white text-[#18181B] hover:border-[#D8DED3]'
+                    }`}
+                  >
+                    <div
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                        isSelected
+                          ? 'bg-[#163300] text-[#9FE870]'
+                          : 'bg-[#EBEEE8] text-[#163300]'
+                      }`}
+                    >
+                      {renderGoalIcon(g.icon)}
+                    </div>
+                    <span className="text-xs sm:text-sm leading-snug flex-1">{g.label}</span>
+                    <div
+                      className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${
+                        isSelected
+                          ? 'border-[#163300] bg-[#163300] text-[#9FE870]'
+                          : 'border-[#D8DED3] bg-white'
+                      }`}
+                    >
+                      {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {selectedGoals.includes('other') && (
+              <div className="pt-1 animate-fadeIn">
+                <label
+                  htmlFor="custom-goal-input"
+                  className="block text-xs font-medium text-[#52525B] mb-1.5"
+                >
+                  Boshqa maqsadingiz haqida qisqacha yozing
+                </label>
+                <input
+                  id="custom-goal-input"
+                  type="text"
+                  value={customGoal}
+                  onChange={(e) => setCustomGoal(e.target.value)}
+                  placeholder="Masalan: Yangi dasturlash noutbuki xaridi"
+                  className="w-full min-h-[46px] rounded-xl border border-[#E5E7EB] bg-white px-3.5 py-2 text-sm text-[#18181B] placeholder-[#71717A] focus:border-[#163300] focus:outline-none focus:ring-2 focus:ring-[#163300]/15"
+                />
               </div>
             )}
 
-            <div className="flex items-center justify-between gap-3 pt-4 border-t border-[#D5DED7]">
+            <div className="pt-2">
               <button
+                id="goals-continue-button"
                 type="button"
-                onClick={() => setStep(3)}
-                className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2.5 rounded-xl border border-[#D5DED7] bg-white text-sm font-medium text-[#47544C] hover:text-[#17211B] hover:bg-[#F7F9F7] transition-colors"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                <span>Orqaga</span>
-              </button>
-
-              <button
-                id="onboarding-step4-next-btn"
-                type="button"
-                onClick={handleNextFromStep4}
-                className="inline-flex items-center gap-2 min-h-[44px] px-6 py-2.5 rounded-xl bg-[#176B45] hover:bg-[#125536] text-white text-sm font-semibold transition-all shadow-xs active:scale-[0.99]"
+                onClick={handleGoalsNext}
+                className="w-full min-h-[48px] rounded-xl bg-[#163300] hover:bg-[#1f4700] text-[#9FE870] font-semibold text-sm flex items-center justify-center gap-2 transition-all shadow-xs active:scale-[0.99]"
               >
                 <span>Davom etish</span>
-                <ArrowRight className="h-4 w-4" />
+                <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           </div>
         )}
 
-        {/* =========================================================================
-            SCREEN 5: SAVINGS GOALS
-           ========================================================================= */}
-        {/* =========================================================================
-            SCREEN 5A: SAVINGS GOALS SELECTION
-           ========================================================================= */}
-        {step === 5 && !isConfiguringGoals && (
-          <div className="space-y-6 animate-in fade-in duration-200">
-            <div className="space-y-1.5">
-              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#17211B]">
-                Kelajakda nimaga pul yig‘moqchisiz?
-              </h1>
-              <p className="text-base sm:text-lg text-[#47544C]">
-                Maqsadingizni tanlang. Siz uchun jamg‘arish rejasini shakllantiramiz.
+        {/* ========================================================================= */}
+        {/* STEP 5 — MONTHLY INCOME                                                   */}
+        {/* ========================================================================= */}
+        {step === 5 && (
+          <div id="onboarding-step-5" className="space-y-6">
+            <div className="space-y-1.5 text-center sm:text-left">
+              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-[#163300]">
+                Oylik daromadingiz qancha?
+              </h2>
+              <p className="text-xs sm:text-sm text-[#52525B]">
+                O‘rtacha oyda qancha daromad olishingizni kiriting.
               </p>
             </div>
 
-            {/* Selectable Goal Cards Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
-              {GOAL_TEMPLATES.map((tpl) => {
-                const isSelected = selectedGoalKeys.includes(tpl.key);
-                const IconComponent = tpl.icon;
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs sm:text-sm font-medium text-[#18181B] mb-2">
+                  Taxminiy oylik daromad miqdori
+                </label>
+                <CurrencyInput
+                  id="monthly-income-input"
+                  value={monthlyIncome}
+                  onChange={setMonthlyIncome}
+                  placeholder="0"
+                  autoFocus
+                />
+              </div>
 
+              {/* Quick Select Preset Buttons */}
+              <div className="flex flex-wrap gap-2 pt-1">
+                {[5000000, 10000000, 15000000, 25000000].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setMonthlyIncome(preset)}
+                    className="px-3 py-1.5 rounded-xl border border-[#D8DED3] bg-[#F8F9FA] hover:bg-[#EBEEE8] text-xs font-medium text-[#163300] transition-colors"
+                  >
+                    {formatWithSpaces(preset)} so‘m
+                  </button>
+                ))}
+              </div>
+
+              <div className="rounded-xl border border-[#E5E7EB] bg-[#F8F9FA] p-3.5 text-xs text-[#52525B] leading-relaxed">
+                💡 <strong>Eslatma:</strong> Bu miqdor shaxsiy moliyaviy prognoz uchun taxminiy ko‘rsatkich bo‘lib, hisobingizda real tranzaksiya yaratmaydi.
+              </div>
+
+              <div className="pt-2">
+                <button
+                  id="income-continue-button"
+                  type="button"
+                  onClick={handleIncomeNext}
+                  className="w-full min-h-[48px] rounded-xl bg-[#163300] hover:bg-[#1f4700] text-[#9FE870] font-semibold text-sm flex items-center justify-center gap-2 transition-all shadow-xs active:scale-[0.99]"
+                >
+                  <span>Davom etish</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* STEP 6 — MONTHLY EXPENSES                                                 */}
+        {/* ========================================================================= */}
+        {step === 6 && (
+          <div id="onboarding-step-6" className="space-y-6">
+            <div className="space-y-1.5 text-center sm:text-left">
+              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-[#163300]">
+                Oylik xarajatlaringiz qancha?
+              </h2>
+              <p className="text-xs sm:text-sm text-[#52525B]">
+                Har oy pulingiz asosan qaysi yo‘nalishlarga sarflanishini kiriting.
+              </p>
+            </div>
+
+            {/* Expense Categories List */}
+            <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+              {ONBOARDING_EXPENSE_CATEGORIES.map((c) => {
+                const currentVal = categoryExpenses[c.id] || 0;
                 return (
                   <div
-                    key={tpl.key}
-                    onClick={() => toggleGoalSelection(tpl)}
-                    className={`rounded-2xl border p-4 transition-all text-left flex items-center justify-between cursor-pointer select-none ${
-                      isSelected
-                        ? 'border-[#176B45] bg-[#F7FBF8] ring-2 ring-[#DDF3E5]'
-                        : 'border-[#D5DED7] bg-white hover:border-[#176B45]/40 hover:bg-[#FAFBFB]'
-                    }`}
+                    key={c.id}
+                    className="flex items-center justify-between gap-3 p-3 rounded-2xl border border-[#E5E7EB] bg-white hover:border-[#D8DED3] transition-colors"
                   >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
-                          isSelected ? 'bg-[#176B45] text-white' : 'bg-[#DDF3E5] text-[#176B45]'
-                        }`}
-                      >
-                        <IconComponent className="h-5 w-5" />
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-xl bg-[#EBEEE8] flex items-center justify-center shrink-0">
+                        {renderCategoryIcon(c.icon)}
                       </div>
-                      <div>
-                        <div className="text-sm font-semibold text-[#17211B]">{tpl.defaultName}</div>
-                        <div className="text-xs text-[#47544C] line-clamp-1">{tpl.description}</div>
-                      </div>
+                      <span className="text-xs sm:text-sm font-medium text-[#18181B] truncate">
+                        {c.name}
+                      </span>
                     </div>
 
-                    <div
-                      className={`h-6 w-6 rounded-md border flex items-center justify-center shrink-0 transition-all ${
-                        isSelected
-                          ? 'bg-[#176B45] border-[#176B45] text-white'
-                          : 'border-[#D5DED7] bg-white'
-                      }`}
-                    >
-                      {isSelected && <Check className="h-4 w-4" />}
+                    <div className="relative w-36 sm:w-44 shrink-0">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={currentVal > 0 ? formatWithSpaces(currentVal) : ''}
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/\s+/g, '').replace(/[^0-9]/g, '');
+                          handleCategoryAmountChange(c.id, raw ? parseInt(raw, 10) : 0);
+                        }}
+                        placeholder="0"
+                        className="w-full text-right font-mono font-semibold text-xs sm:text-sm rounded-xl border border-[#D8DED3] bg-[#F8F9FA] py-2 pl-2 pr-12 text-[#18181B] focus:border-[#163300] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#163300]"
+                      />
+                      <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#71717A]">
+                        so‘m
+                      </span>
                     </div>
                   </div>
                 );
               })}
             </div>
 
-            {/* Skip Button Option */}
-            <div className="flex justify-center pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedGoalKeys([]);
-                  const next = 6;
-                  setStep(next);
-                  setIsConfiguringGoals(false);
-                  persistDraft(next);
-                }}
-                className="text-xs sm:text-sm font-medium text-[#5A675F] hover:text-[#17211B] transition-colors underline"
-              >
-                Keyinroq belgilayman (o‘tkazib yuborish)
-              </button>
+            {/* Running Total & Remaining Bar */}
+            <div className="rounded-2xl border border-[#D8DED3] bg-[#F3F8F2] p-4 space-y-2">
+              <div className="flex items-center justify-between text-xs text-[#52525B]">
+                <span>Kiritilgan oylik daromad:</span>
+                <span className="font-semibold text-[#18181B]">
+                  {formatWithSpaces(monthlyIncome)} so‘m
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs text-[#52525B]">
+                <span>Jami taxminiy xarajat:</span>
+                <span className="font-semibold text-[#18181B]">
+                  {formatWithSpaces(totalExpenses)} so‘m
+                </span>
+              </div>
+              <div className="border-t border-[#D8DED3]/60 pt-2 flex items-center justify-between text-xs sm:text-sm">
+                <span className="font-medium text-[#163300]">Taxminiy qolgan mablag‘:</span>
+                <span
+                  className={`font-bold ${
+                    potentialSavings > 0
+                      ? 'text-[#163300]'
+                      : potentialSavings === 0
+                      ? 'text-[#52525B]'
+                      : 'text-[#DC2626]'
+                  }`}
+                >
+                  {formatWithSpaces(potentialSavings)} so‘m
+                </span>
+              </div>
             </div>
 
-            <div className="flex items-center justify-between gap-3 pt-4 border-t border-[#D5DED7]">
+            <div className="pt-2">
               <button
+                id="expenses-continue-button"
                 type="button"
-                onClick={() => setStep(4)}
-                className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2.5 rounded-xl border border-[#D5DED7] bg-white text-sm font-medium text-[#47544C] hover:text-[#17211B] hover:bg-[#F7F9F7] transition-colors"
+                onClick={handleExpensesNext}
+                className="w-full min-h-[48px] rounded-xl bg-[#163300] hover:bg-[#1f4700] text-[#9FE870] font-semibold text-sm flex items-center justify-center gap-2 transition-all shadow-xs active:scale-[0.99]"
               >
-                <ArrowLeft className="h-4 w-4" />
-                <span>Orqaga</span>
-              </button>
-
-              <button
-                id="onboarding-step5-next-btn"
-                type="button"
-                onClick={handleNextFromStep5}
-                className="inline-flex items-center gap-2 min-h-[44px] px-6 py-2.5 rounded-xl bg-[#176B45] hover:bg-[#125536] text-white text-sm font-semibold transition-all shadow-xs active:scale-[0.99]"
-              >
-                <span>Davom etish</span>
-                <ArrowRight className="h-4 w-4" />
+                <span>Natijalarni ko‘rish</span>
+                <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           </div>
         )}
 
-        {/* =========================================================================
-            SCREEN 5B: GOAL PARAMETERS CONFIGURATION
-           ========================================================================= */}
-        {step === 5 && isConfiguringGoals && currentConfigGoal && (
-          <div className="space-y-5 animate-in fade-in duration-200">
-            <div className="space-y-1.5">
-              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#17211B]">
-                Maqsad parametrlarini moslash
-              </h1>
-              <p className="text-base sm:text-lg text-[#47544C]">
-                Tanlangan maqsad uchun rejalashtirilgan summa va muddatni belgilang.
+        {/* ========================================================================= */}
+        {/* STEP 7 — PERSONALIZED FINANCIAL RESULTS                                   */}
+        {/* ========================================================================= */}
+        {step === 7 && (
+          <div id="onboarding-step-7" className="space-y-6">
+            <div className="space-y-1.5 text-center sm:text-left">
+              <div className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-[#EBEEE8] text-[#163300] mb-1">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Shaxsiy moliyaviy prognoz</span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-[#163300]">
+                Moliyaviy imkoniyatlaringizni ko‘ring
+              </h2>
+              <p className="text-xs sm:text-sm text-[#52525B]">
+                UzHamyon bilan moliyaviy holatingizni yaxshiroq tushunib, maqsadlaringiz sari harakat qilishingiz mumkin.
               </p>
             </div>
 
-            {/* Multiple goals tabs if > 1 selected */}
-            {selectedGoalKeys.length > 1 && (
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-                {selectedGoalKeys.map((key, idx) => {
-                  const tpl = GOAL_TEMPLATES.find((t) => t.key === key);
-                  const Icon = tpl?.icon || Sparkles;
-                  const isCurrent = key === currentConfigKey;
-                  const goalName =
-                    configuredGoals[key]?.name || tpl?.defaultName || `Maqsad ${idx + 1}`;
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setActiveConfigGoalKey(key)}
-                      className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all border shrink-0 ${
-                        isCurrent
-                          ? 'bg-[#176B45] text-white border-[#176B45] shadow-xs'
-                          : 'bg-white text-[#47544C] border-[#D5DED7] hover:bg-[#F7F9F7]'
-                      }`}
-                    >
-                      <Icon className={`h-4 w-4 ${isCurrent ? 'text-white' : 'text-[#176B45]'}`} />
-                      <span className="truncate max-w-[120px]">{goalName}</span>
-                    </button>
-                  );
-                })}
+            {/* Income & Expense Summary Strip */}
+            <div className="grid grid-cols-2 gap-2 text-center">
+              <div className="rounded-2xl border border-[#E5E7EB] bg-[#F8F9FA] p-3">
+                <p className="text-[11px] text-[#52525B]">Oylik daromad</p>
+                <p className="text-sm sm:text-base font-bold text-[#18181B] truncate">
+                  {formatWithSpaces(monthlyIncome)} so‘m
+                </p>
+              </div>
+              <div className="rounded-2xl border border-[#E5E7EB] bg-[#F8F9FA] p-3">
+                <p className="text-[11px] text-[#52525B]">Oylik xarajatlar</p>
+                <p className="text-sm sm:text-base font-bold text-[#18181B] truncate">
+                  {formatWithSpaces(totalExpenses)} so‘m
+                </p>
+              </div>
+            </div>
+
+            {/* Potential Savings or Helpful Notice */}
+            {potentialSavings > 0 ? (
+              <div className="space-y-4">
+                <div className="rounded-2xl bg-[#163300] text-white p-4 sm:p-5 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-[#9FE870] font-medium">Potensial oylik jamg‘arma</p>
+                    <p className="text-xl sm:text-2xl font-bold text-white">
+                      +{formatWithSpaces(potentialSavings)} so‘m
+                    </p>
+                  </div>
+                  <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center text-[#9FE870]">
+                    <PiggyBank className="w-6 h-6" />
+                  </div>
+                </div>
+
+                <div className="space-y-2.5">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-[#71717A]">
+                    Vaqt bo‘yicha jamg‘arish istiqboli
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {/* 1 Month */}
+                    <div className="rounded-2xl border border-[#E5E7EB] bg-[#F8F9FA] p-3.5 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-[#163300]">1 oydan so‘ng</span>
+                        <span className="text-xs font-mono font-bold text-[#18181B]">
+                          ~{formatWithSpaces(potentialSavings * 1)} so‘m
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#52525B] leading-tight">
+                        Xarajatlaringiz qayerga ketayotganini yaxshiroq tushuna boshlaysiz.
+                      </p>
+                    </div>
+
+                    {/* 3 Months */}
+                    <div className="rounded-2xl border border-[#E5E7EB] bg-[#F8F9FA] p-3.5 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-[#163300]">3 oydan so‘ng</span>
+                        <span className="text-xs font-mono font-bold text-[#18181B]">
+                          ~{formatWithSpaces(potentialSavings * 3)} so‘m
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#52525B] leading-tight">
+                        Ortiqcha xarajatlarni aniqlash va kamaytirish imkoniyatiga ega bo‘lasiz.
+                      </p>
+                    </div>
+
+                    {/* 6 Months */}
+                    <div className="rounded-2xl border border-[#E5E7EB] bg-[#F8F9FA] p-3.5 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-[#163300]">6 oydan so‘ng</span>
+                        <span className="text-xs font-mono font-bold text-[#18181B]">
+                          ~{formatWithSpaces(potentialSavings * 6)} so‘m
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#52525B] leading-tight">
+                        Jamg‘arish odatini shakllantirishni boshlashingiz mumkin.
+                      </p>
+                    </div>
+
+                    {/* 12 Months */}
+                    <div className="rounded-2xl border border-[#163300]/20 bg-[#F3F8F2] p-3.5 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-[#163300]">12 oydan so‘ng</span>
+                        <span className="text-xs font-mono font-bold text-[#163300]">
+                          ~{formatWithSpaces(potentialSavings * 12)} so‘m
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#52525B] leading-tight">
+                        Rejangizga amal qilsangiz, sezilarli jamg‘armaga ega bo‘lishingiz mumkin.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-[#D8DED3] bg-[#F8F9FA] p-5 space-y-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                    <AlertCircle className="w-5 h-5" />
+                  </div>
+                  <div className="space-y-1 text-xs sm:text-sm">
+                    <h3 className="font-bold text-[#18181B]">
+                      Xarajatlar daromadga teng yoki yuqori
+                    </h3>
+                    <p className="text-[#52525B] leading-relaxed">
+                      Hozirda ko‘rsatilgan oylik xarajatlaringiz daromadingizdan ko‘proq yoki unga teng ko‘rinmoqda. UzHamyon yordamida qaysi xarajatlarni optimallashtirish mumkinligini aniqlab, asta-sekin ijobiy balansga chiqishingiz mumkin.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-[#E5E7EB] flex items-center justify-between text-xs text-[#52525B]">
+                  <span>Ma’lumotlarni o‘zgartirish kerakmi?</span>
+                  <button
+                    type="button"
+                    onClick={() => setStep(6)}
+                    className="font-semibold text-[#163300] hover:underline"
+                  >
+                    Xarajatlarni qayta ko‘rish
+                  </button>
+                </div>
               </div>
             )}
 
-            {/* Parameter Editing Card */}
-            <div className="p-4 sm:p-5 rounded-2xl bg-[#F7F9F7] border border-[#D5DED7] space-y-4">
-              {/* Goal Name Field */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-semibold uppercase tracking-wider text-[#47544C]">
-                  Maqsad nomi
-                </label>
-                <input
-                  type="text"
-                  value={currentConfigGoal.name}
-                  onChange={(e) =>
-                    updateGoalField(currentConfigKey, { name: e.target.value })
-                  }
-                  placeholder="Maqsad nomi"
-                  className="w-full min-h-[44px] rounded-xl border border-[#D5DED7] bg-white px-3.5 py-2 text-sm font-semibold text-[#17211B] focus:border-[#176B45] focus:outline-none transition-colors"
-                />
-              </div>
+            {/* Disclaimer */}
+            <p className="text-[11px] text-[#71717A] leading-relaxed text-center sm:text-left">
+              Hisob-kitoblar siz kiritgan ma&apos;lumotlarga asoslangan taxminiy prognozdir. Haqiqiy natijalar daromad va xarajatlaringizga bog‘liq.
+            </p>
 
-              {/* Amount & Date 2-Column Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-[#47544C]">
-                    Maqsad summasi (UZS)
-                  </label>
-                  <input
-                    type="number"
-                    min="100000"
-                    step="100000"
-                    value={currentConfigGoal.target_amount}
-                    onChange={(e) =>
-                      updateGoalField(currentConfigKey, {
-                        target_amount: Math.max(0, Number(e.target.value) || 0),
-                      })
-                    }
-                    className="w-full min-h-[44px] rounded-xl border border-[#D5DED7] bg-white px-3.5 py-2 text-sm font-semibold font-mono tabular-nums text-[#17211B] focus:border-[#176B45] focus:outline-none transition-colors"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-[#47544C]">
-                    Kutilayotgan sana (Ixtiyoriy)
-                  </label>
-                  <input
-                    type="date"
-                    value={currentConfigGoal.target_date || ''}
-                    onChange={(e) =>
-                      updateGoalField(currentConfigKey, {
-                        target_date: e.target.value || null,
-                      })
-                    }
-                    className="w-full min-h-[44px] rounded-xl border border-[#D5DED7] bg-white px-3.5 py-2 text-sm font-medium text-[#17211B] focus:border-[#176B45] focus:outline-none transition-colors"
-                  />
-                </div>
-              </div>
-
-              {/* Info notice box */}
-              <div className="text-xs text-[#47544C] bg-white p-3.5 rounded-xl border border-[#D5DED7] leading-relaxed flex items-start gap-2.5">
-                <span className="text-base leading-none shrink-0 mt-0.5">💡</span>
-                <span>
-                  <strong>Muhim:</strong> Har bir yangi maqsad to‘liq <strong>0 so‘m</strong> bilan boshlanadi. Haqiqiy to‘lovlar keyinchalik o‘zingiz tomoningizdan kiritiladi.
-                </span>
-              </div>
-            </div>
-
-            {/* Secondary fast-forward link if multiple goals and not on last goal */}
-            {selectedGoalKeys.length > 1 && !isLastConfigGoal && (
-              <div className="flex justify-center pt-0.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = 6;
-                    setStep(next);
-                    setIsConfiguringGoals(false);
-                    persistDraft(next);
-                  }}
-                  className="text-xs sm:text-sm font-medium text-[#5A675F] hover:text-[#176B45] transition-colors underline"
-                >
-                  Qolganlarini standart qoldirib, yakunlash
-                </button>
-              </div>
-            )}
-
-            {/* Navigation Footer */}
-            <div className="flex items-center justify-between gap-3 pt-4 border-t border-[#D5DED7]">
+            {/* Primary CTA */}
+            <div className="pt-2">
               <button
+                id="complete-onboarding-button"
                 type="button"
-                onClick={() => {
-                  if (selectedGoalKeys.length > 1 && currentGoalIndex > 0) {
-                    setActiveConfigGoalKey(selectedGoalKeys[currentGoalIndex - 1]);
-                  } else {
-                    setIsConfiguringGoals(false);
-                  }
-                }}
-                className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2.5 rounded-xl border border-[#D5DED7] bg-white text-sm font-medium text-[#47544C] hover:text-[#17211B] hover:bg-[#F7F9F7] transition-colors"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                <span>Orqaga</span>
-              </button>
-
-              <button
-                id="onboarding-step5-config-next-btn"
-                type="button"
-                onClick={() => {
-                  if (selectedGoalKeys.length > 1 && !isLastConfigGoal) {
-                    setActiveConfigGoalKey(selectedGoalKeys[currentGoalIndex + 1]);
-                  } else {
-                    const next = 6;
-                    setStep(next);
-                    setIsConfiguringGoals(false);
-                    persistDraft(next);
-                  }
-                }}
-                className="inline-flex items-center gap-2 min-h-[44px] px-6 py-2.5 rounded-xl bg-[#176B45] hover:bg-[#125536] text-white text-sm font-semibold transition-all shadow-xs active:scale-[0.99]"
-              >
-                <span>
-                  {selectedGoalKeys.length > 1 && !isLastConfigGoal
-                    ? `Keyingi maqsad (${currentGoalIndex + 1}/${selectedGoalKeys.length})`
-                    : 'Davom etish'}
-                </span>
-                <ArrowRight className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* =========================================================================
-            SCREEN 6: FINAL REVIEW
-           ========================================================================= */}
-        {step === 6 && (
-          <div className="space-y-5 sm:space-y-6 animate-in fade-in duration-200">
-            <div className="space-y-1.5">
-              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#17211B]">
-                Sizning moliyaviy rejangiz tayyor!
-              </h1>
-              <p className="text-sm sm:text-base text-[#47544C]">
-                Kiritgan ma’lumotlaringiz asosida keyingi 1 yilda kutilayotgan moliyaviy natijangiz hisoblab chiqildi.
-              </p>
-            </div>
-
-            {/* Prominent Hero Card: 1-Year Projected Financial Result */}
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0E442B] via-[#176B45] to-[#218653] p-5 sm:p-6 text-white shadow-fintech-elevated">
-              {/* Decorative ambient background glows */}
-              <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl pointer-events-none" />
-              <div className="absolute -left-8 -bottom-8 h-32 w-32 rounded-full bg-[#9EE5B8]/15 blur-2xl pointer-events-none" />
-
-              <div className="relative z-10 space-y-4">
-                {/* Header Badge */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 backdrop-blur-xs text-[#9EE5B8] text-xs font-bold tracking-wider">
-                    <Sparkles className="h-3.5 w-3.5" />
-                    <span>1 YILLIK KUTILAYOTGAN NATIJA</span>
-                  </div>
-                  <span className="text-white/80 text-xs font-semibold">12 oylik prognoz</span>
-                </div>
-
-                {/* Big Hero Amount */}
-                <div className="space-y-1">
-                  <div className="font-mono font-extrabold text-3xl sm:text-4xl tracking-tight text-white tabular-nums">
-                    +{formatWithSpaces(projectedAnnualTotal)} so‘m
-                  </div>
-                  <p className="text-xs sm:text-sm text-[#DDF3E5] font-medium leading-relaxed">
-                    {annualSavingsPotential > 0
-                      ? 'Rejalashtirilgan daromad va tejash sur’ati bilan 1 yilda to‘planadigan umumiy sof jamg‘arma'
-                      : 'Xarajatlarni qisqartirish rejasi hisobiga 1 yilda tejaladigan umumiy mablag‘'}
-                  </p>
-                </div>
-
-                {/* Key Sub-metrics Grid */}
-                <div className="grid grid-cols-2 gap-2.5 pt-1">
-                  <div className="p-3 rounded-2xl bg-white/10 backdrop-blur-xs border border-white/10">
-                    <div className="text-[11px] font-medium text-white/75">Oylik sof jamg‘arma</div>
-                    <div className="font-mono font-bold text-sm sm:text-base text-white tabular-nums mt-0.5">
-                      +{formatWithSpaces(monthlyNetSurplus > 0 ? monthlyNetSurplus : potentialMonthlySavings)} so‘m
-                    </div>
-                  </div>
-
-                  <div className="p-3 rounded-2xl bg-white/10 backdrop-blur-xs border border-white/10">
-                    <div className="text-[11px] font-medium text-white/75">Yillik xarajat tejovi</div>
-                    <div className="font-mono font-bold text-sm sm:text-base text-[#9EE5B8] tabular-nums mt-0.5">
-                      +{formatWithSpaces(annualExpenseSavings)} so‘m
-                    </div>
-                  </div>
-                </div>
-
-                {/* Goals Milestone Impact Callout */}
-                {selectedGoalKeys.length > 0 && totalGoalsTargetAmount > 0 && (
-                  <div className="p-3 rounded-2xl bg-black/15 border border-white/10 text-xs text-[#E8ECE9] flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <Target className="h-4 w-4 text-[#9EE5B8] shrink-0" />
-                      <span>Jamg‘arma maqsadlarini qoplash:</span>
-                    </div>
-                    <span className="font-bold text-[#9EE5B8] text-xs sm:text-sm font-mono">
-                      {annualGoalCoveragePercent}% (1 yilda)
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Compact Plan Summary Card */}
-            <div className="space-y-4 pt-1">
-              {/* Profile Card */}
-              <div className="p-4 sm:p-5 rounded-2xl bg-[#F7F9F7] border border-[#D5DED7] flex items-center justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="text-xs font-semibold text-[#5A675F] uppercase tracking-wider">
-                    Foydalanuvchi
-                  </div>
-                  <div className="text-base sm:text-lg font-bold text-[#17211B]">
-                    {firstName} {lastName}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setStep(1)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold text-[#176B45] hover:bg-white border border-transparent hover:border-[#D5DED7] transition-all"
-                >
-                  <Edit2 className="h-3.5 w-3.5" />
-                  <span>Tahrirlash</span>
-                </button>
-              </div>
-
-              {/* Monthly Income & Expenses */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <div className="p-4 sm:p-5 rounded-2xl bg-[#F7F9F7] border border-[#D5DED7] flex items-center justify-between gap-3">
-                  <div className="space-y-1.5">
-                    <div className="text-xs font-semibold text-[#5A675F] uppercase tracking-wider">
-                      Oylik daromad
-                    </div>
-                    <div className="text-lg sm:text-xl font-bold font-mono tabular-nums text-[#176B45]">
-                      +{formatWithSpaces(monthlyIncome)} so‘m
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setStep(2)}
-                    className="p-2 rounded-xl text-[#176B45] hover:bg-white transition-all border border-transparent hover:border-[#D5DED7]"
-                    title="Daromadni tahrirlash"
-                    aria-label="Daromadni tahrirlash"
-                  >
-                    <Edit2 className="h-4 w-4" />
-                  </button>
-                </div>
-
-                <div className="p-4 sm:p-5 rounded-2xl bg-[#F7F9F7] border border-[#D5DED7] flex items-center justify-between gap-3">
-                  <div className="space-y-1.5">
-                    <div className="text-xs font-semibold text-[#5A675F] uppercase tracking-wider">
-                      Oylik xarajat
-                    </div>
-                    <div className="text-lg sm:text-xl font-bold font-mono tabular-nums text-[#17211B]">
-                      -{formatWithSpaces(monthlyExpenses)} so‘m
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setStep(3)}
-                    className="p-2 rounded-xl text-[#176B45] hover:bg-white transition-all border border-transparent hover:border-[#D5DED7]"
-                    title="Xarajatni tahrirlash"
-                    aria-label="Xarajatni tahrirlash"
-                  >
-                    <Edit2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Reduction Plan */}
-              <div className="p-4 sm:p-5 rounded-2xl bg-[#F7F9F7] border border-[#D5DED7] space-y-3.5">
-                <div className="flex items-center justify-between gap-2 border-b border-[#D5DED7]/60 pb-2.5">
-                  <span className="text-xs font-bold text-[#5A675F] uppercase tracking-wider">
-                    Xarajatni qisqartirish
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setStep(4)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs sm:text-sm font-semibold text-[#176B45] hover:bg-white border border-transparent hover:border-[#D5DED7] transition-all"
-                  >
-                    <Edit2 className="h-3.5 w-3.5" />
-                    <span>Tahrirlash</span>
-                  </button>
-                </div>
-
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-[#DDF3E5] text-[#176B45] text-xs sm:text-sm font-bold">
-                      -{reductionPercent}% kamaytirish
-                    </span>
-                    <span className="text-xs text-[#5A675F]">rejalashtirilgan</span>
-                  </div>
-                  <div className="text-xs sm:text-sm text-[#47544C]">
-                    Yangi oylik limit:{' '}
-                    <strong className="font-mono font-bold text-[#17211B] text-sm sm:text-base">
-                      {formatWithSpaces(targetMonthlyExpenses)} so‘m
-                    </strong>
-                  </div>
-                </div>
-
-                {potentialMonthlySavings > 0 && (
-                  <div className="p-3 rounded-xl bg-[#DDF3E5]/60 border border-[#176B45]/20 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-[#176B45] shrink-0" />
-                      <span className="text-xs sm:text-sm font-semibold text-[#17211B]">
-                        Har oy kutilayotgan tejov:
-                      </span>
-                    </div>
-                    <span className="font-mono font-bold tabular-nums text-sm sm:text-base text-[#176B45]">
-                      +{formatWithSpaces(potentialMonthlySavings)} so‘m
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Savings Goals */}
-              <div className="p-4 sm:p-5 rounded-2xl bg-[#F7F9F7] border border-[#D5DED7] space-y-3.5">
-                <div className="flex items-center justify-between gap-2 border-b border-[#D5DED7]/60 pb-2.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-[#5A675F] uppercase tracking-wider">
-                      Jamg‘arma maqsadlari
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full bg-[#E5EBE6] text-[11px] font-bold text-[#176B45]">
-                      {selectedGoalKeys.length} ta
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStep(5);
-                      setIsConfiguringGoals(false);
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs sm:text-sm font-semibold text-[#176B45] hover:bg-white border border-transparent hover:border-[#D5DED7] transition-all"
-                  >
-                    <Edit2 className="h-3.5 w-3.5" />
-                    <span>Tahrirlash</span>
-                  </button>
-                </div>
-
-                {selectedGoalKeys.length === 0 ? (
-                  <p className="text-xs sm:text-sm text-[#5A675F] italic py-1">
-                    Jamg‘arma maqsadi belgilanmadi (istalgan vaqtda qo‘shish mumkin).
-                  </p>
-                ) : (
-                  <div className="space-y-2.5 pt-0.5">
-                    {selectedGoalKeys.map((k) => {
-                      const g = configuredGoals[k];
-                      if (!g) return null;
-                      const tpl = GOAL_TEMPLATES.find((t) => t.key === k);
-                      const IconComponent = tpl?.icon || Target;
-                      return (
-                        <div
-                          key={k}
-                          className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-white border border-[#D5DED7] shadow-2xs"
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <div className="h-8 w-8 rounded-lg bg-[#DDF3E5] text-[#176B45] flex items-center justify-center shrink-0">
-                              <IconComponent className="h-4 w-4" />
-                            </div>
-                            <span className="font-semibold text-sm text-[#17211B] truncate">
-                              {g.name}
-                            </span>
-                          </div>
-                          <span className="font-mono font-bold tabular-nums text-sm sm:text-base text-[#176B45] shrink-0">
-                            {formatWithSpaces(g.target_amount)} so‘m
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Reassurance Notice */}
-            <div className="p-4 sm:p-5 rounded-2xl bg-[#F7F9F7] border border-[#D5DED7] space-y-3">
-              <div className="flex items-center gap-2 text-sm font-bold text-[#176B45]">
-                <ShieldCheck className="h-5 w-5 shrink-0" />
-                <span>Toza hisob kafolati</span>
-              </div>
-
-              <p className="text-xs sm:text-sm text-[#47544C] leading-relaxed">
-                Sizning yangi profilingiz mutlaqo toza holda ochiladi:
-              </p>
-
-              <div className="grid grid-cols-3 gap-2 pt-1 text-center">
-                <div className="p-2.5 rounded-xl bg-white border border-[#D5DED7]/80">
-                  <div className="text-[11px] font-medium text-[#5A675F]">Balans</div>
-                  <div className="font-mono font-bold text-xs sm:text-sm text-[#17211B] mt-0.5">0 so‘m</div>
-                </div>
-                <div className="p-2.5 rounded-xl bg-white border border-[#D5DED7]/80">
-                  <div className="text-[11px] font-medium text-[#5A675F]">Tranzaksiyalar</div>
-                  <div className="font-mono font-bold text-xs sm:text-sm text-[#17211B] mt-0.5">0 ta</div>
-                </div>
-                <div className="p-2.5 rounded-xl bg-white border border-[#D5DED7]/80">
-                  <div className="text-[11px] font-medium text-[#5A675F]">Jamg‘arma</div>
-                  <div className="font-mono font-bold text-xs sm:text-sm text-[#17211B] mt-0.5">0 so‘m</div>
-                </div>
-              </div>
-
-              <p className="text-[11px] sm:text-xs text-[#5A675F] leading-normal pt-0.5">
-                Ushbu onboardingda kiritilgan ma’lumotlar sun’iy intellekt tahlillari va rejalashtirish uchun foydalaniladi.
-              </p>
-            </div>
-
-            {/* Submit CTA */}
-            <div className="flex items-center justify-between gap-3 pt-4 border-t border-[#D5DED7]">
-              <button
-                type="button"
-                onClick={() => setStep(5)}
                 disabled={isSubmitting}
-                className="inline-flex items-center justify-center gap-2 min-h-[44px] px-4 py-2.5 rounded-xl border border-[#D5DED7] bg-white text-sm font-medium text-[#47544C] hover:text-[#17211B] hover:bg-[#F7F9F7] transition-colors shrink-0 disabled:opacity-50"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                <span>Orqaga</span>
-              </button>
-
-              <button
-                id="onboarding-complete-submit-btn"
-                type="button"
-                onClick={handleFinalSubmit}
-                disabled={isSubmitting}
-                className="inline-flex items-center justify-center gap-2 min-h-[44px] px-5 sm:px-6 py-2.5 rounded-xl bg-[#176B45] hover:bg-[#125536] text-white text-sm font-semibold whitespace-nowrap transition-all shadow-xs active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed"
+                onClick={handleCompleteOnboarding}
+                className="w-full min-h-[50px] rounded-xl bg-[#163300] hover:bg-[#1f4700] text-[#9FE870] font-semibold text-base flex items-center justify-center gap-2 transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99]"
               >
                 {isSubmitting ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-                    <span>Saqlanmoqda...</span>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Dashboard yuklanmoqda...</span>
                   </>
                 ) : (
                   <>
-                    <span>SpendSense AI&apos;ni boshlash</span>
-                    <ArrowRight className="h-4 w-4 shrink-0" />
+                    <span>Dashboardga o‘tish</span>
+                    <ArrowRight className="w-5 h-5" />
                   </>
                 )}
               </button>

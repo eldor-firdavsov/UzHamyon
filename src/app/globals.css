@@ -1,39 +1,58 @@
 @import "tailwindcss";
+@import "./prototype/prototype.css";
 
 :root {
-  /* SpendSense AI Design Tokens — Inspired by (Simple) Finance */
-  --app-bg: #f5f6f8;
+  /* UzHamyon AI Design Tokens — Wise-Inspired High Contrast Design */
+  --app-bg: #f7f8f5;
   --surface: #ffffff;
-  --surface-subtle: #f9fafb;
+  --surface-subtle: #f7f8f5;
   --surface-raised: #ffffff;
-  --surface-green: #ecfdf5;
+  --surface-green: #edf8f1;
   --surface-blue: #eff6ff;
   --surface-purple: #f5f3ff;
   --surface-amber: #fffbeb;
-  --surface-red: #fef2f2;
+  --surface-red: #fdf2f2;
+
+  /* Wise Prototype Design Palette */
+  --wise-primary: #9fe870;
+  --wise-primary-dark: #163300;
+  --wise-primary-subtle: #f0f9e9;
+  --wise-income: #26834a;
+  --wise-income-subtle: #edf8f1;
+  --wise-expense: #d64d4d;
+  --wise-expense-subtle: #fdf2f2;
+  --wise-border: #e8ebe5;
+  --wise-border-subtle: #f0f2ed;
 
   /* Neutral Typography Palette */
-  --text-primary: #18181b;    /* Zinc 900 */
-  --text-secondary: #52525b;  /* Zinc 600 */
-  --text-muted: #71717a;      /* Zinc 500 */
+  --text-primary: #171b16;    /* Wise charcoal/off-black */
+  --text-secondary: #697168;  /* Wise muted gray */
+  --text-muted: #959e94;      /* Lighter gray */
 
-  /* Structural Borders */
-  --border: #e5e7eb;          /* Neutral 200 */
-  --border-strong: #d1d5db;   /* Neutral 300 */
+  /* Structural Borders & HSL Tokens */
+  --border: 90 8% 85%;
+  --border-strong: #d1d5db;
+  --card: 0 0% 100%;
+  --card-foreground: 120 10% 10%;
+  --primary: 96 73% 67%;
+  --primary-foreground: 96 100% 10%;
+  --muted: 90 10% 90%;
+  --muted-foreground: 100 4% 43%;
+  --ring: 96 100% 10%;
 
   /* Brand & Financial Semantics */
-  --brand: #10b981;           /* Emerald 500 */
-  --brand-deep: #059669;      /* Emerald 600 */
-  --brand-soft: #ecfdf5;      /* Emerald 50 */
-  --income: #059669;          /* Emerald 600 */
-  --expense: #dc2626;         /* Red 600 */
+  --brand: #9fe870;
+  --brand-deep: #163300;
+  --brand-soft: #f0f9e9;
+  --income: #26834a;
+  --expense: #d64d4d;
   --blue: #2563eb;
   --purple: #7c3aed;
   --amber: #d97706;
 
   /* Soft Ambient Fintech Shadows */
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.03), 0 2px 8px rgba(0, 0, 0, 0.02);
-  --shadow-hover: 0 4px 14px rgba(0, 0, 0, 0.05);
+  --shadow-card: 0 2px 8px rgba(23, 27, 22, 0.04);
+  --shadow-hover: 0 8px 24px rgba(23, 27, 22, 0.08);
 
   /* Border Radii (12px, 16px, 20px, 24px) */
   --radius-sm: 8px;
@@ -70,6 +89,17 @@
   --line-compact: 1.45;
 }
 
+.dark {
+  --card: 100 20% 7%;
+  --card-foreground: 90 10% 95%;
+  --primary: 96 73% 67%;
+  --primary-foreground: 96 100% 10%;
+  --border: 100 10% 18%;
+  --muted: 100 10% 14%;
+  --muted-foreground: 90 6% 65%;
+  --ring: 96 73% 67%;
+}
+
 @theme inline {
   --color-canvas: var(--app-bg);
   --color-surface: var(--surface);
@@ -83,11 +113,26 @@
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-text-muted: var(--text-muted);
-  --color-border: var(--border);
+  --color-border: hsl(var(--border));
+  --color-card: hsl(var(--card));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-ring: hsl(var(--ring));
   --color-border-strong: var(--border-strong);
   --color-brand: var(--brand);
   --color-brand-deep: var(--brand-deep);
   --color-brand-soft: var(--brand-soft);
+  --color-wise-primary: var(--wise-primary);
+  --color-wise-primary-dark: var(--wise-primary-dark);
+  --color-wise-primary-subtle: var(--wise-primary-subtle);
+  --color-wise-income: var(--wise-income);
+  --color-wise-income-subtle: var(--wise-income-subtle);
+  --color-wise-expense: var(--wise-expense);
+  --color-wise-expense-subtle: var(--wise-expense-subtle);
+  --color-wise-border: var(--wise-border);
+  --color-wise-border-subtle: var(--wise-border-subtle);
   --color-income: var(--income);
   --color-expense: var(--expense);
   --color-blue: var(--blue);
@@ -341,3 +386,141 @@ p {
     background: #eef0f2 !important;
   }
 }
+
+/* ══════════════════════════════════════════════════════════
+   UZHAMYON AI — Liquid Glass Material System (iOS 26)
+   ══════════════════════════════════════════════════════════ */
+@layer components {
+  /* 1. Outer Floating Pill — Liquid Glass Shell */
+  .liquid-glass-pill {
+    background: color-mix(in srgb, hsl(var(--card)) 68%, transparent);
+    backdrop-filter: blur(24px) saturate(190%);
+    -webkit-backdrop-filter: blur(24px) saturate(190%);
+    border: 1px solid color-mix(in srgb, hsl(var(--border)) 75%, rgba(255, 255, 255, 0.25));
+    box-shadow:
+      /* Specular top glass rim */
+      inset 0 1px 1px 0 rgba(255, 255, 255, 0.35),
+      /* Bottom inner refraction rim */
+      inset 0 -1px 1px 0 rgba(0, 0, 0, 0.08),
+      /* Ambient elevation shadow */
+      0 12px 32px -6px rgba(0, 0, 0, 0.16),
+      0 4px 12px -2px rgba(0, 0, 0, 0.08);
+  }
+
+  .dark .liquid-glass-pill {
+    background: color-mix(in srgb, hsl(var(--card)) 58%, transparent);
+    border: 1px solid color-mix(in srgb, hsl(var(--border)) 65%, rgba(255, 255, 255, 0.14));
+    box-shadow:
+      inset 0 1px 1px 0 rgba(255, 255, 255, 0.18),
+      inset 0 -1px 2px 0 rgba(0, 0, 0, 0.35),
+      0 14px 36px -6px rgba(0, 0, 0, 0.45);
+  }
+
+  /* 2. Inner Recessed Circular Slot Wells */
+  .liquid-glass-slot {
+    background: color-mix(in srgb, hsl(var(--muted)) 45%, transparent);
+    box-shadow:
+      inset 0 1px 1px 0 rgba(255, 255, 255, 0.18),
+      inset 0 -1px 1px 0 rgba(0, 0, 0, 0.04);
+  }
+
+  .dark .liquid-glass-slot {
+    background: color-mix(in srgb, hsl(var(--muted)) 35%, transparent);
+    box-shadow:
+      inset 0 1px 0.5px 0 rgba(255, 255, 255, 0.08),
+      inset 0 -1px 1px 0 rgba(0, 0, 0, 0.25);
+  }
+
+  /* 3. Active Liquid Droplet & Detached FAB (Uses existing --primary) */
+  .liquid-glass-primary {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    box-shadow:
+      /* Liquid dome top reflection */
+      inset 0 1.5px 2px 0 rgba(255, 255, 255, 0.38),
+      /* Deep bottom curve */
+      inset 0 -2px 3px 0 rgba(0, 0, 0, 0.2),
+      /* Coloured ambient glow from primary token */
+      0 6px 18px -3px color-mix(in srgb, hsl(var(--primary)) 45%, transparent);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   TRADITIONAL UZBEK QUARTER-NAQSH MOBILE FINANCE CARD
+   ══════════════════════════════════════════════════════════ */
+.finance-card {
+  position: relative;
+  overflow: hidden;
+  background-color: #0b1e0f !important;
+  background: #0b1e0f !important;
+  border-radius: 24px;
+  color: #ffffff;
+  border: 1px solid rgba(159, 232, 112, 0.16);
+  box-shadow: 0 8px 28px rgba(11, 30, 15, 0.35);
+  transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Requirement 4: Remove all :hover states on mobile card, use :active touch feedback */
+.finance-card:hover {
+  transform: none;
+}
+
+.finance-card:active {
+  transform: scale(0.98);
+}
+
+/* Requirement 2 & 3: Naqsh Asset & Positioning + Visual Blending */
+.card-naqsh-bg {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  width: 180px;
+  height: 180px;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.18;
+  mix-blend-mode: screen;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  display: block;
+}
+
+.card-naqsh-bg img,
+.card-naqsh-bg svg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  display: block;
+}
+
+/* Requirement 3: Layering - card content and sub-cards sharp above the naqsh */
+.finance-card-content,
+.finance-card .card-content,
+.finance-card .card-text,
+.finance-card .card-header,
+.finance-card .card-body,
+.finance-card .finance-sub-card,
+.finance-card > *:not(.card-naqsh-bg) {
+  position: relative;
+  z-index: 2;
+}
+
+.finance-sub-card {
+  position: relative;
+  z-index: 2;
+  border-radius: 16px;
+  transition: transform 0.15s ease;
+}
+
+.finance-sub-card:hover {
+  transform: none;
+}
+
+.finance-sub-card:active {
+  transform: scale(0.98);
+}
+

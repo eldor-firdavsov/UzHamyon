@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { X, Loader2, Coins, Calendar, Tag, Building2, FileText } from 'lucide-react';
 import { Category, TransactionWithCategory, TransactionType } from '@/types/database';
 import { getCategoryDisplayName } from '@/lib/categories/schemas';
+import CategoryIcon from '@/components/categories/CategoryIcon';
 
 interface TransactionModalProps {
   isOpen: boolean;
@@ -203,23 +204,32 @@ function TransactionModalForm({
           <label htmlFor="category-select" className="block text-sm font-medium text-[#47544C] mb-1.5">
             Kategoriya
           </label>
-          <div className="relative">
-            <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#5A675F]">
-              <Tag className="h-4 w-4" />
-            </span>
-            <select
-              id="category-select"
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-              className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white pl-10 pr-3.5 py-2.5 text-sm text-[#17211B] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all"
-            >
-              <option value="">Kategoriyasiz</option>
-              {compatibleCategories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {getCategoryDisplayName(c.name)}
-                </option>
-              ))}
-            </select>
+          <div className="flex items-center gap-2.5">
+            {categoryId && (
+              <CategoryIcon
+                name={getCategoryDisplayName(compatibleCategories.find((c) => c.id === categoryId)?.name || '')}
+                type={type === 'income' ? 'in' : 'ex'}
+                size="sm"
+              />
+            )}
+            <div className="relative flex-1">
+              <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#5A675F]">
+                <Tag className="h-4 w-4" />
+              </span>
+              <select
+                id="category-select"
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white pl-10 pr-3.5 py-2.5 text-sm text-[#17211B] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all"
+              >
+                <option value="">Kategoriyasiz</option>
+                {compatibleCategories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {getCategoryDisplayName(c.name)}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 

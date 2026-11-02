@@ -1,11 +1,9 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import AppHeader from '@/components/navigation/AppHeader';
-import TahlilHub from '@/components/analytics/TahlilHub';
-import PageContainer from '@/components/bento/PageContainer';
+import UzHamyonPrototypeApp from '@/components/prototype/UzHamyonPrototypeApp';
 
 export const metadata = {
-  title: 'Budjetlar — SpendSense AI',
+  title: 'Budjetlar — UzHamyon',
   description: 'Xarajat limitlarini belgilang va real vaqtda sarf-xarajatlarni kuzatib boring.',
 };
 
@@ -20,18 +18,24 @@ export default async function BudgetsPage() {
     redirect('/login');
   }
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('first_name, last_name')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  const profileName = profile?.first_name ? `${profile.first_name}${profile.last_name ? ` ${profile.last_name}` : ''}` : '';
   const metaName = `${user.user_metadata?.first_name || ''} ${user.user_metadata?.last_name || ''}`.trim() || user.user_metadata?.full_name || '';
   const emailPrefix = (user.email || '').split('@')[0] || '';
   const cleanEmailName = emailPrefix.replace(/[0-9_.-]/g, ' ').trim();
-  const displayName = metaName || (cleanEmailName ? cleanEmailName.charAt(0).toUpperCase() + cleanEmailName.slice(1).toLowerCase() : 'Foydalanuvchi');
+  const displayName = profileName || metaName || (cleanEmailName ? cleanEmailName.charAt(0).toUpperCase() + cleanEmailName.slice(1).toLowerCase() : 'Foydalanuvchi');
 
   return (
-    <div className="min-h-screen bg-[#F1F4F2] text-[#17211B] pb-36 md:pb-16">
-      <AppHeader userEmail={user.email} userName={displayName} />
-
-      <PageContainer>
-        <TahlilHub initialTab="budgets" />
-      </PageContainer>
-    </div>
+    <UzHamyonPrototypeApp
+      initialTab="tahlil"
+      initialSubTab="an"
+      initialUserName={displayName}
+      userEmail={user.email}
+    />
   );
 }

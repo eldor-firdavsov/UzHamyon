@@ -1,12 +1,145 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
-import { completeOnboardingSchema, CompleteOnboardingInput } from '@/lib/onboarding/schemas';
+async function getSupabase() {
+  if (typeof window !== 'undefined') {
+    const { createClient } = await import('@/lib/supabase/client');
+    return createClient();
+  }
+  const { createClient } = await import('@/lib/supabase/server');
+  return await createClient();
+}
+import {
+  onboardingAccountSchema,
+  completeOnboardingSchema,
+  type CompleteOnboardingInput,
+} from '@/lib/onboarding/schemas';
 
 export interface OnboardingActionResult<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;
+  fieldErrors?: Record<string, string[]>;
+}
+
+/**
+ * Creates a new Supabase auth user during onboarding Step 2.
+ */
+export async function createOnboardingAccountAction(
+  prevState: OnboardingActionResult | null,
+  formData: FormData
+): Promise<OnboardingActionResult<{ email: string; userId: string; requiresVerification?: boolean }>> {
+  const rawData = {
+    email: formData.get('email'),
+    password: formData.get('password'),
+    confirmPassword: formData.get('confirmPassword'),
+  };
+
+  const validated = onboardingAccountSchema.safeParse(rawData);
+  if (!validated.success) {
+    return {
+      success: false,
+      fieldErrors: validated.error.flatten().fieldErrors,
+      error: 'Iltimos, ma’lumotlarni to‘g‘ri kiriting.',
+    };
+  }
+
+  const { email, password } = validated.data;
+
+  try {
+    const supabase = await getSupabase();
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+    });
+
+    if (error) {
+      const msg = error.message.toLowerCase();
+      if (
+        msg.includes('already registered') ||
+        msg.includes('user already exists')
+      ) {
+        return {
+          success: false,
+          error: 'Ushbu elektron pochta manziliga ega hisob allaqachon mavjud. Iltimos, kirish sahifasidan foydalaning.',
+        };
+      }
+      if (msg.includes('rate limit') || msg.includes('too many requests')) {
+        return {
+          success: false,
+          error: 'Juda ko‘p urinishlar qilindi. Iltimos, biroz kutib qayta urining.',
+        };
+      }
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+
+    if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+      return {
+        success: false,
+        error: 'Ushbu elektron pochta manziliga ega hisob allaqachon mavjud. Iltimos, kirish sahifasidan foydalaning.',
+      };
+    }
+
+    // If signUp did not auto-create a session (e.g. email verification disabled in project), try sign in
+    let sessionUser = data.user;
+    if (!data.session) {
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (signInError) {
+        const msg = signInError.message.toLowerCase();
+        if (msg.includes('confirm') || msg.includes('not verified')) {
+          return {
+            success: true,
+            data: {
+              email,
+              userId: data.user?.id || '',
+              requiresVerification: true,
+            },
+          };
+        }
+      } else if (signInData.user) {
+        sessionUser = signInData.user;
+      }
+    }
+
+    const userId = sessionUser?.id || data.user?.id || '';
+
+    // Initialize or update profile to mark onboarding as in-progress at step 3
+    if (userId) {
+      await supabase
+        .from('profiles')
+        .upsert({
+          id: userId,
+          email,
+          onboarding_completed: false,
+          onboarding_step: 3,
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .maybeSingle();
+    }
+
+    return {
+      success: true,
+      data: {
+        email,
+        userId,
+        requiresVerification: false,
+      },
+    };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.error('Error in createOnboardingAccountAction:', err);
+    return {
+      success: false,
+      error: `Hisob yaratishda xatolik yuz berdi: ${errorMsg}`,
+    };
+  }
 }
 
 /**
@@ -17,14 +150,15 @@ export async function getOnboardingStateAction(): Promise<
     userId: string;
     email: string;
     firstName: string;
-    lastName: string;
     onboardingStep: number;
     onboardingCompleted: boolean;
     onboardingData: Record<string, unknown> | null;
+    declaredMonthlyIncome: number;
+    declaredMonthlyExpenses: number;
   }>
 > {
   try {
-    const supabase = await createClient();
+    const supabase = await getSupabase();
     const {
       data: { user },
       error: authErr,
@@ -46,10 +180,11 @@ export async function getOnboardingStateAction(): Promise<
 
     const meta = user.user_metadata || {};
     const firstName = profile?.first_name || meta.first_name || '';
-    const lastName = profile?.last_name || meta.last_name || '';
-    const onboardingStep = profile?.onboarding_step || 0;
+    const onboardingStep = profile?.onboarding_step || 1;
     const onboardingCompleted = profile?.onboarding_completed ?? false;
     const onboardingData = (profile?.onboarding_data as Record<string, unknown>) || null;
+    const declaredMonthlyIncome = Number(profile?.declared_monthly_income) || 0;
+    const declaredMonthlyExpenses = Number(profile?.declared_monthly_expenses) || 0;
 
     return {
       success: true,
@@ -57,10 +192,11 @@ export async function getOnboardingStateAction(): Promise<
         userId: user.id,
         email: user.email || '',
         firstName,
-        lastName,
         onboardingStep,
         onboardingCompleted,
         onboardingData,
+        declaredMonthlyIncome,
+        declaredMonthlyExpenses,
       },
     };
   } catch (err) {
@@ -77,7 +213,7 @@ export async function saveOnboardingStepAction(
   draftData: Record<string, unknown>
 ): Promise<OnboardingActionResult> {
   try {
-    const supabase = await createClient();
+    const supabase = await getSupabase();
     const {
       data: { user },
       error: authErr,
@@ -87,13 +223,25 @@ export async function saveOnboardingStepAction(
       return { success: false, error: 'Avtorizatsiyadan o‘tish talab qilinadi' };
     }
 
+    const updatePayload: Record<string, unknown> = {
+      onboarding_step: step,
+      onboarding_data: draftData,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (typeof draftData.first_name === 'string' && draftData.first_name.trim()) {
+      updatePayload.first_name = draftData.first_name.trim();
+    }
+    if (typeof draftData.declared_monthly_income === 'number') {
+      updatePayload.declared_monthly_income = draftData.declared_monthly_income;
+    }
+    if (typeof draftData.declared_monthly_expenses === 'number') {
+      updatePayload.declared_monthly_expenses = draftData.declared_monthly_expenses;
+    }
+
     const { error: updateErr } = await supabase
       .from('profiles')
-      .update({
-        onboarding_step: step,
-        onboarding_data: draftData,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq('id', user.id);
 
     if (updateErr) {
@@ -108,17 +256,17 @@ export async function saveOnboardingStepAction(
 }
 
 /**
- * Completes onboarding: validates and persists profile data and savings goals.
- * Strict fintech rules:
- * - current_amount for goals is ALWAYS 0.00
- * - NO transactions or fake activity created
- * - onboarding_completed is set to true
+ * Completes onboarding:
+ * - Updates user profile with first_name, declared_monthly_income, declared_monthly_expenses, target_monthly_expenses
+ * - Stores goals and category estimates inside profile.onboarding_data
+ * - Sets onboarding_completed: true
+ * - CRITICAL: Never inserts mock transactions or fake goals into financial_goals or transactions.
  */
 export async function completeOnboardingAction(
   rawInput: CompleteOnboardingInput
 ): Promise<OnboardingActionResult> {
   try {
-    const supabase = await createClient();
+    const supabase = await getSupabase();
     const {
       data: { user },
       error: authErr,
@@ -136,12 +284,11 @@ export async function completeOnboardingAction(
 
     const {
       first_name,
-      last_name,
       declared_monthly_income,
       declared_monthly_expenses,
-      target_expense_reduction_percent,
-      target_monthly_expenses,
       goals,
+      custom_goal,
+      category_expenses,
     } = validated.data;
 
     // 1. Fetch existing profile to preserve existing financial_start_date if present
@@ -154,20 +301,24 @@ export async function completeOnboardingAction(
     const todayDateStr = new Date().toISOString().split('T')[0];
     const effectiveFinancialStartDate = existingProfile?.financial_start_date || todayDateStr;
 
-    // 2. Update user profile
+    // 2. Persist to profiles table.
+    // Financial estimates and intentions stay strictly in profile and onboarding_data.
     const { error: profileUpdateErr } = await supabase
       .from('profiles')
       .update({
         first_name,
-        last_name,
         declared_monthly_income,
         declared_monthly_expenses,
-        target_expense_reduction_percent,
-        target_monthly_expenses,
+        target_monthly_expenses: declared_monthly_expenses,
         financial_start_date: effectiveFinancialStartDate,
         onboarding_completed: true,
-        onboarding_step: 6,
-        onboarding_data: null,
+        onboarding_step: 8,
+        onboarding_data: {
+          goals,
+          custom_goal: custom_goal || null,
+          category_expenses,
+          completed_at: new Date().toISOString(),
+        },
         updated_at: new Date().toISOString(),
       })
       .eq('id', user.id);
@@ -179,57 +330,12 @@ export async function completeOnboardingAction(
       };
     }
 
-    // 2. Also update auth user metadata if first_name / last_name changed
+    // 3. Also update auth user metadata if first_name changed
     await supabase.auth.updateUser({
       data: {
         first_name,
-        last_name,
       },
     });
-
-    // 3. Create savings goals if any selected
-    if (goals && goals.length > 0) {
-      // Avoid duplicates: remove any pending goal with same name created in onboarding
-      for (const g of goals) {
-        if (!g.name || !g.target_amount || g.target_amount <= 0) continue;
-
-        // Check if goal with same name already exists
-        const { data: existingGoal } = await supabase
-          .from('financial_goals')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('name', g.name)
-          .maybeSingle();
-
-        if (existingGoal) {
-          // Update target amount/date if already exists
-          await supabase
-            .from('financial_goals')
-            .update({
-              target_amount: g.target_amount,
-              target_date: g.target_date || null,
-              currency: 'UZS',
-            })
-            .eq('id', existingGoal.id);
-        } else {
-          // Insert brand new goal with current_amount = 0
-          const { error: goalInsertErr } = await supabase.from('financial_goals').insert({
-            user_id: user.id,
-            name: g.name,
-            target_amount: g.target_amount,
-            current_amount: 0.0,
-            currency: 'UZS',
-            target_date: g.target_date || null,
-            tracking_strategy: 'manual',
-            status: 'in_progress',
-          });
-
-          if (goalInsertErr) {
-            console.error('Error inserting onboarding goal:', goalInsertErr);
-          }
-        }
-      }
-    }
 
     return { success: true };
   } catch (err) {

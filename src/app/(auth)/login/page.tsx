@@ -8,7 +8,7 @@ import { loginSchema, type AuthActionResult } from '@/app/auth/schemas';
 import { loginAction } from '@/app/auth/actions';
 import { Lock, Mail, ArrowRight, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { z } from 'zod';
-import SpendSenseLogo from '@/components/brand/SpendSenseLogo';
+import UzHamyonLogo from '@/components/brand/UzHamyonLogo';
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
@@ -37,15 +37,18 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-[#F5F6F8] px-4 py-12 text-[#18181B]">
       <div className="w-full max-w-md space-y-6 rounded-2xl border border-[#E5E7EB] bg-white p-6 sm:p-8 shadow-xs">
         <div className="text-center">
-          <div className="flex justify-center mb-4">
-            <SpendSenseLogo variant="icon" size="lg" />
+          <div className="flex justify-center mb-3">
+            <UzHamyonLogo variant="icon" size="lg" />
+          </div>
+          <div className="text-xl font-bold tracking-tight text-[#18181B] mb-1">
+            UzHamyon
           </div>
           <h1 className="text-2xl font-semibold tracking-tight text-[#18181B]">
             Kirish
             <span className="sr-only">Welcome back Sign In</span>
           </h1>
-          <p className="mt-2 text-sm text-[#52525B] leading-relaxed">
-            Hisobingizga kiring va shaxsiy moliyangizni boshqaring
+          <p className="mt-1.5 text-sm text-[#52525B] leading-relaxed">
+            UzHamyon hisobingizga kiring va shaxsiy moliyangizni boshqaring
           </p>
         </div>
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
-import { ChevronRight, RefreshCw } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 
 export interface BreadcrumbItem {
   label: string;
@@ -21,19 +21,14 @@ export interface PageHeaderProps {
 }
 
 /**
- * Standardized PageHeader component for SpendSense AI pages.
- * Integrates semantic h1 heading, accessibility fallback for automated tests,
- * optional breadcrumb trail, and responsive action triggers.
+ * Standardized PageHeader component for UzHamyon pages.
+ * Integrates semantic h1 heading, optional breadcrumb trail, and responsive action triggers.
  */
 export function PageHeader({
   title,
   subtitle,
   badge,
   actions,
-  onRefresh,
-  isRefreshing = false,
-  refreshId,
-  refreshTitle = 'Yangilash',
   breadcrumbs,
   className = '',
 }: PageHeaderProps) {
@@ -73,21 +68,6 @@ export function PageHeader({
               </h1>
               {badge}
             </div>
-
-            {/* Mobile Refresh Button - positioned next to title on the right end */}
-            {onRefresh && (
-              <button
-                type="button"
-                id={refreshId || 'page-header-refresh-btn'}
-                onClick={onRefresh}
-                disabled={isRefreshing}
-                className="sm:hidden min-h-[38px] min-w-[38px] flex items-center justify-center p-2 rounded-xl bg-white border border-[#D5DED7] text-[#47544C] hover:text-[#17211B] hover:bg-[#F7F9F7] transition-all shadow-fintech-card shrink-0 cursor-pointer disabled:opacity-50"
-                title={refreshTitle}
-                aria-label={refreshTitle}
-              >
-                <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin text-[#176B45]' : ''}`} />
-              </button>
-            )}
           </div>
 
           {subtitle && (
@@ -98,23 +78,8 @@ export function PageHeader({
         </div>
 
         {/* Right side controls on desktop & mobile secondary buttons */}
-        {(actions || onRefresh) && (
+        {actions && (
           <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 shrink-0 pt-0.5">
-            {/* Desktop Refresh Button */}
-            {onRefresh && (
-              <button
-                type="button"
-                id={refreshId ? `${refreshId}-desktop` : 'page-header-refresh-desktop-btn'}
-                onClick={onRefresh}
-                disabled={isRefreshing}
-                className="hidden sm:inline-flex min-h-[40px] min-w-[40px] items-center justify-center p-2 rounded-xl bg-white border border-[#D5DED7] text-[#47544C] hover:text-[#17211B] hover:bg-[#F7F9F7] transition-all shadow-fintech-card shrink-0 cursor-pointer disabled:opacity-50"
-                title={refreshTitle}
-                aria-label={refreshTitle}
-              >
-                <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin text-[#176B45]' : ''}`} />
-              </button>
-            )}
-
             {actions}
           </div>
         )}
@@ -124,3 +89,4 @@ export function PageHeader({
 }
 
 export default PageHeader;
+

@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import Script from "next/script";
+import TelegramMiniAppInit from "@/components/telegram/TelegramMiniAppInit";
 import "./globals.css";
 
 const inter = Inter({
@@ -18,8 +20,8 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "SpendSense AI — Aqlli shaxsiy moliya va budjet boshqaruvi",
-  description: "Shaxsiy moliya, budjet nazorati va sun’iy intellektli moliyaviy maslahatchi",
+  title: "UzHamyon — Aqlli shaxsiy moliya va budjet boshqaruvi",
+  description: "UzHamyon — Shaxsiy moliya, xarajatlar va daromadlar boshqaruvi",
   icons: {
     icon: [
       { url: "/icon.png", type: "image/png" },
@@ -37,7 +39,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       lang="uz"
       className={`${inter.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-[#F5F6F8] text-[#18181B] font-sans selection:bg-[#ECFDF5] selection:text-[#059669]">
+      <head>
+        <Script
+          src="https://telegram.org/js/telegram-web-app.js"
+          strategy="beforeInteractive"
+        />
+      </head>
+      <body className="min-h-full flex flex-col bg-[#F7F8F5] text-[#171B16] font-sans selection:bg-[#F0F9E9] selection:text-[#163300]">
+        <TelegramMiniAppInit />
         {children}
       </body>
     </html>

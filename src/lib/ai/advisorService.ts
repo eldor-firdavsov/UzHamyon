@@ -1,5 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { generateGeminiContent } from './geminiClient.ts';
+import { generateAIContent } from './aiClient.ts';
 import type { AIConversation, AIMessage } from '../../types/database.ts';
 
 export interface ServiceResult<T> {
@@ -489,7 +489,7 @@ function buildDeterministicGroundedAnswer(question: string, context: string): st
     (q.includes('nazorat') || q.includes('boshqarish') || q.includes('rejalashtir') || q.includes('50/30/20')) &&
     (q.includes('xarajat') || q.includes('daromad') || q.includes('oylik') || q.includes('topaman') || q.includes('topdim'))
   ) {
-    return 'Oyiga 6 000 000 soʻm daromad uchun 50/30/20 qoidasi boʻyicha taqsimlashni tavsiya qilaman: 3 000 000 soʻm zarur xarajatlarga, 1 800 000 soʻm shaxsiy ehtiyojlarga va 1 200 000 soʻm jamgʻarmaga yoʻnaltiriladi. Barcha xarajatlaringizni doimiy ravishda SpendSense ilovasiga kiritib boring.';
+    return 'Oyiga 6 000 000 soʻm daromad uchun 50/30/20 qoidasi boʻyicha taqsimlashni tavsiya qilaman: 3 000 000 soʻm zarur xarajatlarga, 1 800 000 soʻm shaxsiy ehtiyojlarga va 1 200 000 soʻm jamgʻarmaga yoʻnaltiriladi. Barcha xarajatlaringizni doimiy ravishda UzHamyon ilovasiga kiritib boring.';
   }
 
   // 12. "Bir yil ichida mashina olmoqchiman" / Katta xarid rejasi
@@ -655,7 +655,7 @@ export async function askFinancialAdvisor(
     }
 
     // 4. Prompt Gemini with factual grounding and conciseness rules
-    const systemInstruction = `Siz SpendSense AI — shaxsiy moliya bo'yicha professional va yuqori intellektli moliyaviy yordamchisiz.
+    const systemInstruction = `Siz UzHamyon shaxsiy moliya platformasining professional va yuqori intellektli moliyaviy yordamchisiz.
 
 Asosiy vazifalar va javob tuzilishi:
 1. SAVOL TURINI ANIQLASH:
@@ -687,9 +687,9 @@ Asosiy vazifalar va javob tuzilishi:
 
     const fullPrompt = `${context}\n\nUSER QUESTION: ${question.trim()}`;
 
-    const aiRes = await generateGeminiContent(fullPrompt, systemInstruction);
+    const aiRes = await generateAIContent(fullPrompt, systemInstruction);
 
-    // If Gemini was rate limited or timed out, use verified deterministic grounded answer
+    // If AI was rate limited or timed out, use verified deterministic grounded answer
     let finalAnswer =
       !aiRes.isFallback && aiRes.text.trim()
         ? aiRes.text

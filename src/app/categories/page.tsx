@@ -5,8 +5,8 @@ import CategoriesManager from '@/components/categories/CategoriesManager';
 import PageContainer from '@/components/bento/PageContainer';
 
 export const metadata = {
-  title: 'Kategoriyalar — SpendSense AI',
-  description: 'SpendSense AI ilovasida shaxsiy xarajat va daromad kategoriyalarini boshqaring',
+  title: 'Kategoriyalar — UzHamyon',
+  description: 'UzHamyon ilovasida shaxsiy xarajat va daromad kategoriyalarini boshqaring',
 };
 
 export default async function CategoriesPage() {

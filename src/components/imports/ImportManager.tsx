@@ -338,7 +338,7 @@ export default function ImportManager() {
                 </h3>
               </div>
               <p className="text-sm sm:text-base text-[#47544C] leading-relaxed mb-4">
-                SpendSense AI import qilingan har bir bank ko‘chirmasini qat’iy xavfsizlik standartlari asosida qayta ishlaydi:
+                UzHamyon import qilingan har bir bank ko‘chirmasini qat’iy xavfsizlik standartlari asosida qayta ishlaydi:
               </p>
 
               <ul className="space-y-3 text-xs sm:text-sm text-[#17211B]">
@@ -680,14 +680,6 @@ export default function ImportManager() {
             <Clock className="h-5 w-5 text-[#176B45]" />
             <h2 className="text-base font-semibold text-[#17211B]">Import tarixi</h2>
           </div>
-          <button
-            type="button"
-            onClick={refreshJobs}
-            className="min-h-[36px] text-xs sm:text-sm font-semibold text-[#47544C] hover:text-[#17211B] flex items-center gap-1.5 transition-colors"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${loadingJobs ? 'animate-spin text-[#176B45]' : ''}`} />
-            <span>Yangilash</span>
-          </button>
         </div>
 
         {jobs.length === 0 ? (

@@ -34,8 +34,7 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith('/budgets') ||
     pathname.startsWith('/goals') ||
     pathname.startsWith('/advisor') ||
-    pathname.startsWith('/insights') ||
-    pathname.startsWith('/onboarding');
+    pathname.startsWith('/insights');
   const isAuthRoute = pathname === '/login' || pathname === '/register';
 
   if (pathname === '/') {

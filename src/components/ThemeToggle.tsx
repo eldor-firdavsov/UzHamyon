@@ -38,7 +38,7 @@ function subscribe(callback: () => void) {
 
 function getSnapshot(): ThemeMode {
   try {
-    return (localStorage.getItem('spendsense_theme') as ThemeMode) || 'system';
+    return (localStorage.getItem('uzhamyon_theme') as ThemeMode) || (localStorage.getItem('spendsense_theme') as ThemeMode) || 'system';
   } catch {
     return 'system';
   }
@@ -58,7 +58,8 @@ export default function ThemeToggle() {
 
   const handleSelect = (mode: ThemeMode) => {
     try {
-      localStorage.setItem('spendsense_theme', mode);
+      localStorage.setItem('uzhamyon_theme', mode);
+      localStorage.removeItem('spendsense_theme');
     } catch {
       // ignore
     }

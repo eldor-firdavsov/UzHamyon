@@ -3,7 +3,18 @@ import { execSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
 import { askFinancialAdvisor } from '../src/lib/ai/advisorService.ts';
 
-const envContent = fs.readFileSync('/home/eldor_firdavsov/Desktop/SpendSense/.env.local', 'utf8');
+const envPath = fs.existsSync('.env.local') ? '.env.local' : '/home/eldor_firdavsov/Desktop/UzHamyon/.env.local';
+const envContent = fs.readFileSync(envPath, 'utf8');
+for (const line of envContent.split('\n')) {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.startsWith('#')) continue;
+  const eqIdx = trimmed.indexOf('=');
+  if (eqIdx !== -1) {
+    const k = trimmed.slice(0, eqIdx).trim();
+    const v = trimmed.slice(eqIdx + 1).trim();
+    if (!process.env[k]) process.env[k] = v;
+  }
+}
 const supabaseUrl = envContent.match(/NEXT_PUBLIC_SUPABASE_URL=(.+)/)?.[1]?.trim();
 
 let serviceKey = null;
