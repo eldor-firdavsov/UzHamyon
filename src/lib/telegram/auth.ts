@@ -102,12 +102,18 @@ export function verifyTelegramWebAppData(
   }
 }
 
+import {
+  getSupabaseUrl,
+  getSupabaseAnonKey,
+  getSupabaseServiceRoleKey,
+} from '@/lib/supabase/config';
+
 /**
  * Derives a deterministic internal email and secure password for a Telegram user.
  * This guarantees the user has a permanent, stable Supabase auth identity without exposing credentials.
  */
 function deriveTelegramCredentials(telegramId: number) {
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'uzhamyon_internal_secret';
+  const serviceKey = getSupabaseServiceRoleKey() || 'uzhamyon_telegram_auth_salt_2026';
   const botToken = process.env.TELEGRAM_BOT_TOKEN || '9085840931:AAHXfmvbGSqJYKARmpwsvh352SeR2dMHOo4';
   
   const internalEmail = `tg_${telegramId}@telegram.uzhamyon.uz`;
@@ -126,20 +132,18 @@ function deriveTelegramCredentials(telegramId: number) {
  * - Preserves RLS and data isolation.
  */
 export async function getOrCreateTelegramUser(tgUser: TelegramUser): Promise<TelegramAuthSession> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  const supabaseUrl = getSupabaseUrl();
+  const serviceRoleKey = getSupabaseServiceRoleKey();
+  const anonKey = getSupabaseAnonKey();
 
-  if (!supabaseUrl || !serviceRoleKey || !anonKey) {
-    throw new Error('Supabase configuration missing in environment');
-  }
-
-  const adminClient = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
   const publicClient = createClient(supabaseUrl, anonKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+  const adminClient = serviceRoleKey
+    ? createClient(supabaseUrl, serviceRoleKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+    : null;
 
   const { internalEmail, internalPassword } = deriveTelegramCredentials(tgUser.id);
   const firstName = tgUser.first_name || 'Foydalanuvchi';
@@ -150,7 +154,7 @@ export async function getOrCreateTelegramUser(tgUser: TelegramUser): Promise<Tel
   let authSession: any = null;
 
   // 1. Attempt login with derived credentials
-  const { data: signInData, error: signInError } = await publicClient.auth.signInWithPassword({
+  const { data: signInData } = await publicClient.auth.signInWithPassword({
     email: internalEmail,
     password: internalPassword,
   });
@@ -193,8 +197,10 @@ export async function getOrCreateTelegramUser(tgUser: TelegramUser): Promise<Tel
 
       // If signUp did not immediately issue session (due to email confirm settings), sign in directly
       if (!authSession) {
-        // Confirm user email automatically via admin
-        await adminClient.auth.admin.updateUserById(authUser.id, { email_confirm: true });
+        if (adminClient) {
+          // Confirm user email automatically via admin
+          await adminClient.auth.admin.updateUserById(authUser.id, { email_confirm: true });
+        }
         const postConfirmSignIn = await publicClient.auth.signInWithPassword({
           email: internalEmail,
           password: internalPassword,
@@ -209,8 +215,16 @@ export async function getOrCreateTelegramUser(tgUser: TelegramUser): Promise<Tel
     throw new Error('Telegram foydalanuvchisi uchun faol sessiya yaratilmadi');
   }
 
-  // 3. Ensure profiles table row exists and reflects telegram_id
-  const { data: existingProfile } = await adminClient
+  // 3. Database client: prefer adminClient, otherwise user session client
+  const dbClient =
+    adminClient ||
+    createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: `Bearer ${authSession.access_token}` } },
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+  // Ensure profiles table row exists and reflects telegram_id
+  const { data: existingProfile } = await dbClient
     .from('profiles')
     .select('*')
     .eq('id', authUser.id)
@@ -221,7 +235,7 @@ export async function getOrCreateTelegramUser(tgUser: TelegramUser): Promise<Tel
   if (!existingProfile) {
     // Insert new profile
     const today = new Date().toISOString().split('T')[0];
-    await adminClient.from('profiles').insert({
+    await dbClient.from('profiles').insert({
       id: authUser.id,
       first_name: firstName,
       last_name: lastName,
@@ -247,7 +261,7 @@ export async function getOrCreateTelegramUser(tgUser: TelegramUser): Promise<Tel
     // Update existing profile metadata if username changed
     const currentData = (existingProfile.onboarding_data as Record<string, unknown>) || {};
     if (!currentData.telegram_id || currentData.telegram_username !== tgUser.username) {
-      await adminClient
+      await dbClient
         .from('profiles')
         .update({
           onboarding_data: {

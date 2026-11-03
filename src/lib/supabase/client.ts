@@ -1,25 +1,13 @@
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { getSupabaseUrl, getSupabaseAnonKey } from './config';
 
 let clientInstance: any = null;
 
 export function createClient() {
   if (clientInstance) return clientInstance;
 
-  const supabaseUrl =
-    (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_SUPABASE_URL) ||
-    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_URL) ||
-    (typeof import.meta !== 'undefined' && (import.meta as any).env?.NEXT_PUBLIC_SUPABASE_URL);
-
-  const supabaseAnonKey =
-    (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_SUPABASE_ANON_KEY) ||
-    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_ANON_KEY) ||
-    (typeof import.meta !== 'undefined' && (import.meta as any).env?.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error(
-      'Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY environment variables.'
-    );
-  }
+  const supabaseUrl = getSupabaseUrl();
+  const supabaseAnonKey = getSupabaseAnonKey();
 
   clientInstance = createSupabaseClient<any>(supabaseUrl, supabaseAnonKey);
 

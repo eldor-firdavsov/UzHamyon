@@ -30,6 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html
       lang="uz"
       className="h-full antialiased font-sans"
+      suppressHydrationWarning
     >
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -43,7 +44,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           strategy="beforeInteractive"
         />
       </head>
-      <body className="min-h-full flex flex-col bg-[#F7F8F5] text-[#171B16] font-sans selection:bg-[#F0F9E9] selection:text-[#163300]">
+      <body
+        className="min-h-full flex flex-col bg-[#F7F8F5] text-[#171B16] font-sans selection:bg-[#F0F9E9] selection:text-[#163300]"
+        suppressHydrationWarning
+      >
         <TelegramMiniAppInit />
         {children}
       </body>

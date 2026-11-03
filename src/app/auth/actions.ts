@@ -35,14 +35,6 @@ export async function registerAction(
   const { firstName, lastName, email, password } = validated.data;
 
   try {
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      return {
-        success: false,
-        error:
-          'Supabase sozlamalari (Environment Variables) topilmadi. Vercel loyiha sozlamalarida (Settings > Environment Variables) NEXT_PUBLIC_SUPABASE_URL va NEXT_PUBLIC_SUPABASE_ANON_KEY ni kiriting va qayta deploy qiling.',
-      };
-    }
-
     const supabase = await createClient();
 
     const { data, error } = await supabase.auth.signUp({
@@ -143,14 +135,6 @@ export async function loginAction(
   const { email, password } = validated.data;
 
   try {
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      return {
-        success: false,
-        error:
-          'Supabase sozlamalari (Environment Variables) topilmadi. Vercel loyiha sozlamalarida (Settings > Environment Variables) NEXT_PUBLIC_SUPABASE_URL va NEXT_PUBLIC_SUPABASE_ANON_KEY ni kiriting va qayta deploy qiling.',
-      };
-    }
-
     const supabase = await createClient();
 
     const { error } = await supabase.auth.signInWithPassword({

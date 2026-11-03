@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyTelegramWebAppData, getOrCreateTelegramUser } from '@/lib/telegram/auth';
 import { createServerClient } from '@supabase/ssr';
+import { getSupabaseUrl, getSupabaseAnonKey } from '@/lib/supabase/config';
 
 export async function POST(req: NextRequest) {
   try {
@@ -42,8 +43,8 @@ export async function POST(req: NextRequest) {
       isNewUser: authResult.isNewUser,
     });
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    const supabaseUrl = getSupabaseUrl();
+    const supabaseAnonKey = getSupabaseAnonKey();
 
     const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
       cookies: {

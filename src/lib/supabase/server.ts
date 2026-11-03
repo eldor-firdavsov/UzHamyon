@@ -7,6 +7,8 @@ import {
   type VerifiedInternalUser,
 } from '@/lib/auth/internalAuth';
 
+import { getSupabaseUrl, getSupabaseAnonKey } from './config';
+
 export const createClient = cache(async () => {
   const cookieStore = await cookies();
   const allCookies = cookieStore.getAll();
@@ -29,14 +31,8 @@ export const createClient = cache(async () => {
     }
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error(
-      'Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY environment variables.'
-    );
-  }
+  const supabaseUrl = getSupabaseUrl();
+  const supabaseAnonKey = getSupabaseAnonKey();
 
   const client = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {

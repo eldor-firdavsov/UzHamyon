@@ -74,7 +74,11 @@ export function verifyInternalAuth(token: string | null | undefined): VerifiedIn
   const timestamp = Number(tsStr);
 
   // 1. Freshness check: token must be younger than 30 seconds
-  if (!Number.isFinite(timestamp) || Math.abs(Date.now() - timestamp) > 30000) {
+  const currentMs =
+    typeof performance !== 'undefined' && typeof performance.timeOrigin === 'number'
+      ? performance.timeOrigin + performance.now()
+      : Date.now();
+  if (!Number.isFinite(timestamp) || Math.abs(currentMs - timestamp) > 30000) {
     return null;
   }
 

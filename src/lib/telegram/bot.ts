@@ -67,12 +67,12 @@ export async function sendTelegramMessage(chatId: number, text: string, buttonTe
 /**
  * Checks if a Telegram user has completed onboarding in UzHamyon
  */
+import { getSupabaseUrl, getSupabaseServiceRoleKey } from '@/lib/supabase/config';
+
 export async function isReturningTelegramUser(telegramId: number): Promise<boolean> {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) return false;
+    const supabaseUrl = getSupabaseUrl();
+    const serviceRoleKey = getSupabaseServiceRoleKey();
 
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },

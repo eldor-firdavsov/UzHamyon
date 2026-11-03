@@ -12,6 +12,8 @@ interface CachedSession {
 
 // In-memory cache for verified sessions across rapid page navigations (20s TTL)
 const sessionCache = new Map<string, CachedSession>();
+import { getSupabaseUrl, getSupabaseAnonKey } from './config';
+
 const SESSION_CACHE_TTL_MS = 20000;
 
 export async function updateSession(request: NextRequest) {
@@ -19,12 +21,8 @@ export async function updateSession(request: NextRequest) {
     request,
   });
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return { supabaseResponse, user: null };
-  }
+  const supabaseUrl = getSupabaseUrl();
+  const supabaseAnonKey = getSupabaseAnonKey();
 
   // 1. Fast-path: check if any Supabase auth cookies are present
   const allCookies = request.cookies.getAll();
