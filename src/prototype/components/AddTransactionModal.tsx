@@ -5,6 +5,7 @@ import { X, ArrowDownLeft, ArrowUpRight, Check, Calendar, Sparkles } from 'lucid
 import { DEMO_CATEGORIES, type DemoTransaction } from '../demoData';
 import { formatUzbekCurrency } from '../tokens';
 import { predictCategoryFromTitle } from '@/lib/categories/predictCategory';
+import { formatNumberWithGaps } from '@/lib/formatters/numberGaps';
 
 interface AddTransactionModalProps {
   isOpen: boolean;
@@ -133,13 +134,7 @@ export function AddTransactionModal({
                 inputMode="numeric"
                 value={amountStr}
                 onChange={(e) => {
-                  const raw = e.target.value.replace(/\D/g, '');
-                  if (!raw) {
-                    setAmountStr('');
-                  } else {
-                    const num = parseInt(raw, 10);
-                    setAmountStr(new Intl.NumberFormat('uz-UZ').format(num).replace(/,/g, ' '));
-                  }
+                  setAmountStr(formatNumberWithGaps(e.target.value));
                 }}
                 placeholder="0"
                 autoFocus

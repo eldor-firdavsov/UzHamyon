@@ -7,6 +7,9 @@ import { getCategoryDisplayName } from '@/lib/categories/schemas';
 import CategoryIcon from '@/components/categories/CategoryIcon';
 import { predictCategoryFromTitle, matchPredictedToDbCategory } from '@/lib/categories/predictCategory';
 
+import { GappedNumberInput } from '@/components/ui/GappedNumberInput';
+import { formatNumberWithGaps, parseNumberFromGaps, cleanNumberGaps } from '@/lib/formatters/numberGaps';
+
 interface TransactionModalProps {
   isOpen: boolean;
   isSaving: boolean;
@@ -36,7 +39,7 @@ function TransactionModalForm({
 
   const [description, setDescription] = useState(transactionToEdit?.description || '');
   const [amount, setAmount] = useState(
-    transactionToEdit?.amount !== undefined ? String(transactionToEdit.amount) : ''
+    transactionToEdit?.amount !== undefined ? formatNumberWithGaps(transactionToEdit.amount) : ''
   );
   const currency = transactionToEdit?.currency || 'UZS';
   const [type, setType] = useState<TransactionType>(transactionToEdit?.type || 'expense');
@@ -60,13 +63,14 @@ function TransactionModalForm({
     e.preventDefault();
     setFormError(null);
 
-    const parsedAmount = Number(amount);
+    const parsedAmount = parseNumberFromGaps(amount);
     if (!amount || isNaN(parsedAmount) || parsedAmount <= 0) {
       setFormError('Iltimos, noldan katta to‘g‘ri summa kiriting.');
       return;
     }
 
-    const decimals = amount.split('.')[1];
+    const clean = cleanNumberGaps(amount);
+    const decimals = clean.split('.')[1];
     if (decimals && decimals.length > 2) {
       setFormError('Summada 2 tadan ortiq kasr xonasi bo‘lishi mumkin emas.');
       return;
@@ -191,15 +195,12 @@ function TransactionModalForm({
             <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#5A675F]">
               <Coins className="h-4 w-4" />
             </span>
-            <input
+            <GappedNumberInput
               id="amount-input"
-              type="number"
-              step="0.01"
-              min="0.01"
               required
               placeholder="0"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(formatted) => setAmount(formatted)}
               className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white pl-10 pr-3.5 py-2.5 text-base text-[#17211B] font-semibold font-mono tabular-nums focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all"
             />
           </div>

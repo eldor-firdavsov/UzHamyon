@@ -7,6 +7,7 @@ import SlidingSegmentedNav from '@/prototype/components/SlidingSegmentedNav';
 import UzHamyonLogo from '@/components/brand/UzHamyonLogo';
 import CategoryIcon, { getCategoryMeta } from '@/components/categories/CategoryIcon';
 import { predictCategoryFromTitle } from '@/lib/categories/predictCategory';
+import { formatNumberWithGaps } from '@/lib/formatters/numberGaps';
 import {
   Sparkles,
   ArrowUp,
@@ -961,7 +962,7 @@ export default function UzHamyonPrototypeApp({
     setEditId(t.id);
     setFormData({
       type: t.type,
-      amount: String(t.amount),
+      amount: formatNumberWithGaps(t.amount),
       cat: t.cat,
       desc: t.desc || '',
       date: t.date,
@@ -1050,7 +1051,7 @@ export default function UzHamyonPrototypeApp({
 
   const handleOpenEditBudget = (b: Budget) => {
     setEditId(b.id);
-    setFormData({ cat: b.cat, limit: String(b.limit) });
+    setFormData({ cat: b.cat, limit: formatNumberWithGaps(b.limit) });
     setActiveSheet('budget');
   };
 
@@ -1104,7 +1105,7 @@ export default function UzHamyonPrototypeApp({
     setEditId(g.id);
     setFormData({
       name: g.name,
-      target: String(g.target),
+      target: formatNumberWithGaps(g.target),
       date: g.date,
     });
     setActiveSheet('goal');
@@ -2679,7 +2680,7 @@ export default function UzHamyonPrototypeApp({
                       inputMode="numeric"
                       placeholder="0"
                       value={formData.amount || ''}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, amount: e.target.value }))}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, amount: formatNumberWithGaps(e.target.value) }))}
                     />
 
                     {/* 3. Nomi (Title) — Summadan keyin albatta kiritilishi kerak */}
@@ -2850,7 +2851,7 @@ export default function UzHamyonPrototypeApp({
                     inputMode="numeric"
                     placeholder="0"
                     value={formData.limit || ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, limit: e.target.value }))}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, limit: formatNumberWithGaps(e.target.value) }))}
                   />
                 </div>
 
@@ -2897,7 +2898,7 @@ export default function UzHamyonPrototypeApp({
                     inputMode="numeric"
                     placeholder="0"
                     value={formData.target || ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, target: e.target.value }))}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, target: formatNumberWithGaps(e.target.value) }))}
                   />
 
                   <label className="lb" htmlFor="goal-date">
@@ -2944,7 +2945,7 @@ export default function UzHamyonPrototypeApp({
                     inputMode="numeric"
                     placeholder="0"
                     value={formData.contrib || ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, contrib: e.target.value }))}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, contrib: formatNumberWithGaps(e.target.value) }))}
                   />
                 </div>
 

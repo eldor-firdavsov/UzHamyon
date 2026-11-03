@@ -1,8 +1,8 @@
-'use client';
-
 import { useState } from 'react';
 import { X, Loader2, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import type { GoalWithProgress } from '@/lib/goals/schemas';
+import { GappedNumberInput } from '@/components/ui/GappedNumberInput';
+import { parseNumberFromGaps } from '@/lib/formatters/numberGaps';
 
 interface ContributeModalProps {
   isOpen: boolean;
@@ -30,7 +30,7 @@ export default function ContributeModal({
     setLoading(true);
     setError(null);
 
-    const numAmount = parseFloat(amount);
+    const numAmount = parseNumberFromGaps(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
       setError('Iltimos, 0 dan katta to‘g‘ri summa kiriting');
       setLoading(false);
@@ -122,15 +122,12 @@ export default function ContributeModal({
             <label className="block text-sm font-medium text-[#52525B] mb-1.5">
               Summa (soʻm) *
             </label>
-            <input
+            <GappedNumberInput
               id="contribute-amount-input"
-              type="number"
-              step="0.01"
-              min="0.01"
               required
-              placeholder="100000"
+              placeholder="100 000"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(formatted) => setAmount(formatted)}
               className="w-full min-h-[48px] bg-white border border-[#E5E7EB] rounded-xl px-3.5 py-2.5 text-[#18181B] font-semibold font-mono tabular-nums text-base focus:border-[#059669] focus:outline-none focus:ring-2 focus:ring-[#059669]/20 transition-all"
             />
           </div>

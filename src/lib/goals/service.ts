@@ -26,7 +26,7 @@ async function resolveClient(providedClient?: SupabaseClient): Promise<SupabaseC
 
 function formatUzMoney(amount: number, currency: string = 'UZS'): string {
   if (currency === 'UZS') {
-    return `${new Intl.NumberFormat('uz-UZ', { maximumFractionDigits: 0 }).format(Math.round(amount))} soʻm`;
+    return `${new Intl.NumberFormat('uz-UZ', { maximumFractionDigits: 0 }).format(Math.round(amount)).replace(/[\u00a0\u202f]/g, ' ')} soʻm`;
   }
   return `${amount >= 1000 ? amount.toLocaleString('en-US') : amount.toFixed(2)} ${currency}`;
 }

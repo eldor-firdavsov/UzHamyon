@@ -57,7 +57,7 @@ function formatCurrencyAmount(amount: number | string | undefined, curr = 'UZS')
     return `${num >= 1000 ? num.toLocaleString('en-US') : num} dollar`;
   }
   if (curr === 'UZS' || !curr) {
-    return `${new Intl.NumberFormat('uz-UZ', { maximumFractionDigits: 0 }).format(Math.round(num))} soʻm`;
+    return `${new Intl.NumberFormat('uz-UZ', { maximumFractionDigits: 0 }).format(Math.round(num)).replace(/[\u00a0\u202f]/g, ' ')} soʻm`;
   }
   return `${num >= 1000 ? num.toLocaleString('en-US') : num.toFixed(2)} ${curr}`;
 }
@@ -89,8 +89,8 @@ function extractAmountAndCurrency(text: string): { amount: number; currency: str
     }
   }
 
-  // 3. Exact number string (supporting space between thousands e.g. "50 000" or "6 000 000")
-  const normalized = text.replace(/(\d)\s+(\d)/g, '$1$2').replace(/(\d)\s+(\d)/g, '$1$2');
+  // 3. Exact number string (supporting space between thousands e.g. "50 000", "100 000", "6 000 000")
+  const normalized = text.replace(/(?<=\d)[\s\u00a0\u202f]+(?=\d)/g, '');
   const digitsMatch = normalized.match(/\b(\d+(?:[.,]\d{1,2})?)\b/);
   if (!digitsMatch) return null;
 

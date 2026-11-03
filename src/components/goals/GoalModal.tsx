@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import type { GoalWithProgress } from '@/lib/goals/schemas';
+import { GappedNumberInput } from '@/components/ui/GappedNumberInput';
+import { formatNumberWithGaps, parseNumberFromGaps } from '@/lib/formatters/numberGaps';
 
 interface GoalModalProps {
   isOpen: boolean;
@@ -20,8 +22,12 @@ export default function GoalModal({
   const isEditing = !!goalToEdit;
 
   const [name, setName] = useState(goalToEdit?.name || '');
-  const [targetAmount, setTargetAmount] = useState(goalToEdit ? String(goalToEdit.target_amount) : '');
-  const [currentAmount, setCurrentAmount] = useState(goalToEdit ? String(goalToEdit.current_amount) : '0');
+  const [targetAmount, setTargetAmount] = useState(
+    goalToEdit ? formatNumberWithGaps(goalToEdit.target_amount) : ''
+  );
+  const [currentAmount, setCurrentAmount] = useState(
+    goalToEdit ? formatNumberWithGaps(goalToEdit.current_amount) : '0'
+  );
   const currency = goalToEdit?.currency || 'UZS';
   const [targetDate, setTargetDate] = useState(goalToEdit?.target_date || '');
   const [status, setStatus] = useState<'in_progress' | 'completed' | 'cancelled'>(
@@ -38,8 +44,8 @@ export default function GoalModal({
     setLoading(true);
     setError(null);
 
-    const numTarget = parseFloat(targetAmount);
-    const numCurrent = parseFloat(currentAmount);
+    const numTarget = parseNumberFromGaps(targetAmount);
+    const numCurrent = parseNumberFromGaps(currentAmount);
 
     if (isNaN(numTarget) || numTarget <= 0) {
       setError('Maqsad summasi musbat son bo‘lishi kerak');
@@ -129,15 +135,12 @@ export default function GoalModal({
             <label className="block text-sm font-medium text-[#52525B] mb-1.5">
               Maqsad summasi (so‘m) *
             </label>
-            <input
+            <GappedNumberInput
               id="goal-target-amount-input"
-              type="number"
-              step="0.01"
-              min="0.01"
               required
-              placeholder="1000.00"
+              placeholder="100 000"
               value={targetAmount}
-              onChange={(e) => setTargetAmount(e.target.value)}
+              onChange={(formatted) => setTargetAmount(formatted)}
               className="w-full min-h-[48px] bg-white border border-[#E5E7EB] rounded-xl px-3.5 py-2.5 text-base font-semibold font-mono tabular-nums text-[#18181B] focus:border-[#059669] focus:outline-none focus:ring-2 focus:ring-[#059669]/20 transition-all"
             />
           </div>
@@ -146,14 +149,11 @@ export default function GoalModal({
             <label className="block text-sm font-medium text-[#52525B] mb-1.5">
               Boshlang‘ich to‘plangan mablag‘
             </label>
-            <input
+            <GappedNumberInput
               id="goal-current-amount-input"
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="0.00"
+              placeholder="0"
               value={currentAmount}
-              onChange={(e) => setCurrentAmount(e.target.value)}
+              onChange={(formatted) => setCurrentAmount(formatted)}
               className="w-full min-h-[48px] bg-white border border-[#E5E7EB] rounded-xl px-3.5 py-2.5 text-base font-semibold font-mono tabular-nums text-[#18181B] focus:border-[#059669] focus:outline-none focus:ring-2 focus:ring-[#059669]/20 transition-all"
             />
           </div>

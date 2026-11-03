@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import type { BudgetWithProgress } from '@/lib/budgets/schemas';
 import { getCategoryDisplayName } from '@/lib/categories/schemas';
+import { GappedNumberInput } from '@/components/ui/GappedNumberInput';
+import { formatNumberWithGaps, parseNumberFromGaps } from '@/lib/formatters/numberGaps';
 
 interface CategoryOption {
   id: string;
@@ -36,7 +38,9 @@ export default function BudgetModal({
   const defaultEnd = `${lastDay.getFullYear()}-${pad(lastDay.getMonth() + 1)}-${pad(lastDay.getDate())}`;
 
   const [name, setName] = useState(budgetToEdit?.name || '');
-  const [amount, setAmount] = useState(budgetToEdit ? String(budgetToEdit.amount) : '');
+  const [amount, setAmount] = useState(
+    budgetToEdit ? formatNumberWithGaps(budgetToEdit.amount) : ''
+  );
   const currency = budgetToEdit?.currency || 'UZS';
   const [periodType, setPeriodType] = useState<'monthly' | 'weekly' | 'custom'>(
     budgetToEdit?.period_type || 'monthly'
@@ -55,7 +59,7 @@ export default function BudgetModal({
     setLoading(true);
     setError(null);
 
-    const numAmount = parseFloat(amount);
+    const numAmount = parseNumberFromGaps(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
       setError('Summa musbat son bo‘lishi kerak');
       setLoading(false);
@@ -140,15 +144,12 @@ export default function BudgetModal({
 
           <div>
             <label className="block text-sm font-medium text-[#47544C] mb-1.5">Limit summasi (so‘m) *</label>
-            <input
+            <GappedNumberInput
               id="budget-amount-input"
-              type="number"
-              step="0.01"
-              min="0.01"
               required
-              placeholder="1000000"
+              placeholder="1 000 000"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(formatted) => setAmount(formatted)}
               className="w-full min-h-[48px] bg-white border border-[#D5DED7] rounded-xl px-3.5 py-2.5 text-base font-semibold font-mono tabular-nums text-[#17211B] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all"
             />
           </div>
