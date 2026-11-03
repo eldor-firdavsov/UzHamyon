@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import UzHamyonLogo from '@/components/brand/UzHamyonLogo';
 import { completeOnboardingAction } from '@/app/onboarding/actions';
+import { createClient } from '@/lib/supabase/client';
 
 interface TelegramOnboardingProps {
   initialFirstName?: string;
@@ -85,9 +86,37 @@ export default function TelegramOnboarding({
       });
 
       if (!res.success) {
-        setErrorMsg(res.error || 'Saqlashda xatolik yuz berdi');
-        setIsSubmitting(false);
-        return;
+        // Fallback: update profile directly via client if server session cookie hadn't arrived
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (user) {
+          const { error: clientErr } = await supabase
+            .from('profiles')
+            .update({
+              first_name: preferredName.trim() || initialFirstName || 'Foydalanuvchi',
+              onboarding_completed: true,
+              onboarding_step: 8,
+              onboarding_data: {
+                goals: goalsToSave,
+                completed_at: new Date().toISOString(),
+              },
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', user.id);
+
+          if (clientErr) {
+            setErrorMsg(res.error || clientErr.message);
+            setIsSubmitting(false);
+            return;
+          }
+        } else {
+          setErrorMsg(res.error || 'Saqlashda xatolik yuz berdi');
+          setIsSubmitting(false);
+          return;
+        }
       }
 
       if (onCompleted) {

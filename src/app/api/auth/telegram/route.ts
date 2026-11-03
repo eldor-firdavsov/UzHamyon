@@ -55,9 +55,9 @@ export async function POST(req: NextRequest) {
           cookiesToSet.forEach(({ name, value, options }) => {
             res.cookies.set(name, value, {
               ...options,
+              path: '/',
               sameSite: 'none', // Critical for Telegram Mini App iframe / WebApp webview
               secure: true,
-              httpOnly: true,
             });
           });
         },
@@ -68,6 +68,14 @@ export async function POST(req: NextRequest) {
     await supabase.auth.setSession({
       access_token: authResult.session.access_token,
       refresh_token: authResult.session.refresh_token,
+    });
+
+    // Also explicitly set sb-access-token for unified client/server session verification
+    res.cookies.set('sb-access-token', authResult.session.access_token, {
+      path: '/',
+      sameSite: 'none',
+      secure: true,
+      maxAge: 604800,
     });
 
     return res;

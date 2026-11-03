@@ -27,7 +27,7 @@ export async function updateSession(request: NextRequest) {
   // 1. Fast-path: check if any Supabase auth cookies are present
   const allCookies = request.cookies.getAll();
   const authCookies = allCookies
-    .filter((c) => c.name.startsWith('sb-') && c.name.includes('-auth-token'))
+    .filter((c) => c.name.startsWith('sb-'))
     .sort((a, b) => a.name.localeCompare(b.name));
 
   if (authCookies.length === 0) {
@@ -70,9 +70,20 @@ export async function updateSession(request: NextRequest) {
   });
 
   try {
-    const {
+    let {
       data: { user },
     } = await supabase.auth.getUser();
+
+    // Fallback: If no user found via default cookies, check sb-access-token directly
+    if (!user) {
+      const accessTokenCookie = request.cookies.get('sb-access-token')?.value;
+      if (accessTokenCookie) {
+        const { data: jwtData } = await supabase.auth.getUser(accessTokenCookie);
+        if (jwtData?.user) {
+          user = jwtData.user;
+        }
+      }
+    }
 
     if (user) {
       if (sessionCache.size > 2000) {

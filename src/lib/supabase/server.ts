@@ -16,7 +16,7 @@ export const createClient = cache(async () => {
 
   // Must have Supabase auth cookies present to be eligible for internal identity reuse
   const hasSupabaseCookie = allCookies.some((c) =>
-    c.name.startsWith('sb-') && c.name.includes('-auth-token')
+    c.name.startsWith('sb-')
   );
 
   if (hasSupabaseCookie) {
@@ -84,7 +84,18 @@ export const createClient = cache(async () => {
         return originalGetUser(jwt);
       }
       if (!cachedUserPromise) {
-        cachedUserPromise = originalGetUser();
+        cachedUserPromise = originalGetUser().then(async (res) => {
+          if (!res.data?.user) {
+            const accessToken = cookieStore.get('sb-access-token')?.value;
+            if (accessToken) {
+              const tokenRes = await originalGetUser(accessToken);
+              if (tokenRes.data?.user) {
+                return tokenRes;
+              }
+            }
+          }
+          return res;
+        });
       }
       return cachedUserPromise;
     }) as typeof originalGetUser;

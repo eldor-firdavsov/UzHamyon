@@ -60,6 +60,8 @@ export default function TelegramMiniAppInit() {
       return;
     }
 
+    const initData = tg.initData;
+
     try {
       tg.ready();
       tg.expand();
@@ -68,16 +70,9 @@ export default function TelegramMiniAppInit() {
     } catch {}
 
     const supabase = createClient();
+    const pathname = window.location.pathname;
 
-    // Check if session already exists
-    supabase.auth.getSession().then(async (res: any) => {
-      const session = res?.data?.session;
-      if (session) {
-        // Already authenticated
-        return;
-      }
-
-      // Start seamless backend verification
+    async function syncTelegramAuth() {
       setIsAuthenticating(true);
       setAuthError(null);
 
@@ -85,7 +80,7 @@ export default function TelegramMiniAppInit() {
         const res = await fetch('/api/auth/telegram', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ initData: tg.initData }),
+          body: JSON.stringify({ initData }),
         });
 
         const data = await res.json();
@@ -96,14 +91,13 @@ export default function TelegramMiniAppInit() {
           return;
         }
 
-        // Set session in client Supabase
+        // Set session in client Supabase (which writes @supabase/ssr cookies)
         await supabase.auth.setSession({
           access_token: data.session.access_token,
           refresh_token: data.session.refresh_token,
         });
 
         // Determine destination based on onboarding status
-        const pathname = window.location.pathname;
         if (!data.onboarding_completed) {
           if (!pathname.startsWith('/onboarding')) {
             window.location.replace('/onboarding?tg=1');
@@ -121,6 +115,24 @@ export default function TelegramMiniAppInit() {
         setAuthError(msg);
         setIsAuthenticating(false);
       }
+    }
+
+    // Check if session already exists
+    supabase.auth.getSession().then(async (res: any) => {
+      const session = res?.data?.session;
+
+      if (session) {
+        // If user already has a session and landed on /login or /register, redirect to dashboard or onboarding
+        if (pathname === '/login' || pathname === '/register') {
+          // Re-sync with backend to ensure fresh cookies and redirect to dashboard
+          await syncTelegramAuth();
+          return;
+        }
+        return;
+      }
+
+      // No session yet: authenticate via Telegram backend
+      await syncTelegramAuth();
     });
   }, []);
 
