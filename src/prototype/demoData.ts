@@ -303,16 +303,15 @@ export const DEMO_CATEGORIES = {
   expense: [
     { id: 'cat-auto', name: 'Auto', icon: 'sparkles' },
     { id: 'cat-food', name: 'Oziq-ovqat', icon: 'cart' },
-    { id: 'cat-transport', name: 'Transport & Taksi', icon: 'car' },
-    { id: 'cat-cafe', name: 'Kafe & Restoran', icon: 'coffee' },
-    { id: 'cat-utilities', name: 'Kommunal & Aloqa', icon: 'wifi' },
-    { id: 'cat-health', name: 'Salomatlik & Dori', icon: 'heart' },
-    { id: 'cat-shopping', name: 'Kiyim & Xarid', icon: 'shopping' },
+    { id: 'cat-transport', name: 'Transport', icon: 'car' },
+    { id: 'cat-cafe', name: 'Kafeler va Restoranlar', icon: 'coffee' },
+    { id: 'cat-utilities', name: 'Kommunal', icon: 'wifi' },
+    { id: 'cat-shopping', name: 'Xaridlar', icon: 'shopping' },
   ],
   income: [
     { id: 'cat-auto-inc', name: 'Auto', icon: 'sparkles' },
-    { id: 'cat-salary', name: 'Oylik maosh', icon: 'wallet' },
-    { id: 'cat-freelance', name: 'Frilans / Loyiha', icon: 'laptop' },
-    { id: 'cat-invest', name: 'Investitsiya & Depozit', icon: 'trending-up' },
+    { id: 'cat-salary', name: 'Maosh', icon: 'wallet' },
+    { id: 'cat-freelance', name: 'Frilans', icon: 'laptop' },
+    { id: 'cat-other-inc', name: 'Boshqa daromad', icon: 'trending-up' },
   ],
 };

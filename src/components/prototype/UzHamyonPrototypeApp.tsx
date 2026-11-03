@@ -101,22 +101,16 @@ const EXPENSE_CATEGORIES = [
   'Auto',
   'Oziq-ovqat',
   'Transport',
-  'Uy-joy',
   'Kafeler va Restoranlar',
+  'Uy-joy',
   'Kommunal',
-  'Aloqa va Internet',
-  "Ko'ngilochar",
   'Xaridlar',
-  'Salomatlik',
-  "Ta'lim",
-  'Shaxsiy parvarish',
 ];
 const INCOME_CATEGORIES = [
   'Auto',
   'Maosh',
   'Frilans',
-  'Investitsiyalar',
-  "Sovg'alar",
+  'Boshqa daromad',
 ];
 
 const UZBEK_MONTH_NAMES = [
@@ -1085,6 +1079,7 @@ export default function UzHamyonPrototypeApp({
 
   const isSaveTxDisabled =
     parseNumber(formData.amount) <= 0 ||
+    !(formData.desc || '').trim() ||
     !formData.date ||
     formData.date < START_DATE ||
     formData.date > TODAY_DATE;
@@ -2548,8 +2543,9 @@ export default function UzHamyonPrototypeApp({
                       style={{ marginTop: '8px' }}
                     />
 
+                    {/* 2. Summa (Price) */}
                     <label className="lb" htmlFor="tx-amount">
-                      Summa (so&apos;m)
+                      Summa (so&apos;m) <span style={{ color: '#D64D4D' }}>*</span>
                     </label>
                     <input
                       id="tx-amount"
@@ -2560,6 +2556,22 @@ export default function UzHamyonPrototypeApp({
                       onChange={(e) => setFormData((prev) => ({ ...prev, amount: e.target.value }))}
                     />
 
+                    {/* 3. Nomi (Title) — Summadan keyin albatta kiritilishi kerak */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '14px', marginBottom: '6px' }}>
+                      <label className="lb" htmlFor="tx-desc" style={{ margin: 0 }}>
+                        Nomi (Title) <span style={{ color: '#D64D4D' }}>*</span>
+                      </label>
+                      <span style={{ fontSize: '11px', color: '#71717A', fontWeight: 500 }}>Majburiy</span>
+                    </div>
+                    <input
+                      id="tx-desc"
+                      className="in"
+                      placeholder={formData.type === 'in' ? 'Masalan: Oylik maosh, Keshbek, Mukofot...' : 'Masalan: Tushlik, Korzinka, Taksi, Benzin...'}
+                      value={formData.desc || ''}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, desc: e.target.value }))}
+                    />
+
+                    {/* 4. Kategoriya — ixcham ro‘yxat, AI avtomatik tanlaydi */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '14px', marginBottom: '6px' }}>
                       <div className="lb" style={{ margin: 0 }}>Kategoriya</div>
                       {isAutoActive && (
@@ -2642,12 +2654,13 @@ export default function UzHamyonPrototypeApp({
                       >
                         <Sparkles size={13} style={{ color: '#16A34A', flexShrink: 0 }} />
                         <span>
-                          AI izohga qarab toifani avtomatik tanlaydi: <strong>«{livePredicted.category}»</strong>
+                          AI titlega qarab toifani avtomatik tanlaydi: <strong>«{livePredicted.category}»</strong>
                         </span>
                       </div>
                     )}
 
-                    <label className="lb" htmlFor="tx-date">
+                    {/* 5. Sana */}
+                    <label className="lb" htmlFor="tx-date" style={{ marginTop: '14px' }}>
                       Sana
                     </label>
                     <input
@@ -2658,17 +2671,6 @@ export default function UzHamyonPrototypeApp({
                       max={TODAY_DATE}
                       value={formData.date || ''}
                       onChange={(e) => setFormData((prev) => ({ ...prev, date: e.target.value }))}
-                    />
-
-                    <label className="lb" htmlFor="tx-desc">
-                      Izoh {isAutoActive && <span style={{ color: '#16A34A', fontWeight: 500, fontSize: '11px' }}>(AI toifani shu orqali aniqlaydi)</span>}
-                    </label>
-                    <input
-                      id="tx-desc"
-                      className="in"
-                      placeholder={formData.type === 'in' ? 'Masalan: Oylik maosh, Bonus...' : 'Masalan: Korzinka, Taksi, Evos lavash...'}
-                      value={formData.desc || ''}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, desc: e.target.value }))}
                     />
                   </div>
 

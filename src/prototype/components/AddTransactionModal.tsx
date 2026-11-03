@@ -31,7 +31,7 @@ export function AddTransactionModal({
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    if (numericAmount <= 0) return;
+    if (numericAmount <= 0 || !name.trim()) return;
 
     const finalCategory = (!selectedCategory || selectedCategory === 'Auto')
       ? predicted.category
