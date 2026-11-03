@@ -49,7 +49,7 @@ export default async function DashboardPage() {
       .select('id, amount, categories(name)')
       .eq('user_id', user.id),
     supabase
-      .from('goals')
+      .from('financial_goals')
       .select('id, name, target_amount, target_date, current_amount')
       .eq('user_id', user.id),
   ]);

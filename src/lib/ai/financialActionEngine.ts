@@ -8,7 +8,9 @@ export interface PendingAction {
     | 'create_expense'
     | 'delete_last_expense'
     | 'clarify_cash'
-    | 'record_initial_balance';
+    | 'record_initial_balance'
+    | 'create_goal'
+    | 'contribute_goal';
   status: 'pending' | 'executed' | 'cancelled';
   params: {
     amount?: number;
@@ -18,6 +20,10 @@ export interface PendingAction {
     category_id?: string | null;
     description?: string;
     transaction_id?: string;
+    goal_name?: string;
+    goal_id?: string;
+    target_amount?: number;
+    target_date?: string;
   };
 }
 
@@ -39,7 +45,7 @@ export interface EngineResult {
 function cleanText(text: string): string {
   return text
     .toLowerCase()
-    .replace(/['`’‘]/g, '')
+    .replace(/['`’‘ʻʼʹ]/g, '')
     .replace(/[.,!?;:]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -63,7 +69,7 @@ function extractAmountAndCurrency(text: string): { amount: number; currency: str
   const isDollar = /dollar|usd|\$/i.test(text);
   const currency = isDollar ? 'USD' : 'UZS';
 
-  const clean = text.toLowerCase().replace(/['`’‘]/g, '');
+  const clean = text.toLowerCase().replace(/['`’‘ʻʼʹ]/g, '');
 
   // 1. Check for "million" or "mln" e.g. "6 million", "2.5 mln"
   const millionMatch = clean.match(/(\d+(?:[.,]\d+)?)\s*(?:million|mln)\b/i);
@@ -136,6 +142,33 @@ async function findCategoryId(
   if (partial) return partial.id;
 
   return null;
+}
+
+/**
+ * Extracts a goal name from user text
+ */
+function extractGoalName(text: string): string {
+  const clean = text.replace(/['`’‘]/g, '');
+
+  const forMatch = clean.match(/(?:uchun\s+)?([A-Za-zА-Яа-яЎўҚқҒғҲҳ\s]{2,25})\s+(?:olish|xarid|sotib\s+olish)\s+uchun/i);
+  if (forMatch && forMatch[1].trim() && !/^(yangi|jamg|maqsad|summa|so|som|pul)$/i.test(forMatch[1].trim())) {
+    const raw = forMatch[1].trim();
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+  }
+
+  const goalMatch = clean.match(/([A-Za-zА-Яа-яЎўҚқҒғҲҳ]{3,20})\s+(?:maqsadi|maqsadiga)/i);
+  if (goalMatch && !/^(yangi|jamg|maqsad|summa|so|som|pul|hissa)$/i.test(goalMatch[1])) {
+    const raw = goalMatch[1].trim();
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+  }
+
+  if (/mashina|avtomobil/i.test(clean)) return 'Mashina';
+  if (/noutbuk|laptop|kompyuter/i.test(clean)) return 'Noutbuk';
+  if (/uy|xonadon|kvartira/i.test(clean)) return 'Yangi uy';
+  if (/sayohat|dam\s*olish|safar/i.test(clean)) return 'Sayohat';
+  if (/telefon|ayfon|iphone/i.test(clean)) return 'Telefon';
+
+  return 'Jamg‘arma maqsadi';
 }
 
 /**
@@ -268,6 +301,118 @@ export async function executePendingAction(
         success: true,
         message: `${formatCurrencyAmount(amount, currency)} naqd pul balansi muvaffaqiyatli saqlandi.`,
         data: res.data,
+      };
+    }
+
+    if (action.type === 'create_goal') {
+      const { amount, target_amount, currency = 'UZS', goal_name = 'Jamg‘arma maqsadi', target_date } = action.params;
+      const targetAmt = target_amount || amount || 1000000;
+      const now = new Date();
+      const defaultDate = target_date || new Date(Date.UTC(now.getFullYear() + 1, now.getMonth(), 1)).toISOString().split('T')[0];
+
+      const { data: userAuth } = await supabase.auth.getUser();
+      const uid = userAuth?.user?.id;
+      if (!uid) {
+        return { success: false, message: 'Foydalanuvchi avtorizatsiyadan o‘tmagan.' };
+      }
+
+      const { data: newGoal, error: goalErr } = await supabase
+        .from('financial_goals')
+        .insert({
+          user_id: uid,
+          name: goal_name,
+          target_amount: targetAmt,
+          current_amount: 0,
+          currency: currency || 'UZS',
+          target_date: defaultDate,
+          tracking_strategy: 'manual',
+          status: 'in_progress',
+        })
+        .select()
+        .single();
+
+      if (goalErr || !newGoal) {
+        return { success: false, message: `Maqsadni saqlash muvaffaqiyatsiz bo‘ldi: ${goalErr?.message || 'Noma’lum xatolik'}.` };
+      }
+
+      return {
+        success: true,
+        message: `«${goal_name}» uchun ${formatCurrencyAmount(targetAmt, currency)}lik yangi jamg‘arma maqsadi muvaffaqiyatli yaratildi.`,
+        data: newGoal,
+      };
+    }
+
+    if (action.type === 'contribute_goal') {
+      const { amount, currency = 'UZS', goal_name, goal_id } = action.params;
+      if (!amount || amount <= 0) {
+        return { success: false, message: 'Jamg‘armaga qo‘shish uchun summa ko‘rsatilishi shart.' };
+      }
+
+      const { data: userAuth } = await supabase.auth.getUser();
+      const uid = userAuth?.user?.id;
+      if (!uid) {
+        return { success: false, message: 'Foydalanuvchi avtorizatsiyadan o‘tmagan.' };
+      }
+
+      let targetGoalId = goal_id;
+
+      if (!targetGoalId) {
+        const { data: goals } = await supabase
+          .from('financial_goals')
+          .select('id, name, target_amount, current_amount, status')
+          .eq('user_id', uid);
+
+        if (!goals || goals.length === 0) {
+          return { success: false, message: 'Sizda hozircha hech qanday jamg‘arma maqsadi mavjud emas. Avval yangi maqsad yarating.' };
+        }
+
+        if (goal_name) {
+          const matched = goals.find((g) => g.name.toLowerCase().includes(goal_name.toLowerCase()));
+          if (matched) targetGoalId = matched.id;
+        }
+
+        if (!targetGoalId) {
+          const inProgress = goals.find((g) => g.status === 'in_progress');
+          targetGoalId = inProgress ? inProgress.id : goals[0].id;
+        }
+      }
+
+      const { data: existing } = await supabase
+        .from('financial_goals')
+        .select('id, name, target_amount, current_amount, status')
+        .eq('id', targetGoalId)
+        .eq('user_id', uid)
+        .maybeSingle();
+
+      if (!existing) {
+        return { success: false, message: 'Jamg‘arma maqsadi topilmadi.' };
+      }
+
+      const current = Number(existing.current_amount) || 0;
+      const target = Number(existing.target_amount) || 0;
+      const newAmount = Math.max(0, Math.round((current + amount) * 100) / 100);
+      const newStatus = newAmount >= target ? 'completed' : 'in_progress';
+
+      const { data: updated, error: updateErr } = await supabase
+        .from('financial_goals')
+        .update({
+          current_amount: newAmount,
+          status: newStatus,
+        })
+        .eq('id', existing.id)
+        .eq('user_id', uid)
+        .select()
+        .single();
+
+      if (updateErr || !updated) {
+        return { success: false, message: `Jamg‘armaga mablag‘ qo‘shishda xatolik: ${updateErr?.message}.` };
+      }
+
+      const pct = target > 0 ? Math.min(100, Math.round((newAmount / target) * 100)) : 100;
+      return {
+        success: true,
+        message: `«${existing.name}» maqsadiga ${formatCurrencyAmount(amount, currency)} muvaffaqiyatli qo‘shildi! Hozirda to‘plandi: ${formatCurrencyAmount(newAmount, currency)} (${pct}% bajarildi).`,
+        data: updated,
       };
     }
 
@@ -473,47 +618,90 @@ export async function processFinancialIntent(
     };
   }
 
-  // ── Savings Goal Intent: "Shu oy 2 million so'm tejamoqchiman" ──
-  if (/tejamoqchiman|jamg‘armoqchiman|jamgarmoqchiman|maqsad\s*qilmoqchiman|maqsad\s*qo‘ymoqchiman|maqsad\s*qoymoqchiman/i.test(norm)) {
+  // ── Contribute to Goal Intent: "Mashina maqsadiga 3 000 000 soʻm pul qoʻshdim" ──
+  if (
+    /(?:maqsadiga|jamg‘armaga|jamgarmaga|maqsadga|jamgarmamga|jamg‘armamga).*(?:qo‘sh|qosh|to‘pla|topla|o‘tkaz|otkaz|kirit|yig‘)/i.test(norm) ||
+    /(?:qo‘shdim|qoshdim|to‘pladim|topladim|o‘tkazdim|otkazdim).*(?:maqsad|jamg‘arma|jamgarma)/i.test(norm) ||
+    /(?:hissa|pul).*(?:qo‘shdim|qoshdim|o‘tkazdim)/i.test(norm)
+  ) {
     const parsed = extractAmountAndCurrency(userText);
     if (!parsed) {
       return {
         handled: true,
-        answer: 'Qancha summa tejamoqchisiz?',
+        answer: 'Jamg‘armaga qancha pul qo‘shmoqchisiz?',
       };
     }
 
     const { amount, currency } = parsed;
-    const lastDayOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 0)).toISOString().split('T')[0];
+    const goalName = extractGoalName(userText);
 
-    const goalName = `${formatCurrencyAmount(amount, currency)} tejash maqsadi`;
-    const { data: newGoal, error: goalErr } = await supabase
+    // Fetch existing goals to match
+    const { data: userGoals } = await supabase
       .from('financial_goals')
-      .insert({
-        user_id: userId,
-        name: goalName,
-        target_amount: amount,
-        current_amount: 0,
-        currency: currency || 'UZS',
-        target_date: lastDayOfMonth,
-        tracking_strategy: 'manual',
-        status: 'in_progress',
-      })
-      .select()
-      .single();
+      .select('id, name, current_amount, target_amount')
+      .eq('user_id', userId);
 
-    if (goalErr) {
-      return {
-        handled: true,
-        answer: `Jamg‘arma maqsadini yaratishda xatolik yuz berdi: ${goalErr.message}.`,
-        actionResult: { success: false, message: goalErr.message },
-      };
+    let targetGoal = userGoals?.find((g) => g.name.toLowerCase().includes(goalName.toLowerCase()));
+    if (!targetGoal && userGoals && userGoals.length > 0) {
+      targetGoal = userGoals[0];
     }
+
+    const pendingAction: PendingAction = {
+      action_id: `act-${Date.now()}`,
+      type: 'contribute_goal',
+      status: 'pending',
+      params: {
+        amount,
+        currency,
+        goal_name: targetGoal?.name || goalName,
+        goal_id: targetGoal?.id,
+      },
+    };
+
+    const targetDisplayName = targetGoal ? `«${targetGoal.name}»` : (goalName ? `«${goalName}»` : 'jamg‘arma');
 
     return {
       handled: true,
-      answer: `${formatCurrencyAmount(amount, currency)}lik tejash maqsadi yaratildi. Kafe va taksi xarajatlarini kamaytirish imkoniyatlarini ko‘rib chiqaman.`,
-      actionResult: { success: true, type: 'create_goal', data: newGoal },
+      answer: `${targetDisplayName} maqsadiga ${formatCurrencyAmount(amount, currency)} qo‘shishni qayd etaymi? Tasdiqlaysizmi?`,
+      pendingAction,
+    };
+  }
+
+  // ── Savings Goal Intent: "Yangi mashina olish uchun 80 million soʻmlik maqsad qoʻsh", "Shu oy 2 million so'm tejamoqchiman" ──
+  if (
+    /maqsad\s*(?:qo‘sh|qosh|yarat|kirit|belgila)|(?:jamg‘arma|jamgarma)\s*maqsadi|(?:tejamoqchiman|jamg‘armoqchiman|jamgarmoqchiman)/i.test(norm) ||
+    (/(?:mashina|avtomobil|uy|kvartira|noutbuk|telefon|safar|sayohat)\s*(?:olish|uchun)/i.test(norm) && (norm.includes('maqsad') || norm.includes('jamg')))
+  ) {
+    const parsed = extractAmountAndCurrency(userText);
+    const goalName = extractGoalName(userText);
+
+    if (!parsed) {
+      return {
+        handled: true,
+        answer: `«${goalName}» uchun qancha summa yig‘moqchisiz?`,
+      };
+    }
+
+    const { amount, currency } = parsed;
+    const nextYear = new Date(Date.UTC(now.getFullYear() + 1, now.getMonth(), 1)).toISOString().split('T')[0];
+
+    const pendingAction: PendingAction = {
+      action_id: `act-${Date.now()}`,
+      type: 'create_goal',
+      status: 'pending',
+      params: {
+        amount,
+        target_amount: amount,
+        currency: currency || 'UZS',
+        goal_name: goalName,
+        target_date: nextYear,
+      },
+    };
+
+    return {
+      handled: true,
+      answer: `«${goalName}» uchun ${formatCurrencyAmount(amount, currency)}lik yangi jamg‘arma maqsadi yaratilsinmi? Tasdiqlaysizmi?`,
+      pendingAction,
     };
   }
 
@@ -533,6 +721,29 @@ export async function processFinancialIntent(
         answer: `Qancha narxdagi ${item} olmoqchisiz? Maqsadingizga qarab oylik jamg‘arma miqdorini aniq hisoblab beraman.`,
       };
     }
+
+    const { amount, currency } = parsed;
+    const goalName = item === 'mashina' ? 'Mashina' : 'Yangi uy';
+    const nextYear = new Date(Date.UTC(now.getFullYear() + 1, now.getMonth(), 1)).toISOString().split('T')[0];
+
+    const pendingAction: PendingAction = {
+      action_id: `act-${Date.now()}`,
+      type: 'create_goal',
+      status: 'pending',
+      params: {
+        amount,
+        target_amount: amount,
+        currency: currency || 'UZS',
+        goal_name: goalName,
+        target_date: nextYear,
+      },
+    };
+
+    return {
+      handled: true,
+      answer: `«${goalName}» olish uchun ${formatCurrencyAmount(amount, currency)}lik jamg‘arma maqsadini ochishni taklif qilaman. Tasdiqlaysizmi?`,
+      pendingAction,
+    };
   }
 
   // ── Scenario 4: "Bu oy qancha pul sarfladim?" ──
