@@ -28,7 +28,7 @@ export function PrototypeHeader({
           <div>
             <span className="text-xs font-medium text-[#697168] block">Xush kelibsiz</span>
             <h1 className="text-lg font-bold text-[#171B16] leading-tight">
-              {userName} 👋
+              {userName}
             </h1>
           </div>
         </div>

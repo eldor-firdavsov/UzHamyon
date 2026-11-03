@@ -257,7 +257,7 @@ function TransactionModalForm({
                 onChange={(e) => setCategoryId(e.target.value)}
                 className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white pl-10 pr-3.5 py-2.5 text-sm text-[#17211B] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all font-semibold"
               >
-                <option value="auto">✨ Auto (AI titlega qarab tanlaydi)</option>
+                <option value="auto">Auto (AI titlega qarab tanlaydi)</option>
                 {compatibleCategories.map((c) => (
                   <option key={c.id} value={c.id}>
                     {getCategoryDisplayName(c.name)}

@@ -11,6 +11,7 @@ import {
   Calendar,
   Sparkles,
   ArrowUpRight,
+  PartyPopper,
 } from 'lucide-react';
 import GoalModal from './GoalModal';
 import ContributeModal from './ContributeModal';
@@ -330,9 +331,14 @@ export default function GoalsManager() {
                           {g.percentage_completed.toFixed(1)}% bajarildi
                         </span>
                         <span className="text-[#71717A] font-medium tabular-nums">
-                          {isDone
-                            ? 'Maqsadga erishildi! 🎉'
-                            : `${formatCurrency(g.remaining_amount, g.currency)} qoldi`}
+                          {isDone ? (
+                            <span className="inline-flex items-center gap-1 text-[#059669]">
+                              <PartyPopper className="w-3.5 h-3.5 shrink-0" />
+                              <span>Maqsadga erishildi!</span>
+                            </span>
+                          ) : (
+                            `${formatCurrency(g.remaining_amount, g.currency)} qoldi`
+                          )}
                         </span>
                       </div>
                     </div>

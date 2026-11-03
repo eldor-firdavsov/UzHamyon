@@ -30,6 +30,7 @@ import {
   EyeOff,
   User,
   Sparkles,
+  Lightbulb,
 } from 'lucide-react';
 import UzHamyonLogo from '@/components/brand/UzHamyonLogo';
 import CurrencyInput, { formatWithSpaces } from './CurrencyInput';
@@ -460,8 +461,8 @@ export default function OnboardingWizard({
             {user ? (
               <div className="rounded-2xl border border-[#D8DED3] bg-[#F8F9FA] p-5 space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-[#163300] text-[#9FE870] flex items-center justify-center font-bold">
-                    ✓
+                  <div className="w-10 h-10 rounded-full bg-[#163300] text-[#9FE870] flex items-center justify-center">
+                    <Check className="h-5 w-5 stroke-[2.5]" />
                   </div>
                   <div>
                     <p className="text-xs text-[#52525B] font-medium">Siz tizimga kirdingiz</p>
@@ -806,8 +807,9 @@ export default function OnboardingWizard({
                 ))}
               </div>
 
-              <div className="rounded-xl border border-[#E5E7EB] bg-[#F8F9FA] p-3.5 text-xs text-[#52525B] leading-relaxed">
-                💡 <strong>Eslatma:</strong> Bu miqdor shaxsiy moliyaviy prognoz uchun taxminiy ko‘rsatkich bo‘lib, hisobingizda real tranzaksiya yaratmaydi.
+              <div className="rounded-xl border border-[#E5E7EB] bg-[#F8F9FA] p-3.5 text-xs text-[#52525B] leading-relaxed flex items-start gap-2.5">
+                <Lightbulb className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                <span><strong>Eslatma:</strong> Bu miqdor shaxsiy moliyaviy prognoz uchun taxminiy ko‘rsatkich bo‘lib, hisobingizda real tranzaksiya yaratmaydi.</span>
               </div>
 
               <div className="pt-2">

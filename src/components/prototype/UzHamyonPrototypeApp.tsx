@@ -22,6 +22,7 @@ import {
   ChevronLeft,
   ChevronRight,
   User,
+  Check,
 } from 'lucide-react';
 
 // ── Types & Interfaces ──
@@ -2941,7 +2942,10 @@ export default function UzHamyonPrototypeApp({
                   >
                     <span>{item.l}</span>
                     {year === item.y && month === item.m && (
-                      <span style={{ color: '#26834A', fontSize: '13px' }}>✓ Tanlangan</span>
+                      <span className="inline-flex items-center gap-1" style={{ color: '#26834A', fontSize: '13px' }}>
+                        <Check className="h-3.5 w-3.5 stroke-[2.5]" />
+                        <span>Tanlangan</span>
+                      </span>
                     )}
                   </button>
                 ))}

@@ -350,7 +350,7 @@ export default function FastTransactionModal({
                 disabled={isSubmitting || loadingCategories}
                 className="w-full min-h-[48px] rounded-xl border border-[#E8EBE5] bg-white px-3.5 py-2.5 text-sm text-[#163300] font-semibold focus:border-[#163300] focus:outline-none focus:ring-2 focus:ring-[#9FE870]/30 transition-all"
               >
-                <option value="auto">✨ Auto (AI titlega qarab tanlaydi)</option>
+                <option value="auto">Auto (AI titlega qarab tanlaydi)</option>
                 {filteredCategories.map((cat) => (
                   <option key={cat.id} value={cat.id}>
                     {getCategoryDisplayName(cat.name)}

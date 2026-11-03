@@ -14,6 +14,17 @@ import {
   Compass,
   TrendingUp,
   Wallet,
+  BarChart3,
+  PiggyBank,
+  TrendingDown,
+  Search,
+  Shield,
+  Plane,
+  Scale,
+  Sprout,
+  HelpCircle,
+  Settings,
+  PartyPopper,
 } from 'lucide-react';
 import UzHamyonLogo from '@/components/brand/UzHamyonLogo';
 import { completeOnboardingAction } from '@/app/onboarding/actions';
@@ -24,14 +35,14 @@ interface TelegramOnboardingProps {
 }
 
 const TELEGRAM_FINANCIAL_GOALS = [
-  { id: 'track_expenses', label: 'Xarajatlarimni nazorat qilish', icon: '📊' },
-  { id: 'save_more', label: 'Ko‘proq pul jamg‘arish', icon: '💰' },
-  { id: 'reduce_debt', label: 'Qarzlarimni kamaytirish', icon: '📉' },
-  { id: 'understand_flow', label: 'Pulim qayerga ketayotganini tushunish', icon: '🔍' },
-  { id: 'emergency_fund', label: 'Favqulodda vaziyatlar uchun zaxira yaratish', icon: '🛡️' },
-  { id: 'big_purchase', label: 'Katta xarid yoki safar uchun pul yig‘ish', icon: '✈️' },
-  { id: 'balance_flow', label: 'Daromad va xarajatlarimni muvozanatlash', icon: '⚖️' },
-  { id: 'better_habits', label: 'Moliyaviy odatlarimni yaxshilash', icon: '🌱' },
+  { id: 'track_expenses', label: 'Xarajatlarimni nazorat qilish', icon: BarChart3 },
+  { id: 'save_more', label: 'Ko‘proq pul jamg‘arish', icon: PiggyBank },
+  { id: 'reduce_debt', label: 'Qarzlarimni kamaytirish', icon: TrendingDown },
+  { id: 'understand_flow', label: 'Pulim qayerga ketayotganini tushunish', icon: Search },
+  { id: 'emergency_fund', label: 'Favqulodda vaziyatlar uchun zaxira yaratish', icon: Shield },
+  { id: 'big_purchase', label: 'Katta xarid yoki safar uchun pul yig‘ish', icon: Plane },
+  { id: 'balance_flow', label: 'Daromad va xarajatlarimni muvozanatlash', icon: Scale },
+  { id: 'better_habits', label: 'Moliyaviy odatlarimni yaxshilash', icon: Sprout },
 ];
 
 export default function TelegramOnboarding({
@@ -122,8 +133,8 @@ export default function TelegramOnboarding({
         {/* SCREEN 1: Welcome */}
         {step === 1 && (
           <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E8EBE5] shadow-xs space-y-6 animate-in fade-in duration-200">
-            <div className="w-16 h-16 rounded-2xl bg-[#F0F9E9] text-[#163300] flex items-center justify-center text-3xl shadow-2xs border border-[#9FE870]/40">
-              🌱
+            <div className="w-16 h-16 rounded-2xl bg-[#F0F9E9] text-[#163300] flex items-center justify-center shadow-2xs border border-[#9FE870]/40">
+              <Sprout className="w-8 h-8 stroke-[2.2]" />
             </div>
 
             <div className="space-y-2">
@@ -164,8 +175,8 @@ export default function TelegramOnboarding({
         {/* SCREEN 2: Preferred Name */}
         {step === 2 && (
           <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E8EBE5] shadow-xs space-y-6 animate-in fade-in duration-200">
-            <div className="w-14 h-14 rounded-2xl bg-[#F0F9E9] text-[#163300] flex items-center justify-center text-2xl shadow-2xs border border-[#9FE870]/40">
-              👋
+            <div className="w-14 h-14 rounded-2xl bg-[#F0F9E9] text-[#163300] flex items-center justify-center shadow-2xs border border-[#9FE870]/40">
+              <User className="w-7 h-7 stroke-[2.2]" />
             </div>
 
             <div className="space-y-1.5">
@@ -231,6 +242,7 @@ export default function TelegramOnboarding({
             <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
               {TELEGRAM_FINANCIAL_GOALS.map((goal) => {
                 const isSelected = selectedGoals.includes(goal.id);
+                const GoalIcon = goal.icon;
                 return (
                   <button
                     key={goal.id}
@@ -243,7 +255,15 @@ export default function TelegramOnboarding({
                     }`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <span className="text-lg">{goal.icon}</span>
+                      <div
+                        className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border transition-colors ${
+                          isSelected
+                            ? 'bg-[#163300] text-[#9FE870] border-[#163300]'
+                            : 'bg-[#F0F9E9] text-[#163300] border-[#9FE870]/40'
+                        }`}
+                      >
+                        <GoalIcon className="w-4 h-4 stroke-[2.2]" />
+                      </div>
                       <span className="text-xs sm:text-sm font-semibold truncate">{goal.label}</span>
                     </div>
                     <div
@@ -270,7 +290,15 @@ export default function TelegramOnboarding({
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-lg">💭</span>
+                  <div
+                    className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border transition-colors ${
+                      noSpecificGoal
+                        ? 'bg-[#163300] text-[#9FE870] border-[#163300]'
+                        : 'bg-[#F7F8F5] text-[#697168] border-[#E8EBE5]'
+                    }`}
+                  >
+                    <HelpCircle className="w-4 h-4 stroke-[2]" />
+                  </div>
                   <span className="text-xs sm:text-sm font-semibold">Hozircha aniq maqsadim yo‘q</span>
                 </div>
                 <div
@@ -309,8 +337,8 @@ export default function TelegramOnboarding({
         {/* SCREEN 4: Optional Financial Preferences */}
         {step === 4 && (
           <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E8EBE5] shadow-xs space-y-6 animate-in fade-in duration-200">
-            <div className="w-14 h-14 rounded-2xl bg-[#F0F9E9] text-[#163300] flex items-center justify-center text-2xl shadow-2xs border border-[#9FE870]/40">
-              ⚙️
+            <div className="w-14 h-14 rounded-2xl bg-[#F0F9E9] text-[#163300] flex items-center justify-center shadow-2xs border border-[#9FE870]/40">
+              <Settings className="w-7 h-7 stroke-[2.2]" />
             </div>
 
             <div className="space-y-1.5">
@@ -378,8 +406,8 @@ export default function TelegramOnboarding({
         {/* SCREEN 5: Completion */}
         {step === 5 && (
           <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E8EBE5] shadow-xs space-y-6 text-center animate-in fade-in duration-200">
-            <div className="w-20 h-20 rounded-3xl bg-[#F0F9E9] text-[#163300] flex items-center justify-center text-4xl shadow-xs border border-[#9FE870]/50 mx-auto">
-              🎉
+            <div className="w-20 h-20 rounded-3xl bg-[#F0F9E9] text-[#163300] flex items-center justify-center shadow-xs border border-[#9FE870]/50 mx-auto">
+              <PartyPopper className="w-10 h-10 stroke-[2.2]" />
             </div>
 
             <div className="space-y-2">
