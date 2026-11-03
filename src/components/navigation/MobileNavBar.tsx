@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   Home,
   Receipt,
@@ -29,7 +30,8 @@ export const MobileNavBar: React.FC<MobileNavBarProps> = ({
   onTabChange,
   className,
 }) => {
-  const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
+  const router = useRouter();
+  const currentPathname = usePathname() || '';
   const pillRef = useRef<HTMLDivElement>(null);
 
   // Resolve active index including nested routes (e.g., /analytics/monthly -> index 2)
@@ -40,20 +42,20 @@ export const MobileNavBar: React.FC<MobileNavBarProps> = ({
       if (activeTab === 'tahlil') return 2;
       if (activeTab === 'ai') return 3;
     }
-    if (!pathname) return 0;
-    if (pathname === '/' || pathname === '/dashboard') return 0;
-    if (pathname.startsWith('/transactions') || pathname.startsWith('/activity')) return 1;
+    if (!currentPathname) return 0;
+    if (currentPathname === '/' || currentPathname === '/dashboard') return 0;
+    if (currentPathname.startsWith('/transactions') || currentPathname.startsWith('/activity')) return 1;
     if (
-      pathname.startsWith('/analytics') ||
-      pathname.startsWith('/budgets') ||
-      pathname.startsWith('/goals') ||
-      pathname.startsWith('/insights')
+      currentPathname.startsWith('/analytics') ||
+      currentPathname.startsWith('/budgets') ||
+      currentPathname.startsWith('/goals') ||
+      currentPathname.startsWith('/insights')
     ) {
       return 2;
     }
-    if (pathname.startsWith('/ai') || pathname.startsWith('/advisor')) return 3;
+    if (currentPathname.startsWith('/ai') || currentPathname.startsWith('/advisor')) return 3;
     return 0;
-  }, [pathname, activeTab]);
+  }, [currentPathname, activeTab]);
 
   const [activeIndex, setActiveIndex] = useState<number>(resolveActiveIndex);
   // Continuous floating index (0.00 -> 3.00) during thumb scrubbing
@@ -135,8 +137,8 @@ export const MobileNavBar: React.FC<MobileNavBarProps> = ({
     const targetItem = NAV_ITEMS[finalIndex];
     if (onTabChange) {
       onTabChange(targetItem.prototypeTab);
-    } else if (typeof window !== 'undefined' && pathname !== targetItem.href) {
-      window.location.href = targetItem.href;
+    } else if (currentPathname !== targetItem.href) {
+      router.push(targetItem.href);
     }
   };
 
@@ -146,8 +148,8 @@ export const MobileNavBar: React.FC<MobileNavBarProps> = ({
     const targetItem = NAV_ITEMS[idx];
     if (onTabChange) {
       onTabChange(targetItem.prototypeTab);
-    } else if (typeof window !== 'undefined' && pathname !== targetItem.href) {
-      window.location.href = targetItem.href;
+    } else if (currentPathname !== targetItem.href) {
+      router.push(targetItem.href);
     }
   };
 

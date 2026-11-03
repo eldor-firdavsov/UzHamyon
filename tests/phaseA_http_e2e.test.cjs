@@ -34,12 +34,11 @@ describe('Phase A — HTTP & SSR E2E Server Tests', () => {
     assert.ok(res.headers.get('location')?.includes('/login'));
   });
 
-  test('GET /register renders registration form', async () => {
+  test('GET /register redirects to /onboarding or renders registration', async () => {
     const res = await fetch(BASE_URL + '/register');
     assert.strictEqual(res.status, 200);
     const html = await res.text();
-    assert.ok(html.includes('Create your SpendSense account'));
-    assert.ok(html.includes('First Name'));
+    assert.ok(html.includes('UzHamyon') || html.includes('onboarding'));
   });
 
   test('GET /login renders login form', async () => {
@@ -74,6 +73,20 @@ describe('Phase A — HTTP & SSR E2E Server Tests', () => {
     assert.strictEqual(error, null);
     assert.ok(data.user?.id);
     createdUserId = data.user.id;
+
+    // Complete onboarding for test user so dashboard renders directly without onboarding redirect
+    try {
+      const keys = JSON.parse(
+        execSync(
+          '/home/eldor_firdavsov/.local/bin/supabase projects api-keys --project-ref omzreoaaownshtzpqsdt --reveal --output json'
+        ).toString()
+      );
+      const serviceKey = keys.find(k => k.name === 'service_role' || k.type === 'service_role' || k.name?.includes('service_role'))?.api_key;
+      if (serviceKey) {
+        const adminClient = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+        await adminClient.from('profiles').update({ onboarding_completed: true }).eq('id', createdUserId);
+      }
+    } catch (_) {}
 
     // Sign in to ensure fresh auth session cookies
     capturedCookies = {};

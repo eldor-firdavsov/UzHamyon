@@ -44,6 +44,8 @@ interface Message {
       status: 'pending' | 'executed' | 'cancelled';
       params: {
         amount?: number;
+        target_amount?: number;
+        goal_name?: string;
         currency?: string;
         date?: string;
         category_name?: string;
@@ -764,6 +766,9 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
                         </div>
 
                         <div className="text-xs sm:text-sm text-[#52525B] space-y-1">
+                          {m.evidence.pending_action.params.goal_name && (
+                            <div>Maqsad: <span className="text-[#18181B] font-medium">{m.evidence.pending_action.params.goal_name}</span></div>
+                          )}
                           {m.evidence.pending_action.params.category_name && (
                             <div>Kategoriya: <span className="text-[#18181B] font-medium">{m.evidence.pending_action.params.category_name}</span></div>
                           )}
