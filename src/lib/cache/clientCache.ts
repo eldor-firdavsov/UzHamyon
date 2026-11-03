@@ -247,6 +247,7 @@ export function clearAllCache(): void {
  */
 export function invalidateAllFinancialCaches(): void {
   invalidateCache('/api/transactions');
+  invalidateCache('/api/timeline');
   invalidateCache('/api/analytics');
   invalidateCache('/api/budgets');
   invalidateCache('/api/goals');

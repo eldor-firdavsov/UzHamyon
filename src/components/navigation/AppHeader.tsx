@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect, Suspense } from 'react';
+import React, { useState, useRef, useEffect, Suspense, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import LogoutButton from '@/components/LogoutButton';
@@ -21,6 +21,7 @@ import {
   ChevronRight,
   User,
   Plus,
+  Calendar,
 } from 'lucide-react';
 
 // Exactly 4 Primary Sections in requested order with API warming paths
@@ -80,15 +81,30 @@ function DefaultHeaderMonthSwitcher() {
     return peekCache<FinancialTimelineSummary>('/api/timeline/available-months') || null;
   });
 
-  useEffect(() => {
+  const fetchTimeline = useCallback(() => {
     cachedFetch<FinancialTimelineSummary>('/api/timeline/available-months')
       .then((data) => {
-        if (data && data.availableMonths && data.availableMonths.length > 0) {
+        if (data) {
           setTimeline(data);
         }
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    fetchTimeline();
+
+    const handleInvalidation = (e: Event) => {
+      const customEvent = e as CustomEvent<{ urlPrefix?: string }>;
+      const prefix = customEvent.detail?.urlPrefix;
+      if (!prefix || prefix.startsWith('/api/timeline') || prefix.startsWith('/api/transactions')) {
+        fetchTimeline();
+      }
+    };
+
+    window.addEventListener('uzhamyon:cache-invalidated', handleInvalidation);
+    return () => window.removeEventListener('uzhamyon:cache-invalidated', handleInvalidation);
+  }, [fetchTimeline]);
 
   const isMonthSupported =
     pathname.startsWith('/dashboard') ||
@@ -97,53 +113,31 @@ function DefaultHeaderMonthSwitcher() {
 
   if (!isMonthSupported) return null;
 
-  const currentParam = searchParams.get('month');
-  const now = new Date();
-  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const activeKey = currentParam || (timeline?.latestMonthKey || currentMonthKey);
+  const months = timeline?.availableMonths || [];
 
-  const months = timeline?.availableMonths || [
-    {
-      key: '2026-11',
-      year: 2026,
-      month: 11,
-      labelUz: 'Noyabr 2026',
-      shortLabelUz: 'Noy 2026',
-      startDate: '2026-11-01',
-      endDate: '2026-11-30',
-      transactionCount: 0,
-    },
-    {
-      key: '2026-10',
-      year: 2026,
-      month: 10,
-      labelUz: 'Oktabr 2026',
-      shortLabelUz: 'Okt 2026',
-      startDate: '2026-10-01',
-      endDate: '2026-10-31',
-      transactionCount: 0,
-    },
-    {
-      key: '2026-09',
-      year: 2026,
-      month: 9,
-      labelUz: 'Sentabr 2026',
-      shortLabelUz: 'Sen 2026',
-      startDate: '2026-09-01',
-      endDate: '2026-09-30',
-      transactionCount: 0,
-    },
-  ];
+  if (months.length === 0) {
+    return (
+      <div className="hidden md:inline-flex items-center gap-1.5 bg-[#F7F8F5] border border-[#E8EBE5] rounded-xl px-3 py-1.5 text-xs text-[#697168] font-medium shadow-2xs">
+        <Calendar className="h-3.5 w-3.5 text-[#959E94]" />
+        <span>Tranzaksiyalar mavjud emas</span>
+      </div>
+    );
+  }
+
+  const currentParam = searchParams.get('month');
+  const activeKey = currentParam || (timeline?.latestMonthKey || months[0]?.key);
 
   const currentIndex = months.findIndex((m) => m.key === activeKey);
   const activeMonthObj = currentIndex >= 0 ? months[currentIndex] : months[0];
-  const activeLabel = activeMonthObj ? activeMonthObj.labelUz : 'Noyabr 2026';
+  const activeLabel = activeMonthObj ? activeMonthObj.labelUz : '';
 
   const canGoPrev = currentIndex < months.length - 1;
   const canGoNext = currentIndex > 0;
 
-  const handleNavigate = (delta: number) => {
-    const nextIdx = (currentIndex >= 0 ? currentIndex : 0) - delta;
+  const handleNavigate = (direction: -1 | 1) => {
+    // direction === -1: go to previous (older) month: currentIndex + 1
+    // direction === 1: go to next (newer) month: currentIndex - 1
+    const nextIdx = direction === -1 ? currentIndex + 1 : currentIndex - 1;
     if (nextIdx >= 0 && nextIdx < months.length) {
       const nextMonth = months[nextIdx];
       const params = new URLSearchParams(searchParams.toString());

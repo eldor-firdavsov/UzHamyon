@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Calendar, Check } from 'lucide-react';
 import { 
   getAvailableMonths, 
+  getTransactionAvailableMonths,
   canNavigatePrevious, 
   canNavigateNext, 
   getPreviousMonth, 
@@ -17,6 +18,7 @@ interface MonthSelectorProps {
   onSelectMonth: (year: number, month: number) => void;
   financialStartDate?: string;
   maxDate?: string;
+  transactions?: Array<{ date: string; amount?: number; type?: string }>;
 }
 
 export function MonthSelector({
@@ -25,17 +27,37 @@ export function MonthSelector({
   onSelectMonth,
   financialStartDate = '2026-05-01',
   maxDate = '2026-10-31',
+  transactions,
 }: MonthSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const availableMonths = getAvailableMonths(financialStartDate, maxDate);
-  const hasPrev = canNavigatePrevious(selectedYear, selectedMonth, financialStartDate);
-  const hasNext = canNavigateNext(selectedYear, selectedMonth, maxDate);
+  const availableMonths = transactions
+    ? getTransactionAvailableMonths(transactions)
+    : getAvailableMonths(financialStartDate, maxDate);
+
+  const currentIdx = availableMonths.findIndex(
+    (m) => m.year === selectedYear && m.month === selectedMonth
+  );
+
+  const hasPrev = transactions
+    ? currentIdx >= 0 && currentIdx < availableMonths.length - 1
+    : canNavigatePrevious(selectedYear, selectedMonth, financialStartDate);
+
+  const hasNext = transactions
+    ? currentIdx > 0
+    : canNavigateNext(selectedYear, selectedMonth, maxDate);
 
   const currentLabel = `${UZBEK_MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`;
 
   const handlePrev = () => {
+    if (transactions) {
+      if (currentIdx >= 0 && currentIdx < availableMonths.length - 1) {
+        const prev = availableMonths[currentIdx + 1];
+        onSelectMonth(prev.year, prev.month);
+      }
+      return;
+    }
     const prev = getPreviousMonth(selectedYear, selectedMonth, financialStartDate);
     if (prev) {
       onSelectMonth(prev.year, prev.month);
@@ -43,6 +65,13 @@ export function MonthSelector({
   };
 
   const handleNext = () => {
+    if (transactions) {
+      if (currentIdx > 0) {
+        const next = availableMonths[currentIdx - 1];
+        onSelectMonth(next.year, next.month);
+      }
+      return;
+    }
     const next = getNextMonth(selectedYear, selectedMonth, maxDate);
     if (next) {
       onSelectMonth(next.year, next.month);

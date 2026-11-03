@@ -60,36 +60,31 @@ export function getMonthDateRange(year: number, monthIndex0: number) {
 }
 
 /**
- * Returns user-specific eligible financial months.
+ * Returns user-specific eligible financial months based ONLY on actual recorded transactions.
  * Strict rules:
- * - Only months with actual qualifying financial transactions appear.
- * - No months before financial_start_date.
- * - No artificial or empty intermediate months.
- * - New users with 0 transactions return an empty timeline (hasData = false).
+ * - Only calendar months with >= 1 actual qualifying financial transaction appear.
+ * - Both income and expense transactions are counted.
+ * - Excludes deleted or invalid transactions (amount <= 0, invalid types).
+ * - Never generates empty months between transactions.
+ * - Sorts months newest first (descending).
+ * - Returns an empty timeline (hasData = false, availableMonths = []) for users with 0 transactions.
  */
 export async function getUserFinancialTimeline(
   userId: string,
   supabase: SupabaseClient
 ): Promise<FinancialTimelineSummary> {
-  // 1. Fetch user profile financial_start_date
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('financial_start_date, created_at')
-    .eq('id', userId)
-    .maybeSingle();
-
-  let financialStartDate = profile?.financial_start_date || null;
-
-  // 2. Fetch all transaction dates for user
+  // 1. Fetch valid financial transactions for this user
   const { data: txs, error } = await supabase
     .from('transactions')
-    .select('transaction_date')
+    .select('transaction_date, amount, type')
     .eq('user_id', userId)
+    .gt('amount', 0)
+    .in('type', ['income', 'expense'])
     .order('transaction_date', { ascending: false });
 
   if (error || !txs || txs.length === 0) {
     return {
-      financialStartDate,
+      financialStartDate: null,
       availableMonths: [],
       availableMonthKeys: [],
       latestMonthKey: null,
@@ -99,58 +94,54 @@ export async function getUserFinancialTimeline(
     };
   }
 
-  // 3. If user has transactions but financial_start_date was not set, backfill it
-  const earliestTxDate = txs[txs.length - 1]?.transaction_date;
-  if (!financialStartDate && earliestTxDate) {
-    financialStartDate = earliestTxDate;
-    await supabase
-      .from('profiles')
-      .update({ financial_start_date: financialStartDate })
-      .eq('id', userId);
-  }
-
-  const financialStartMonthKey = financialStartDate
-    ? financialStartDate.substring(0, 7)
-    : null;
-
-  // 4. Count transactions per month and filter out months before financial_start_date
+  // 2. Count transactions per distinct calendar month (YYYY-MM)
   const monthCountMap = new Map<string, number>();
   for (const t of txs) {
-    if (typeof t.transaction_date !== 'string') continue;
-    const mKey = t.transaction_date.substring(0, 7); // 'YYYY-MM'
-
-    // Strict rule: do not include months before financial_start_date
-    if (financialStartMonthKey && mKey < financialStartMonthKey) {
-      continue;
-    }
-
+    if (!t.transaction_date || typeof t.transaction_date !== 'string') continue;
+    const match = t.transaction_date.match(/^(\d{4})-(\d{2})/);
+    if (!match) continue;
+    const mKey = `${match[1]}-${match[2]}`;
     monthCountMap.set(mKey, (monthCountMap.get(mKey) || 0) + 1);
   }
 
-  // Sort months newest first (e.g. ['2027-01', '2026-12', '2026-10'])
+  // Sort months newest first (e.g. ['2026-11', '2026-09'])
   const sortedKeys = Array.from(monthCountMap.keys()).sort().reverse();
+
+  if (sortedKeys.length === 0) {
+    return {
+      financialStartDate: null,
+      availableMonths: [],
+      availableMonthKeys: [],
+      latestMonthKey: null,
+      oldestMonthKey: null,
+      hasData: false,
+      totalTransactions: 0,
+    };
+  }
 
   const availableMonths: EligibleMonthItem[] = sortedKeys.map((key) => {
     const [yStr, mStr] = key.split('-');
     const year = parseInt(yStr, 10);
     const month = parseInt(mStr, 10);
-    const monthIdx = month - 1;
-    const { startDate, endDate } = getMonthDateRange(year, monthIdx);
+    const monthIdx0 = month - 1;
+    const { startDate, endDate } = getMonthDateRange(year, monthIdx0);
 
     return {
       key,
       year,
       month,
-      labelUz: `${MONTH_NAMES_UZ_FULL[monthIdx]} ${year}`,
-      shortLabelUz: `${MONTH_NAMES_UZ_SHORT[monthIdx]} ${year}`,
+      labelUz: `${MONTH_NAMES_UZ_FULL[monthIdx0]} ${year}`,
+      shortLabelUz: `${MONTH_NAMES_UZ_SHORT[monthIdx0]} ${year}`,
       startDate,
       endDate,
       transactionCount: monthCountMap.get(key) || 0,
     };
   });
 
+  const oldestMonth = availableMonths[availableMonths.length - 1];
+
   return {
-    financialStartDate,
+    financialStartDate: oldestMonth ? oldestMonth.startDate : null,
     availableMonths,
     availableMonthKeys: sortedKeys,
     latestMonthKey: sortedKeys[0] || null,

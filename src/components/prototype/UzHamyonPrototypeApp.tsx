@@ -23,13 +23,24 @@ import {
   ChevronRight,
   User,
   Check,
+  Calendar,
 } from 'lucide-react';
+import { invalidateAllFinancialCaches } from '@/lib/cache/clientCache';
 
 // ── Types & Interfaces ──
 export type TabType = 'dash' | 'act' | 'tahlil' | 'ai';
 export type SubTabType = 'an' | 'go';
 export type FilterType = 'all' | 'in' | 'ex';
 export type SheetType = 'tx' | 'budget' | 'goal' | 'contrib' | 'detail' | 'confirm' | 'month' | 'user' | null;
+
+export interface AvailableMonthItem {
+  key: string;        // 'YYYY-MM'
+  year: number;
+  month: number;      // 1-12
+  label: string;      // e.g. 'Noyabr 2026'
+  shortLabel: string; // e.g. 'Noy 2026'
+  count: number;
+}
 
 export interface Transaction {
   id: string;
@@ -84,8 +95,8 @@ export interface UzHamyonPrototypeAppProps {
 }
 
 // ── Constants from Specification ──
-const START_DATE = '2026-09-01';
-const TODAY_DATE = '2026-11-02';
+const MIN_ALLOWED_DATE = '2020-01-01';
+const TODAY_DATE = new Date().toISOString().slice(0, 10);
 
 const CATEGORY_ICONS: Record<string, string> = {
   Uy: 'M3 11l9-8 9 8v10H3z',
@@ -233,6 +244,42 @@ export default function UzHamyonPrototypeApp({
   );
   const [loading, setLoading] = useState<boolean>(!initialTransactions);
 
+  // ── Transaction-based Available Months ──
+  // STRICT REQUIREMENT: Only calendar months with >= 1 actual recorded transaction belonging to the user appear!
+  // Both income and expense transactions count.
+  // No empty months inserted between earliest and latest transactions.
+  // Sorted descending chronologically (newest first).
+  const availableMonths = useMemo<AvailableMonthItem[]>(() => {
+    const monthCounts = new Map<string, number>();
+
+    for (const t of transactions) {
+      if (!t.date || typeof t.date !== 'string') continue;
+      const match = t.date.match(/^(\d{4})-(\d{2})/);
+      if (!match) continue;
+
+      if (t.amount > 0 && (t.type === 'in' || t.type === 'ex')) {
+        const key = `${match[1]}-${match[2]}`;
+        monthCounts.set(key, (monthCounts.get(key) || 0) + 1);
+      }
+    }
+
+    const sortedKeys = Array.from(monthCounts.keys()).sort().reverse();
+
+    return sortedKeys.map((key) => {
+      const [yStr, mStr] = key.split('-');
+      const y = parseInt(yStr, 10);
+      const m = parseInt(mStr, 10);
+      return {
+        key,
+        year: y,
+        month: m,
+        label: `${UZBEK_MONTH_NAMES[m]} ${y}`,
+        shortLabel: `${UZBEK_MONTH_NAMES[m]?.slice(0, 3) || ''} ${y}`,
+        count: monthCounts.get(key) || 0,
+      };
+    });
+  }, [transactions]);
+
   // ── AI State ──
   const [conversations, setConversations] = useState<Conversation[]>(INITIAL_CONVERSATIONS);
   const [currentConvId, setCurrentConvId] = useState<string>('c1');
@@ -250,7 +297,7 @@ export default function UzHamyonPrototypeApp({
   const [confirmConfig, setConfirmConfig] = useState<{ k: 'tx' | 'budget' | 'goal'; id: string } | null>(null);
   const [formData, setFormData] = useState<Record<string, string>>(
     initialSheet === 'tx'
-      ? { type: 'ex', amount: '', cat: 'Oziq-ovqat', desc: '', date: '2026-11-02' }
+      ? { type: 'ex', amount: '', cat: 'Oziq-ovqat', desc: '', date: TODAY_DATE }
       : initialSheet === 'budget'
       ? { cat: 'Oziq-ovqat', amount: '' }
       : initialSheet === 'goal'
@@ -261,26 +308,38 @@ export default function UzHamyonPrototypeApp({
 
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Sync tab with browser URL if requested
-  const switchTab = useCallback((newTab: TabType, newSubTab?: SubTabType) => {
-    setTab(newTab);
-    if (newSubTab) setSubTab(newSubTab);
+  // Sync tab with browser URL if requested, keeping selected month synchronized
+  const switchTab = useCallback(
+    (newTab: TabType, newSubTab?: SubTabType) => {
+      setTab(newTab);
+      if (newSubTab) setSubTab(newSubTab);
 
-    if (syncBrowserUrl && typeof window !== 'undefined') {
-      const targetPath =
-        newTab === 'dash'
-          ? '/dashboard'
-          : newTab === 'act'
-          ? '/transactions'
-          : newTab === 'tahlil'
-          ? '/analytics'
-          : '/advisor';
+      if (syncBrowserUrl && typeof window !== 'undefined') {
+        const targetPathBase =
+          newTab === 'dash'
+            ? '/dashboard'
+            : newTab === 'act'
+            ? '/transactions'
+            : newTab === 'tahlil'
+            ? '/analytics'
+            : '/advisor';
 
-      if (window.location.pathname !== targetPath) {
-        window.history.pushState(null, '', targetPath);
+        const params = new URLSearchParams(window.location.search);
+        if (availableMonths.length > 0) {
+          params.set('month', `${year}-${padTwo(month)}`);
+        } else {
+          params.delete('month');
+        }
+        const qs = params.toString() ? `?${params.toString()}` : '';
+        const targetPath = `${targetPathBase}${qs}`;
+
+        if (window.location.pathname + window.location.search !== targetPath) {
+          window.history.pushState(null, '', targetPath);
+        }
       }
-    }
-  }, [syncBrowserUrl]);
+    },
+    [syncBrowserUrl, availableMonths.length, year, month]
+  );
 
   // Handle browser popstate (back/forward)
   useEffect(() => {
@@ -310,11 +369,19 @@ export default function UzHamyonPrototypeApp({
       if (qSub && ['an', 'go'].includes(qSub)) {
         setSubTab(qSub);
       }
+      const qMonth = params.get('month');
+      if (qMonth && /^\d{4}-\d{2}$/.test(qMonth)) {
+        const [y, m] = qMonth.split('-').map(Number);
+        if (m >= 1 && m <= 12) {
+          setYear(y);
+          setMonth(m);
+        }
+      }
       const qSheet = params.get('sheet') as SheetType;
       if (qSheet) {
         setActiveSheet(qSheet);
         if (qSheet === 'tx') {
-          setFormData({ type: 'ex', amount: '', cat: 'Oziq-ovqat', desc: '', date: `${year}-${padTwo(month)}-02` });
+          setFormData({ type: 'ex', amount: '', cat: 'Oziq-ovqat', desc: '', date: TODAY_DATE });
         } else if (qSheet === 'budget') {
           setFormData({ cat: 'Oziq-ovqat', amount: '' });
         } else if (qSheet === 'goal') {
@@ -322,7 +389,7 @@ export default function UzHamyonPrototypeApp({
         }
       }
     }
-  }, [year, month]);
+  }, []);
 
   // Load real backend data on mount
   useEffect(() => {
@@ -446,29 +513,70 @@ export default function UzHamyonPrototypeApp({
     }, 2200);
   }, []);
 
-  // ── Date Bounds & Month Filtering ──
-  const minK = parseInt(START_DATE.slice(0, 4), 10) * 12 + parseInt(START_DATE.slice(5, 7), 10);
-  const maxK = parseInt(TODAY_DATE.slice(0, 4), 10) * 12 + parseInt(TODAY_DATE.slice(5, 7), 10);
-  const currentKey = year * 12 + month;
+  // ── Month Selection & Navigation (Strictly Based on Actual Transactions) ──
+  // Auto-synchronize year and month with availableMonths
+  useEffect(() => {
+    if (availableMonths.length > 0) {
+      const currentKey = `${year}-${padTwo(month)}`;
+      const isCurrentAvailable = availableMonths.some((m) => m.key === currentKey);
+      if (!isCurrentAvailable) {
+        // If the active month has 0 transactions, automatically switch to newest month with transactions
+        const newest = availableMonths[0];
+        setYear(newest.year);
+        setMonth(newest.month);
+        setSelectedWeek(null);
+      }
+    }
+  }, [availableMonths, year, month]);
 
-  const noPrev = currentKey <= minK;
-  const noNext = currentKey >= maxK;
+  const handleSelectMonth = useCallback(
+    (newYear: number, newMonth: number) => {
+      setYear(newYear);
+      setMonth(newMonth);
+      setSelectedWeek(null);
+      setActiveSheet(null);
 
-  const handleNavigateMonth = (delta: number) => {
-    const nextK = year * 12 + (month - 1) + delta;
-    setYear(Math.floor(nextK / 12));
-    setMonth((nextK % 12) + 1);
-    setSelectedWeek(null);
+      if (syncBrowserUrl && typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        params.set('month', `${newYear}-${padTwo(newMonth)}`);
+        const newUrl = `${window.location.pathname}?${params.toString()}`;
+        window.history.replaceState(null, '', newUrl);
+      }
+    },
+    [syncBrowserUrl]
+  );
+
+  const currentMonthKey = `${year}-${padTwo(month)}`;
+  const currentMonthIdx = availableMonths.findIndex((m) => m.key === currentMonthKey);
+
+  // Navigation is strictly confined to months that have actual transactions:
+  // - Older months are at higher indices (currentMonthIdx + 1)
+  // - Newer months are at lower indices (currentMonthIdx - 1)
+  const canGoPrev = currentMonthIdx >= 0 && currentMonthIdx < availableMonths.length - 1;
+  const canGoNext = currentMonthIdx > 0;
+  const noPrev = !canGoPrev;
+  const noNext = !canGoNext;
+
+  const handleNavigateMonth = (direction: -1 | 1) => {
+    if (availableMonths.length === 0) return;
+    // direction === -1: go to previous (older) month
+    // direction === 1: go to next (newer) month
+    const targetIdx = direction === -1 ? currentMonthIdx + 1 : currentMonthIdx - 1;
+    if (targetIdx >= 0 && targetIdx < availableMonths.length) {
+      const target = availableMonths[targetIdx];
+      handleSelectMonth(target.year, target.month);
+    }
   };
 
-  const monthLabel = UZBEK_MONTH_NAMES[month];
+  const monthLabel = UZBEK_MONTH_NAMES[month] || '';
   const daysInCurrentMonth = new Date(year, month, 0).getDate();
 
   // Transactions strictly for currently active month
   const currentMonthTransactions = useMemo(() => {
+    if (availableMonths.length === 0) return [];
     const prefix = `${year}-${padTwo(month)}`;
-    return transactions.filter((t) => t.date.startsWith(prefix));
-  }, [transactions, year, month]);
+    return transactions.filter((t) => t.date && t.date.startsWith(prefix));
+  }, [transactions, year, month, availableMonths.length]);
 
   // Income / Expense sums for currently active month
   const monthIncome = useMemo(() => {
@@ -865,6 +973,7 @@ export default function UzHamyonPrototypeApp({
         prev.map((t) => (t.id === editId ? { ...t, type, amount: amt, cat, desc, date } : t))
       );
       triggerToast('Tranzaksiya yangilandi');
+      invalidateAllFinancialCaches();
       fetch(`/api/transactions/${editId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -890,6 +999,7 @@ export default function UzHamyonPrototypeApp({
       setYear(parseInt(date.slice(0, 4), 10));
       setMonth(parseInt(date.slice(5, 7), 10));
       triggerToast(`Tranzaksiya qo‘shildi: ${cat}`);
+      invalidateAllFinancialCaches();
       fetch('/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1063,6 +1173,7 @@ export default function UzHamyonPrototypeApp({
     if (k === 'tx') {
       setTransactions((prev) => prev.filter((t) => t.id !== id));
       triggerToast("Tranzaksiya o'chirildi");
+      invalidateAllFinancialCaches();
       fetch(`/api/transactions/${id}`, { method: 'DELETE' }).catch(console.error);
     } else if (k === 'budget') {
       setBudgets((prev) => prev.filter((b) => b.id !== id));
@@ -1081,7 +1192,7 @@ export default function UzHamyonPrototypeApp({
     parseNumber(formData.amount) <= 0 ||
     !(formData.desc || '').trim() ||
     !formData.date ||
-    formData.date < START_DATE ||
+    formData.date < MIN_ALLOWED_DATE ||
     formData.date > TODAY_DATE;
 
   const isSaveBudgetDisabled = parseNumber(formData.limit) <= 0 || !formData.cat;
@@ -1188,7 +1299,7 @@ export default function UzHamyonPrototypeApp({
                 onClick={() => setActiveSheet('month')}
                 className="px-3 py-1 text-xs sm:text-sm font-medium text-[#18181B] hover:text-[#059669] transition-colors cursor-pointer whitespace-nowrap"
               >
-                {monthLabel} {year}
+                {availableMonths.length === 0 ? "Tranzaksiyalar mavjud emas" : `${monthLabel} ${year}`}
               </button>
               <button
                 type="button"
@@ -1273,7 +1384,7 @@ export default function UzHamyonPrototypeApp({
               onClick={() => setActiveSheet('month')}
               className="px-2 py-0.5 text-xs font-medium text-[#18181B] whitespace-nowrap cursor-pointer"
             >
-              {monthLabel} {year}
+              {availableMonths.length === 0 ? "Oylar mavjud emas" : `${monthLabel} ${year}`}
             </button>
             <button
               type="button"
@@ -1414,7 +1525,7 @@ export default function UzHamyonPrototypeApp({
                         style={{ color: '#171B16', fontSize: '13px', padding: '0 6px' }}
                         onClick={() => setActiveSheet('month')}
                       >
-                        {monthLabel} {year}
+                        {availableMonths.length === 0 ? "Tranzaksiyalar mavjud emas" : `${monthLabel} ${year}`}
                       </button>
                       <button
                         aria-label="Keyingi oy"
@@ -1705,7 +1816,7 @@ export default function UzHamyonPrototypeApp({
                   style={{ color: '#fff', fontSize: '14px', padding: '0 8px' }}
                   onClick={() => setActiveSheet('month')}
                 >
-                  {monthLabel} {year}
+                  {availableMonths.length === 0 ? "Tranzaksiyalar mavjud emas" : `${monthLabel} ${year}`}
                 </button>
                 <button
                   aria-label="Keyingi oy"
@@ -1883,7 +1994,7 @@ export default function UzHamyonPrototypeApp({
                           style={{ color: '#171B16', padding: '0 8px' }}
                           onClick={() => setActiveSheet('month')}
                         >
-                          {monthLabel} {year}
+                          {availableMonths.length === 0 ? "Tranzaksiyalar mavjud emas" : `${monthLabel} ${year}`}
                         </button>
                         <button
                           aria-label="Keyingi oy"
@@ -2667,7 +2778,7 @@ export default function UzHamyonPrototypeApp({
                       id="tx-date"
                       className="in"
                       type="date"
-                      min={START_DATE}
+                      min={MIN_ALLOWED_DATE}
                       max={TODAY_DATE}
                       value={formData.date || ''}
                       onChange={(e) => setFormData((prev) => ({ ...prev, date: e.target.value }))}
@@ -2916,41 +3027,114 @@ export default function UzHamyonPrototypeApp({
             {/* ── SHEET: Month Selector Popup ── */}
             {activeSheet === 'month' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <div className="mt" style={{ marginBottom: '6px' }}>
-                  Quyidagi mavjud davrlardan birini tanlang:
-                </div>
-                {[
-                  { y: 2026, m: 11, l: 'Noyabr 2026' },
-                  { y: 2026, m: 10, l: 'Oktyabr 2026' },
-                  { y: 2026, m: 9, l: 'Sentyabr 2026' },
-                ].map((item) => (
-                  <button
-                    key={`${item.y}-${item.m}`}
-                    className={`row ${year === item.y && month === item.m ? 'on' : ''}`}
-                    style={{
-                      padding: '12px 14px',
-                      background: year === item.y && month === item.m ? '#EAF5EC' : '#fff',
-                      border: '1px solid #D8DED3',
-                      borderRadius: '12px',
-                      fontWeight: year === item.y && month === item.m ? 700 : 500,
-                      color: year === item.y && month === item.m ? '#163300' : '#171B16',
-                    }}
-                    onClick={() => {
-                      setYear(item.y);
-                      setMonth(item.m);
-                      setSelectedWeek(null);
-                      setActiveSheet(null);
-                    }}
-                  >
-                    <span>{item.l}</span>
-                    {year === item.y && month === item.m && (
-                      <span className="inline-flex items-center gap-1" style={{ color: '#26834A', fontSize: '13px' }}>
-                        <Check className="h-3.5 w-3.5 stroke-[2.5]" />
-                        <span>Tanlangan</span>
-                      </span>
-                    )}
-                  </button>
-                ))}
+                {availableMonths.length === 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '12px 4px', textAlign: 'center' }}>
+                    <div
+                      style={{
+                        width: '48px',
+                        height: '48px',
+                        borderRadius: '50%',
+                        background: '#F0FDF4',
+                        color: '#16A34A',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        margin: '0 auto',
+                      }}
+                    >
+                      <Calendar className="h-6 w-6 text-[#16A34A]" />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '15px', fontWeight: 700, color: '#171B16' }}>
+                        Tranzaksiyalar mavjud emas
+                      </div>
+                      <p style={{ fontSize: '12px', color: '#697168', marginTop: '4px', lineHeight: 1.5 }}>
+                        Birinchi tranzaksiyangizni kiritganingizdan so‘ng, faqat haqiqiy tranzaksiyaga ega bo‘lgan oylar bu yerda ko‘rinadi.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveSheet('tx');
+                        setFormData({
+                          type: 'ex',
+                          amount: '',
+                          cat: 'Auto',
+                          desc: '',
+                          date: TODAY_DATE,
+                        });
+                      }}
+                      style={{
+                        marginTop: '6px',
+                        padding: '12px 16px',
+                        borderRadius: '12px',
+                        background: '#9FE870',
+                        color: '#163300',
+                        fontWeight: 700,
+                        fontSize: '13px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <Plus className="h-4 w-4 stroke-[3]" />
+                      <span>Birinchi tranzaksiyani qo‘shish</span>
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="mt" style={{ marginBottom: '6px', fontSize: '12px', color: '#697168' }}>
+                      Tranzaksiyalar qayd etilgan mavjud oylar:
+                    </div>
+                    {availableMonths.map((item) => {
+                      const isSelected = year === item.year && month === item.month;
+                      return (
+                        <button
+                          key={item.key}
+                          className={`row ${isSelected ? 'on' : ''}`}
+                          style={{
+                            padding: '12px 14px',
+                            background: isSelected ? '#EAF5EC' : '#fff',
+                            border: `1px solid ${isSelected ? '#9FE870' : '#D8DED3'}`,
+                            borderRadius: '12px',
+                            fontWeight: isSelected ? 700 : 500,
+                            color: isSelected ? '#163300' : '#171B16',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            cursor: 'pointer',
+                          }}
+                          onClick={() => handleSelectMonth(item.year, item.month)}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span>{item.label}</span>
+                            <span
+                              style={{
+                                fontSize: '11px',
+                                padding: '2px 8px',
+                                borderRadius: '999px',
+                                background: isSelected ? '#C7F2A4' : '#F7F8F5',
+                                color: isSelected ? '#163300' : '#697168',
+                                fontWeight: 600,
+                              }}
+                            >
+                              {item.count} ta tranzaksiya
+                            </span>
+                          </div>
+                          {isSelected && (
+                            <span className="inline-flex items-center gap-1" style={{ color: '#26834A', fontSize: '13px' }}>
+                              <Check className="h-3.5 w-3.5 stroke-[2.5]" />
+                              <span>Tanlangan</span>
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </>
+                )}
               </div>
             )}
 

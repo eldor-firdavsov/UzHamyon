@@ -296,6 +296,44 @@ export function calculateChartData<T extends BaseTransaction>(
 }
 
 /**
+ * Returns list of selectable calendar months based STRICTLY on actual transactions.
+ * Only months with >= 1 transaction appear, sorted newest first.
+ */
+export function getTransactionAvailableMonths(
+  transactions: Array<{ date?: string; transaction_date?: string; amount?: number; type?: string }>
+): { year: number; month: number; label: string; shortLabel: string; isoMonth: string; count: number }[] {
+  const monthCounts = new Map<string, number>();
+
+  for (const t of transactions) {
+    const rawDate = t.date || t.transaction_date;
+    if (!rawDate || typeof rawDate !== 'string') continue;
+    const match = rawDate.match(/^(\d{4})-(\d{2})/);
+    if (!match) continue;
+    if (t.amount !== undefined && t.amount <= 0) continue;
+    if (t.type !== undefined && !['in', 'ex', 'income', 'expense'].includes(t.type)) continue;
+
+    const key = `${match[1]}-${match[2]}`;
+    monthCounts.set(key, (monthCounts.get(key) || 0) + 1);
+  }
+
+  const sortedKeys = Array.from(monthCounts.keys()).sort().reverse();
+
+  return sortedKeys.map((key) => {
+    const [yStr, mStr] = key.split('-');
+    const year = parseInt(yStr, 10);
+    const month = parseInt(mStr, 10);
+    return {
+      year,
+      month,
+      label: `${UZBEK_MONTH_NAMES[month - 1]} ${year}`,
+      shortLabel: `${UZBEK_MONTH_SHORT[month - 1]} ${year}`,
+      isoMonth: key,
+      count: monthCounts.get(key) || 0,
+    };
+  });
+}
+
+/**
  * Returns list of selectable calendar months between financialStartDate and maxDate.
  */
 export function getAvailableMonths(
