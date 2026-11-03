@@ -189,7 +189,10 @@ const INITIAL_CONVERSATIONS: Conversation[] = [
 ];
 
 function formatNumber(n: number): string {
-  return (n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  if (n === 0 || !n) return '0';
+  const isNeg = n < 0;
+  const absFormatted = Math.abs(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  return isNeg ? `−${absFormatted}` : absFormatted;
 }
 
 function padTwo(n: number): string {
@@ -596,6 +599,18 @@ export default function UzHamyonPrototypeApp({
       .filter((t) => t.type === 'in')
       .reduce((sum, t) => sum + t.amount, 0);
   }, [transactions]);
+
+  const totalLifetimeExpense = useMemo(() => {
+    return transactions
+      .filter((t) => t.type === 'ex')
+      .reduce((sum, t) => sum + t.amount, 0);
+  }, [transactions]);
+
+  // How much money user has right now (all income minus all expense)
+  // If user has more xarajat than daromad, this becomes negative, like a real card
+  const currentBalance = useMemo(() => {
+    return totalLifetimeIncome - totalLifetimeExpense;
+  }, [totalLifetimeIncome, totalLifetimeExpense]);
 
   // Expenses grouped by category for active month
   const categoryExpenses = useMemo(() => {
@@ -1438,21 +1453,21 @@ export default function UzHamyonPrototypeApp({
               </div>
 
               <div className="card-content" style={{ position: 'relative', zIndex: 2 }}>
-                <div className="sr-only">Jami balans Kirim Chiqim Sof oqim Moliyaviy holatingiz</div>
-                <div style={{ fontSize: '14px', color: '#C9E8B0' }}>Jami daromad</div>
+                <div className="sr-only">Joriy balans Jami balans Kirim Chiqim Sof oqim Moliyaviy holatingiz {currentBalance} soʻm</div>
+                <div style={{ fontSize: '14px', color: '#C9E8B0' }}>Joriy balans</div>
                 <div
                   className="num"
                   style={{
                     fontSize: 'clamp(28px, 5vw, 40px)',
                     fontWeight: 700,
                     letterSpacing: '-1.5px',
-                    color: '#9FE870',
+                    color: currentBalance < 0 ? '#FFB8B8' : '#9FE870',
                     marginTop: '4px',
                     lineHeight: 1.15,
                   }}
                 >
-                  {formatNumber(totalLifetimeIncome)}{' '}
-                  <span style={{ fontSize: '16px', fontWeight: 500, color: '#C9E8B0', letterSpacing: 0 }}>
+                  {formatNumber(currentBalance)}{' '}
+                  <span style={{ fontSize: '16px', fontWeight: 500, color: currentBalance < 0 ? '#FFB8B8' : '#C9E8B0', letterSpacing: 0 }}>
                     so&apos;m
                   </span>
                 </div>

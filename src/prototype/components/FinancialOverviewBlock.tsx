@@ -5,19 +5,29 @@ import { ArrowDownLeft, ArrowUpRight, TrendingUp } from 'lucide-react';
 import { formatUzbekCurrency } from '../tokens';
 
 interface FinancialOverviewBlockProps {
-  totalLifetimeIncome: number;
+  totalLifetimeIncome?: number;
+  totalLifetimeExpense?: number;
+  currentBalance?: number;
   periodIncome: number;
   periodExpenses: number;
   activeMonthLabel: string;
 }
 
 export function FinancialOverviewBlock({
-  totalLifetimeIncome,
+  totalLifetimeIncome = 0,
+  totalLifetimeExpense = 0,
+  currentBalance,
   periodIncome,
   periodExpenses,
   activeMonthLabel,
 }: FinancialOverviewBlockProps) {
-  const formattedTotal = totalLifetimeIncome.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  const balance = currentBalance !== undefined
+    ? currentBalance
+    : (totalLifetimeIncome - totalLifetimeExpense);
+
+  const isNeg = balance < 0;
+  const absFormatted = Math.abs(balance).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  const formattedTotal = isNeg ? `−${absFormatted}` : absFormatted;
 
   return (
     <section aria-label="Moliyaviy ko‘rsatkichlar" className="w-full">
@@ -40,7 +50,7 @@ export function FinancialOverviewBlock({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-[#9FE870]">
-                  Jami qayd etilgan daromad
+                  Joriy balans
                 </span>
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-white/10 text-[#9FE870] border border-[#9FE870]/30 backdrop-blur-xs">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#9FE870] animate-pulse" />
@@ -57,16 +67,16 @@ export function FinancialOverviewBlock({
             {/* ── HERO FINANCIAL NUMBER (38-44px Mobile, 48-56px Desktop) ── */}
             <div className="pt-1">
               <div className="flex items-baseline flex-wrap gap-x-2">
-                <span className="font-mono text-[38px] sm:text-[44px] lg:text-[52px] font-extrabold tracking-tight text-white tabular-nums leading-none drop-shadow-xs">
+                <span className={`font-mono text-[38px] sm:text-[44px] lg:text-[52px] font-extrabold tracking-tight tabular-nums leading-none drop-shadow-xs ${isNeg ? 'text-[#FFB8B8]' : 'text-white'}`}>
                   {formattedTotal}
                 </span>
-                <span className="font-mono text-xl sm:text-2xl lg:text-[28px] font-bold text-[#9FE870] tracking-normal">
+                <span className={`font-mono text-xl sm:text-2xl lg:text-[28px] font-bold tracking-normal ${isNeg ? 'text-[#FFB8B8]' : 'text-[#9FE870]'}`}>
                   so‘m
                 </span>
               </div>
               
               <p className="mt-2 text-xs sm:text-sm text-white/70 max-w-md font-medium">
-                Ilovada hisob ochilgandan buyon kiritilgan umumiy daromad mablag‘i
+                {isNeg ? 'Xarajatlar kiritilgan daromadlardan oshgan (manfiy balans)' : 'Hozirda hisobingizdagi mavjud sof pul mablag‘i'}
               </p>
             </div>
           </div>

@@ -3,7 +3,10 @@
 import React from 'react';
 
 export interface FinanceCardProps {
+  balance?: number;
+  currentBalance?: number;
   totalIncome?: number;
+  totalExpense?: number;
   monthIncome?: number;
   monthExpense?: number;
   monthLabel?: string;
@@ -13,7 +16,10 @@ export interface FinanceCardProps {
 }
 
 export default function FinanceCard({
+  balance,
+  currentBalance,
   totalIncome,
+  totalExpense,
   monthIncome,
   monthExpense,
   monthLabel = 'Joriy oy',
@@ -22,9 +28,18 @@ export default function FinanceCard({
   children,
 }: FinanceCardProps) {
   const formatMoney = (val?: number) => {
-    if (val === undefined || val === null) return '0';
-    return val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    if (val === undefined || val === null || val === 0) return '0';
+    const isNeg = val < 0;
+    const absStr = Math.abs(val).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    return isNeg ? `−${absStr}` : absStr;
   };
+
+  const computedBalance = currentBalance !== undefined
+    ? currentBalance
+    : balance !== undefined
+      ? balance
+      : ((totalIncome ?? 0) - (totalExpense ?? 0));
+  const isNegative = computedBalance < 0;
 
   return (
     <div
@@ -53,21 +68,21 @@ export default function FinanceCard({
           children
         ) : (
           <>
-            <div className="sr-only">Jami balans Kirim Chiqim Sof oqim Moliyaviy holatingiz</div>
-            <div style={{ fontSize: '14px', color: '#C9E8B0' }}>Jami daromad</div>
+            <div className="sr-only">Joriy balans Jami balans Kirim Chiqim Sof oqim Moliyaviy holatingiz {computedBalance} {currency}</div>
+            <div style={{ fontSize: '14px', color: '#C9E8B0' }}>Joriy balans</div>
             <div
               className="num"
               style={{
                 fontSize: 'clamp(28px, 5vw, 40px)',
                 fontWeight: 700,
                 letterSpacing: '-1.5px',
-                color: '#9FE870',
+                color: isNegative ? '#FFB8B8' : '#9FE870',
                 marginTop: '4px',
                 lineHeight: 1.15,
               }}
             >
-              {formatMoney(totalIncome)}{' '}
-              <span style={{ fontSize: '16px', fontWeight: 500, color: '#C9E8B0', letterSpacing: 0 }}>
+              {formatMoney(computedBalance)}{' '}
+              <span style={{ fontSize: '16px', fontWeight: 500, color: isNegative ? '#FFB8B8' : '#C9E8B0', letterSpacing: 0 }}>
                 {currency}
               </span>
             </div>
