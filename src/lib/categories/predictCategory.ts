@@ -154,6 +154,7 @@ const INCOME_RULES: Array<{ category: string; keywords: string[] }> = [
     keywords: [
       'sovg\'a', 'sovga', 'sovg‘a', 'hadya', 'tug\'ilgan kun', 'bayram',
       'to\'yona', 'toyona', 'suyunchi', 'yordam', 'grant', 'stipendiya',
+      'dada', 'dadam', 'ota', 'otam', 'ona', 'onam', 'oyim', 'pul berdi', 'pul berdila', 'pul berdilar', 'berdila', 'qarindosh',
       'gift', 'present', 'подарок', 'грант', 'стипендия'
     ],
   },

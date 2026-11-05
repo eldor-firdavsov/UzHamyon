@@ -58,6 +58,7 @@ export interface Transaction {
   cat: string;
   desc: string;
   date: string;
+  time?: string;
 }
 
 export interface Budget {
@@ -135,6 +136,7 @@ const INCOME_CATEGORIES = [
   'Auto',
   'Maosh',
   'Frilans',
+  "Sovg'alar",
   'Boshqa daromad',
 ];
 
@@ -429,6 +431,8 @@ export default function UzHamyonPrototypeApp({
   const [activeSheet, setActiveSheet] = useState<SheetType>(initialSheet);
   useModalScrollLock(Boolean(activeSheet));
   const [editId, setEditId] = useState<string | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [activeGoalId, setActiveGoalId] = useState<string | null>(null);
   const [confirmConfig, setConfirmConfig] = useState<{ k: 'tx' | 'budget' | 'goal'; id: string } | null>(null);
   const [formData, setFormData] = useState<Record<string, string>>(
@@ -1022,6 +1026,8 @@ export default function UzHamyonPrototypeApp({
   const handleOpenAddTx = () => {
     setEditId(null);
     setTxError(null);
+    setShowDatePicker(false);
+    setShowCategoryPicker(false);
     setFormData({
       type: 'ex',
       amount: '',
@@ -1036,12 +1042,15 @@ export default function UzHamyonPrototypeApp({
   const handleOpenEditTx = (t: Transaction) => {
     setEditId(t.id);
     setTxError(null);
+    setShowDatePicker(false);
+    setShowCategoryPicker(false);
     setFormData({
       type: t.type,
       amount: formatNumberWithGaps(t.amount),
       cat: t.cat,
       desc: t.desc || '',
       date: t.date,
+      time: t.time || getNowLocalTimeString(),
     });
     setActiveSheet('tx');
   };
@@ -1086,16 +1095,18 @@ export default function UzHamyonPrototypeApp({
     if (!isAuthenticated) {
       if (editId) {
         setTransactions((prev) =>
-          prev.map((t) => (t.id === editId ? { ...t, type, amount: amt, cat, desc, date } : t))
+          prev.map((t) => (t.id === editId ? { ...t, type, amount: amt, cat, desc, date, time } : t))
         );
       } else {
         setTransactions((prev) => [
           ...prev,
-          { id: `demo-${Date.now()}`, type, amount: amt, cat, desc, date },
+          { id: `demo-${Date.now()}`, type, amount: amt, cat, desc, date, time },
         ]);
         setYear(parseInt(date.slice(0, 4), 10));
         setMonth(parseInt(date.slice(5, 7), 10));
       }
+      setShowDatePicker(false);
+      setShowCategoryPicker(false);
       setActiveSheet(null);
       setFormData({});
       setEditId(null);
@@ -1164,6 +1175,8 @@ export default function UzHamyonPrototypeApp({
         setMonth(parseInt(date.slice(5, 7), 10));
       }
       triggerToast(editId ? 'Tranzaksiya yangilandi' : 'Tranzaksiya qo‘shildi');
+      setShowDatePicker(false);
+      setShowCategoryPicker(false);
       setActiveSheet(null);
       setFormData({});
       setEditId(null);
@@ -1412,9 +1425,8 @@ export default function UzHamyonPrototypeApp({
   const isSaveTxDisabled =
     parseNumber(formData.amount) <= 0 ||
     !(formData.desc || '').trim() ||
-    !formData.date ||
-    formData.date < MIN_ALLOWED_DATE ||
-    formData.date > TODAY_DATE;
+    ((formData.date || TODAY_DATE) < MIN_ALLOWED_DATE) ||
+    ((formData.date || TODAY_DATE) > TODAY_DATE);
 
   const isSaveBudgetDisabled = isSavingBudget || parseNumber(formData.limit) <= 0 || !formData.cat;
   const isSaveGoalDisabled = parseNumber(formData.target) <= 0 || !(formData.name || '').trim();
@@ -2844,6 +2856,8 @@ export default function UzHamyonPrototypeApp({
                   setFormData({});
                   setEditId(null);
                   setTxError(null);
+                  setShowDatePicker(false);
+                  setShowCategoryPicker(false);
                 }}
                 style={{
                   height: '34px',
@@ -2870,12 +2884,22 @@ export default function UzHamyonPrototypeApp({
             {/* ── SHEET: Add / Edit Transaction ── */}
             {activeSheet === 'tx' && (() => {
               const txType = (formData.type || 'ex') as 'in' | 'ex';
-              const isAutoActive = !formData.cat || formData.cat === 'Auto';
               const livePredicted = predictCategoryFromTitle(formData.desc || '', txType);
+              const effectiveCategory =
+                !formData.cat || formData.cat === 'Auto'
+                  ? livePredicted.category
+                  : formData.cat;
+              const isCustomCategory = Boolean(
+                formData.cat && formData.cat !== 'Auto' && formData.cat !== livePredicted.category
+              );
+              const currentDate = formData.date || TODAY_DATE;
+              const currentTime = formData.time || getNowLocalTimeString();
+              const isToday = currentDate === TODAY_DATE;
 
               return (
                 <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                   <div className="fxb">
+                    {/* 1. Type selector: Daromad / Xarajat */}
                     <SlidingSegmentedNav
                       options={[
                         {
@@ -2891,229 +2915,422 @@ export default function UzHamyonPrototypeApp({
                           activeColor: '#B33A3A',
                         },
                       ]}
-                      value={formData.type}
-                      onChange={(val) => setFormData((prev) => ({ ...prev, type: val, cat: 'Auto' }))}
+                      value={formData.type || 'ex'}
+                      onChange={(val) => {
+                        setFormData((prev) => ({ ...prev, type: val, cat: 'Auto' }));
+                      }}
                       style={{ marginTop: '8px' }}
                     />
 
-                    {/* 2. Summa (Price) */}
-                    <label className="lb" htmlFor="tx-amount" style={{ display: 'block', marginBottom: '6px' }}>
-                      Summa (so&apos;m) <span style={{ color: '#D64D4D' }}>*</span>
-                    </label>
-                    <div style={{ position: 'relative' }}>
+                    {/* 2. Summa (so'm) — Majburiy */}
+                    <div style={{ marginTop: '14px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                        <label className="lb" htmlFor="tx-amount" style={{ margin: 0, fontWeight: 600 }}>
+                          Summa (so&apos;m) <span style={{ color: '#D64D4D' }}>*</span>
+                        </label>
+                        <span style={{ fontSize: '11px', color: '#71717A', fontWeight: 500 }}>Majburiy</span>
+                      </div>
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          id="tx-amount"
+                          className="in num"
+                          inputMode="numeric"
+                          placeholder="0"
+                          value={formData.amount || ''}
+                          onChange={(e) => setFormData((prev) => ({ ...prev, amount: formatNumberWithGaps(e.target.value) }))}
+                          style={{
+                            width: '100%',
+                            height: '50px',
+                            borderRadius: '16px',
+                            paddingRight: '64px',
+                            paddingLeft: '14px',
+                            fontSize: '18px',
+                            fontWeight: 700,
+                            border: '1.5px solid #D8DED3',
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                        <span
+                          style={{
+                            position: 'absolute',
+                            right: '12px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            color: '#5C6659',
+                            background: '#F0F3ED',
+                            padding: '4px 8px',
+                            borderRadius: '8px',
+                            border: '1px solid #E0E5DC',
+                            pointerEvents: 'none',
+                          }}
+                        >
+                          UZS
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* 3. Nomi (Title) — Majburiy */}
+                    <div style={{ marginTop: '14px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                        <label className="lb" htmlFor="tx-desc" style={{ margin: 0, fontWeight: 600 }}>
+                          Nomi (Title) <span style={{ color: '#D64D4D' }}>*</span>
+                        </label>
+                        <span style={{ fontSize: '11px', color: '#71717A', fontWeight: 500 }}>Majburiy</span>
+                      </div>
                       <input
-                        id="tx-amount"
-                        className="in num"
-                        inputMode="numeric"
-                        placeholder="0"
-                        value={formData.amount || ''}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, amount: formatNumberWithGaps(e.target.value) }))}
+                        id="tx-desc"
+                        className="in"
+                        placeholder={txType === 'in' ? 'Masalan: Oylik maosh, Keshbek, Mukofot...' : 'Masalan: Tushlik, Korzinka, Taksi, Benzin...'}
+                        value={formData.desc || ''}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, desc: e.target.value }))}
                         style={{
                           width: '100%',
-                          height: '50px',
-                          borderRadius: '16px',
-                          paddingRight: '64px',
-                          paddingLeft: '14px',
-                          fontSize: '18px',
-                          fontWeight: 700,
+                          height: '48px',
+                          borderRadius: '14px',
+                          padding: '0 14px',
                           border: '1.5px solid #D8DED3',
+                          fontSize: '14px',
+                          fontWeight: 500,
                           boxSizing: 'border-box',
                         }}
                       />
-                      <span
-                        style={{
-                          position: 'absolute',
-                          right: '12px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          fontSize: '12px',
-                          fontWeight: 700,
-                          color: '#5C6659',
-                          background: '#F0F3ED',
-                          padding: '4px 8px',
-                          borderRadius: '8px',
-                          border: '1px solid #E0E5DC',
-                          pointerEvents: 'none',
-                        }}
-                      >
-                        UZS
-                      </span>
                     </div>
 
-                    {/* 3. Nomi (Title) — Summadan keyin albatta kiritilishi kerak */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '14px', marginBottom: '6px' }}>
-                      <label className="lb" htmlFor="tx-desc" style={{ margin: 0 }}>
-                        Nomi (Title) <span style={{ color: '#D64D4D' }}>*</span>
-                      </label>
-                      <span style={{ fontSize: '11px', color: '#71717A', fontWeight: 500 }}>Majburiy</span>
-                    </div>
-                    <input
-                      id="tx-desc"
-                      className="in"
-                      placeholder={formData.type === 'in' ? 'Masalan: Oylik maosh, Keshbek, Mukofot...' : 'Masalan: Tushlik, Korzinka, Taksi, Benzin...'}
-                      value={formData.desc || ''}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, desc: e.target.value }))}
-                      style={{
-                        width: '100%',
-                        height: '48px',
-                        borderRadius: '14px',
-                        padding: '0 14px',
-                        border: '1.5px solid #D8DED3',
-                        fontSize: '14px',
-                        fontWeight: 500,
-                        boxSizing: 'border-box',
-                      }}
-                    />
-
-                    {/* 4. Kategoriya — ixcham ro‘yxat, AI avtomatik tanlaydi */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '14px', marginBottom: '8px' }}>
-                      <div className="lb" style={{ margin: 0 }}>Kategoriya</div>
-                      {isAutoActive && (
-                        <span
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '5px',
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            color: '#15803D',
-                            background: '#F0FDF4',
-                            padding: '3px 10px',
-                            borderRadius: '999px',
-                            border: '1px solid #BBF7D0',
-                          }}
-                        >
-                          <Sparkles size={12} style={{ color: '#16A34A' }} />
-                          AI: {livePredicted.category}
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      {(formData.type === 'in' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map((catName) => {
-                        const isAuto = catName === 'Auto';
-                        const isSelected = isAuto ? isAutoActive : formData.cat === catName;
-                        return (
-                          <button
-                            key={catName}
-                            type="button"
-                            className={`ch ${isSelected ? 'on' : ''}`}
-                            onClick={() => setFormData((prev) => ({ ...prev, cat: catName }))}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              padding: '8px 14px',
-                              borderRadius: '20px',
-                              cursor: 'pointer',
-                              fontSize: '13px',
-                              border: '1.5px solid',
-                              transition: 'all 0.15s ease',
-                              ...(isSelected
-                                ? {
-                                    backgroundColor: '#163300',
-                                    color: '#9FE870',
-                                    borderColor: '#163300',
-                                    fontWeight: 700,
-                                    boxShadow: '0 2px 8px rgba(22, 51, 0, 0.18)',
-                                  }
-                                : isAuto
-                                ? {
-                                    backgroundColor: '#F0FDF4',
-                                    color: '#15803D',
-                                    borderColor: '#BBF7D0',
-                                    fontWeight: 600,
-                                  }
-                                : {
-                                    backgroundColor: '#FFFFFF',
-                                    color: '#374151',
-                                    borderColor: '#E5E7EB',
-                                    fontWeight: 500,
-                                  }),
-                            }}
-                          >
-                            {isAuto ? (
-                              <Sparkles size={14} style={{ color: isSelected ? '#9FE870' : '#16A34A' }} />
-                            ) : (
-                              <CategoryIcon name={catName} size="xs" showBackground={false} />
-                            )}
-                            <span>{isAuto ? 'Auto (AI)' : catName}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {isAutoActive && (
+                    {/* 4. Kategoriya — Title ga qarab AI tomonidan belgilanadi */}
+                    <div style={{ marginTop: '12px' }}>
                       <div
                         style={{
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '8px',
-                          padding: '8px 12px',
-                          borderRadius: '10px',
-                          background: '#F0FDF4',
-                          border: '1px solid #BBF7D0',
-                          color: '#166534',
-                          fontSize: '11px',
-                          fontWeight: 500,
-                          marginTop: '8px',
+                          justifyContent: 'space-between',
+                          padding: '10px 14px',
+                          borderRadius: '14px',
+                          background: isCustomCategory ? '#F9FAFB' : '#F0FDF4',
+                          border: `1.5px solid ${isCustomCategory ? '#E5E7EB' : '#BBF7D0'}`,
+                          transition: 'all 0.15s ease',
                         }}
                       >
-                        <Sparkles size={13} style={{ color: '#16A34A', flexShrink: 0 }} />
-                        <span>
-                          AI titlega qarab toifani avtomatik tanlaydi: <strong>«{livePredicted.category}»</strong>
-                        </span>
-                      </div>
-                    )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                          <div
+                            style={{
+                              width: '32px',
+                              height: '32px',
+                              borderRadius: '10px',
+                              background: isCustomCategory ? '#374151' : '#163300',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <Sparkles size={16} style={{ color: '#9FE870' }} />
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: '11px', color: isCustomCategory ? '#6B7280' : '#15803D', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <span>{isCustomCategory ? 'Tanlangan kategoriya' : 'AI Kategoriya (avtomatik)'}</span>
+                            </div>
+                            <div style={{ fontSize: '14px', fontWeight: 700, color: '#163300', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '1px' }}>
+                              <CategoryIcon name={effectiveCategory} type={txType} size="xs" showBackground={false} />
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {effectiveCategory}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
 
-                    {/* 5. Sana & Vaqt */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '14px' }}>
-                      <div>
-                        <label className="lb" htmlFor="tx-date" style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '6px' }}>
-                          <Calendar size={13} style={{ color: '#163300' }} />
-                          <span>Sana</span>
-                        </label>
-                        <input
-                          id="tx-date"
-                          className="in"
-                          type="date"
-                          min={MIN_ALLOWED_DATE}
-                          max={TODAY_DATE}
-                          value={formData.date || TODAY_DATE}
-                          onChange={(e) => setFormData((prev) => ({ ...prev, date: e.target.value }))}
+                        <button
+                          type="button"
+                          onClick={() => setShowCategoryPicker((prev) => !prev)}
                           style={{
-                            width: '100%',
-                            height: '46px',
-                            borderRadius: '14px',
-                            border: '1.5px solid #D8DED3',
-                            padding: '0 10px',
-                            fontSize: '13px',
-                            fontWeight: 500,
-                            boxSizing: 'border-box',
+                            flexShrink: 0,
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            color: '#163300',
+                            background: '#FFFFFF',
+                            border: '1px solid #D8DED3',
+                            borderRadius: '10px',
+                            padding: '6px 10px',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
                           }}
-                        />
+                        >
+                          <span>{showCategoryPicker ? 'Yopish' : 'O‘zgartirish'}</span>
+                        </button>
                       </div>
-                      <div>
-                        <label className="lb" htmlFor="tx-time" style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '6px' }}>
-                          <Clock size={13} style={{ color: '#163300' }} />
-                          <span>Vaqt</span>
-                        </label>
-                        <input
-                          id="tx-time"
-                          className="in"
-                          type="time"
-                          value={formData.time || getNowLocalTimeString()}
-                          onChange={(e) => setFormData((prev) => ({ ...prev, time: e.target.value }))}
+
+                      {/* Boshqa kategoriya tanlash (ixtiyoriy) */}
+                      {showCategoryPicker && (
+                        <div
                           style={{
-                            width: '100%',
-                            height: '46px',
+                            marginTop: '8px',
+                            padding: '12px',
                             borderRadius: '14px',
-                            border: '1.5px solid #D8DED3',
-                            padding: '0 10px',
-                            fontSize: '13px',
-                            fontWeight: 500,
-                            boxSizing: 'border-box',
+                            background: '#F8FAF6',
+                            border: '1px solid #D8E0D4',
                           }}
-                        />
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 600, color: '#556052' }}>Kategoriyani tanlang:</span>
+                            {isCustomCategory && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setFormData((prev) => ({ ...prev, cat: 'Auto' }));
+                                  setShowCategoryPicker(false);
+                                }}
+                                style={{
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                  color: '#15803D',
+                                  background: 'none',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '3px',
+                                }}
+                              >
+                                <Sparkles size={11} />
+                                <span>AI-avtoga qaytish</span>
+                              </button>
+                            )}
+                          </div>
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            {(txType === 'in' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map((catName) => {
+                              const isAuto = catName === 'Auto';
+                              const isSelected = isAuto ? (!formData.cat || formData.cat === 'Auto') : formData.cat === catName;
+                              return (
+                                <button
+                                  key={catName}
+                                  type="button"
+                                  onClick={() => {
+                                    setFormData((prev) => ({ ...prev, cat: catName }));
+                                    setShowCategoryPicker(false);
+                                  }}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    padding: '6px 12px',
+                                    borderRadius: '16px',
+                                    cursor: 'pointer',
+                                    fontSize: '12px',
+                                    border: '1px solid',
+                                    backgroundColor: isSelected ? '#163300' : '#FFFFFF',
+                                    color: isSelected ? '#9FE870' : '#374151',
+                                    borderColor: isSelected ? '#163300' : '#E5E7EB',
+                                    fontWeight: isSelected ? 700 : 500,
+                                  }}
+                                >
+                                  {isAuto ? (
+                                    <Sparkles size={12} style={{ color: isSelected ? '#9FE870' : '#16A34A' }} />
+                                  ) : (
+                                    <CategoryIcon name={catName} size="xs" showBackground={false} />
+                                  )}
+                                  <span>{isAuto ? 'Auto (AI)' : catName}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 5. Vaqt — avtomatik hozirgi vaqt, bitta kichikroq button orqali o‘zgartiriladi */}
+                    <div style={{ marginTop: '12px' }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '10px 14px',
+                          borderRadius: '14px',
+                          background: '#F9FAFB',
+                          border: '1.5px solid #E5E7EB',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div
+                            style={{
+                              width: '32px',
+                              height: '32px',
+                              borderRadius: '10px',
+                              background: '#EEF2F6',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <Clock size={16} style={{ color: '#374151' }} />
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '11px', color: '#6B7280', fontWeight: 500 }}>
+                              Vaqt va sana (avtomatik)
+                            </div>
+                            <div style={{ fontSize: '13px', fontWeight: 700, color: '#1F2937', marginTop: '1px' }}>
+                              {isToday ? 'Bugun' : currentDate}, {currentTime}
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setShowDatePicker((prev) => !prev)}
+                          style={{
+                            flexShrink: 0,
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            color: '#374151',
+                            background: '#FFFFFF',
+                            border: '1px solid #D1D5DB',
+                            borderRadius: '10px',
+                            padding: '6px 10px',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                          }}
+                        >
+                          <Calendar size={13} style={{ color: '#4B5563' }} />
+                          <span>{showDatePicker ? 'Yopish' : 'O‘zgartirish'}</span>
+                        </button>
                       </div>
+
+                      {/* Expandable Date & Time Pickers */}
+                      {showDatePicker && (
+                        <div
+                          style={{
+                            marginTop: '8px',
+                            padding: '12px',
+                            borderRadius: '14px',
+                            background: '#F8FAF6',
+                            border: '1px solid #D8E0D4',
+                          }}
+                        >
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                            <div>
+                              <label
+                                htmlFor="tx-date-input"
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                  color: '#4B5563',
+                                  marginBottom: '4px',
+                                }}
+                              >
+                                <Calendar size={12} style={{ color: '#163300' }} />
+                                <span>Sana</span>
+                              </label>
+                              <input
+                                id="tx-date-input"
+                                className="in"
+                                type="date"
+                                min={MIN_ALLOWED_DATE}
+                                max={TODAY_DATE}
+                                value={formData.date || TODAY_DATE}
+                                onChange={(e) => setFormData((prev) => ({ ...prev, date: e.target.value }))}
+                                style={{
+                                  width: '100%',
+                                  height: '42px',
+                                  borderRadius: '12px',
+                                  border: '1.5px solid #D8DED3',
+                                  padding: '0 10px',
+                                  fontSize: '13px',
+                                  fontWeight: 500,
+                                  boxSizing: 'border-box',
+                                }}
+                              />
+                            </div>
+                            <div>
+                              <label
+                                htmlFor="tx-time-input"
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                  color: '#4B5563',
+                                  marginBottom: '4px',
+                                }}
+                              >
+                                <Clock size={12} style={{ color: '#163300' }} />
+                                <span>Vaqt</span>
+                              </label>
+                              <input
+                                id="tx-time-input"
+                                className="in"
+                                type="time"
+                                value={formData.time || getNowLocalTimeString()}
+                                onChange={(e) => setFormData((prev) => ({ ...prev, time: e.target.value }))}
+                                style={{
+                                  width: '100%',
+                                  height: '42px',
+                                  borderRadius: '12px',
+                                  border: '1.5px solid #D8DED3',
+                                  padding: '0 10px',
+                                  fontSize: '13px',
+                                  fontWeight: 500,
+                                  boxSizing: 'border-box',
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', paddingTop: '8px', borderTop: '1px solid #E5EBE0' }}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  date: TODAY_DATE,
+                                  time: getNowLocalTimeString(),
+                                }));
+                              }}
+                              style={{
+                                fontSize: '11px',
+                                color: '#166534',
+                                background: 'none',
+                                border: 'none',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                              }}
+                            >
+                              <RefreshCw size={11} />
+                              <span>Hozirgi vaqtga sozlash</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShowDatePicker(false)}
+                              style={{
+                                fontSize: '11px',
+                                color: '#4B5563',
+                                background: '#E5E7EB',
+                                border: 'none',
+                                borderRadius: '6px',
+                                padding: '3px 8px',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Tayyor
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {txError && (
