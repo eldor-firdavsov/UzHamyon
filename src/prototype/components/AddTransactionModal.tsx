@@ -7,6 +7,7 @@ import { formatUzbekCurrency } from '../tokens';
 import { predictCategoryFromTitle } from '@/lib/categories/predictCategory';
 import { formatNumberWithGaps } from '@/lib/formatters/numberGaps';
 import { getNowLocalDateString, getNowLocalTimeString, isValidCalendarDate, isValidTimeString } from '@/lib/transactions/dateTime';
+import { useModalScrollLock } from '@/lib/ui/useModalScrollLock';
 
 interface AddTransactionModalProps {
   isOpen: boolean;
@@ -19,6 +20,8 @@ export function AddTransactionModal({
   onClose,
   onAddTransaction,
 }: AddTransactionModalProps) {
+  useModalScrollLock(isOpen);
+
   const [type, setType] = useState<'expense' | 'income'>('expense');
   const [amountStr, setAmountStr] = useState('');
   const [name, setName] = useState('');
@@ -63,35 +66,39 @@ export function AddTransactionModal({
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-xs transition-opacity duration-300"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-xs transition-opacity duration-300 overscroll-contain touch-pan-y"
       aria-modal="true"
       role="dialog"
+      onClick={onClose}
     >
       {/* ── Slide-up Bottom Sheet (Mobile) / Centered Modal (Tablet/Desktop) ── */}
       <div 
-        className="w-full max-w-md rounded-t-[28px] sm:rounded-[24px] bg-white p-5 sm:p-6 shadow-[0_20px_50px_rgba(23,27,22,0.2)] border border-[#E8EBE5] max-h-[90vh] overflow-y-auto no-scrollbar"
+        className="w-full max-w-md rounded-t-[28px] sm:rounded-[24px] bg-white shadow-[0_20px_50px_rgba(23,27,22,0.2)] border border-[#E8EBE5] flex flex-col max-h-[90dvh] sm:max-h-[85dvh] overscroll-contain touch-pan-y overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Grab Handle for Mobile */}
-        <div className="w-12 h-1.5 bg-[#E8EBE5] rounded-full mx-auto mb-4 sm:hidden" />
-
-        {/* Modal Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-[#E8EBE5]">
-          <h3 className="text-base font-bold text-[#171B16] tracking-tight">
-            Yangi tranzaksiya
-          </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Yopish"
-            className="h-8 w-8 rounded-full bg-[#F7F8F5] text-[#697168] hover:text-[#171B16] flex items-center justify-center transition-colors cursor-pointer"
-          >
-            <X className="h-4 w-4" />
-          </button>
+        {/* Pinned Header */}
+        <div className="shrink-0 p-5 sm:p-6 pb-3 border-b border-[#E8EBE5] bg-white">
+          {/* Grab Handle for Mobile */}
+          <div className="w-12 h-1.5 bg-[#E8EBE5] rounded-full mx-auto mb-3 sm:hidden" />
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-bold text-[#171B16] tracking-tight">
+              Yangi tranzaksiya
+            </h3>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Yopish"
+              className="h-8 w-8 rounded-full bg-[#F7F8F5] text-[#697168] hover:text-[#171B16] flex items-center justify-center transition-colors cursor-pointer"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
-        <form onSubmit={handleSave} className="space-y-4 pt-4">
-          {/* 1. Type Switcher: Chiqim / Kirim */}
+        {/* Scrollable Form Body */}
+        <form onSubmit={handleSave} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y p-5 sm:p-6 space-y-4">
+            {/* 1. Type Switcher: Chiqim / Kirim */}
           <div className="grid grid-cols-2 gap-2 p-1 bg-[#F7F8F5] rounded-full border border-[#E8EBE5]">
             <button
               type="button"
@@ -243,9 +250,10 @@ export function AddTransactionModal({
               />
             </div>
           </div>
+        </div>
 
-          {/* 6. Action Buttons */}
-          <div className="grid grid-cols-2 gap-2.5 pt-3 border-t border-[#E8EBE5]">
+        {/* 6. Action Buttons — Pinned at bottom */}
+          <div className="shrink-0 p-4 sm:p-6 pt-3 border-t border-[#E8EBE5] bg-white grid grid-cols-2 gap-2.5">
             <button
               type="button"
               onClick={onClose}

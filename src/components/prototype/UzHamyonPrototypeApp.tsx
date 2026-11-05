@@ -11,6 +11,7 @@ import {
   matchPredictedToDbCategory,
 } from '@/lib/categories/predictCategory';
 import { formatNumberWithGaps } from '@/lib/formatters/numberGaps';
+import { useModalScrollLock } from '@/lib/ui/useModalScrollLock';
 import type { Category } from '@/types/database';
 import {
   Sparkles,
@@ -424,6 +425,7 @@ export default function UzHamyonPrototypeApp({
 
   // ── Modal Sheet & Form State ──
   const [activeSheet, setActiveSheet] = useState<SheetType>(initialSheet);
+  useModalScrollLock(Boolean(activeSheet));
   const [editId, setEditId] = useState<string | null>(null);
   const [activeGoalId, setActiveGoalId] = useState<string | null>(null);
   const [confirmConfig, setConfirmConfig] = useState<{ k: 'tx' | 'budget' | 'goal'; id: string } | null>(null);

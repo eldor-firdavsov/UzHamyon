@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { AlertTriangle, Loader2 } from 'lucide-react';
+import { useModalScrollLock } from '@/lib/ui/useModalScrollLock';
 
 interface DeleteConfirmModalProps {
   isOpen: boolean;
@@ -18,11 +19,21 @@ export default function DeleteConfirmModal({
   onConfirm,
   onCancel,
 }: DeleteConfirmModalProps) {
+  useModalScrollLock(isOpen);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
-      <div className="w-full max-w-md rounded-2xl border border-[#D5DED7] bg-white p-6 sm:p-7 shadow-xl animate-in fade-in zoom-in-95 duration-150">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs overscroll-contain touch-pan-y"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !isDeleting) onCancel();
+      }}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl border border-[#D5DED7] bg-white p-6 sm:p-7 shadow-xl animate-in fade-in zoom-in-95 duration-150 overscroll-contain touch-pan-y"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center gap-3.5 text-[#C74747] mb-4">
           <div className="h-11 w-11 rounded-xl bg-rose-50 flex items-center justify-center border border-rose-100 shrink-0">
             <AlertTriangle className="h-5 w-5 text-[#C74747]" />

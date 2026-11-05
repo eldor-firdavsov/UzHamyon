@@ -17,6 +17,7 @@ import {
 
 import { GappedNumberInput } from '@/components/ui/GappedNumberInput';
 import { formatNumberWithGaps, parseNumberFromGaps, cleanNumberGaps } from '@/lib/formatters/numberGaps';
+import { useModalScrollLock } from '@/lib/ui/useModalScrollLock';
 
 interface TransactionModalProps {
   isOpen: boolean;
@@ -126,9 +127,12 @@ function TransactionModalForm({
   };
 
   return (
-    <div className="w-full max-w-lg rounded-2xl border border-[#D5DED7] bg-white p-6 sm:p-7 shadow-xl animate-in fade-in zoom-in-95 duration-150 my-8">
-      {/* Header */}
-      <div className="flex items-center justify-between pb-4 border-b border-[#D5DED7]">
+    <div
+      className="w-full max-w-lg rounded-t-[28px] sm:rounded-2xl border border-[#D5DED7] bg-white shadow-2xl flex flex-col max-h-[90dvh] sm:max-h-[85dvh] overscroll-contain touch-pan-y overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-150"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* Header — Pinned at top */}
+      <div className="shrink-0 flex items-center justify-between p-5 sm:p-6 pb-3 sm:pb-4 border-b border-[#D5DED7] bg-white">
         <div>
           <h2 id="modal-title" className="text-xl font-semibold text-[#17211B] tracking-tight">
             {isEditing ? 'Tranzaksiyani tahrirlash' : 'Tranzaksiya qo‘shish'}
@@ -150,235 +154,237 @@ function TransactionModalForm({
         </button>
       </div>
 
-      {/* Form Error Banner */}
-      {formError && (
-        <div
-          id="modal-error-banner"
-          className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-sm font-medium text-[#C74747] flex items-start justify-between"
-        >
-          <span>{formError}</span>
-          <button
-            type="button"
-            onClick={() => setFormError(null)}
-            className="text-[#C74747] underline text-xs ml-2"
-          >
-            Yopish
-          </button>
-        </div>
-      )}
-
-      {/* Form */}
-      <form onSubmit={handleSubmit} className="mt-5 space-y-4">
-        {/* 1. Tranzaksiya turi (Chiqim / Kirim) */}
-        <div>
-          <label className="block text-sm font-medium text-[#47544C] mb-1.5">
-            Tranzaksiya turi
-          </label>
-          <div className="grid grid-cols-2 gap-2.5">
-            <button
-              type="button"
-              id="type-expense-btn"
-              onClick={() => {
-                setType('expense');
-                if (!isEditing) setCategoryId('auto');
-              }}
-              className={`min-h-[44px] py-2 px-3 text-sm font-semibold rounded-xl border transition-all ${
-                type === 'expense'
-                  ? 'border-[#C74747] bg-rose-50 text-[#C74747]'
-                  : 'border-[#D5DED7] bg-white text-[#47544C] hover:bg-[#F7F9F7]'
-              }`}
+      {/* Form — Flex column with independently scrollable body and pinned footer */}
+      <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y p-5 sm:p-6 space-y-4">
+          {/* Form Error Banner */}
+          {formError && (
+            <div
+              id="modal-error-banner"
+              className="rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-sm font-medium text-[#C74747] flex items-start justify-between"
             >
-              Chiqim (Xarajat)
-            </button>
-            <button
-              type="button"
-              id="type-income-btn"
-              onClick={() => {
-                setType('income');
-                if (!isEditing) setCategoryId('auto');
-              }}
-              className={`min-h-[44px] py-2 px-3 text-sm font-semibold rounded-xl border transition-all ${
-                type === 'income'
-                  ? 'border-[#176B45] bg-[#DDF3E5] text-[#176B45]'
-                  : 'border-[#D5DED7] bg-white text-[#47544C] hover:bg-[#F7F9F7]'
-              }`}
-            >
-              Kirim (Daromad)
-            </button>
-          </div>
-        </div>
-
-        {/* 2. Summa (Amount) */}
-        <div>
-          <label htmlFor="amount-input" className="block text-sm font-medium text-[#47544C] mb-1.5">
-            Summa (so‘m) <span className="text-[#C74747]">*</span>
-          </label>
-          <div className="relative">
-            <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#5A675F]">
-              <Coins className="h-4 w-4" />
-            </span>
-            <GappedNumberInput
-              id="amount-input"
-              required
-              placeholder="0"
-              value={amount}
-              onChange={(formatted) => setAmount(formatted)}
-              className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white pl-10 pr-3.5 py-2.5 text-base text-[#17211B] font-semibold font-mono tabular-nums focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all"
-            />
-          </div>
-        </div>
-
-        {/* 3. Title (Nomi) — ALBATTA BO‘LISHI KERAK */}
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label htmlFor="description-input" className="block text-sm font-medium text-[#47544C]">
-              Nomi (Title) <span className="text-[#C74747]">*</span>
-            </label>
-            <span className="text-xs text-[#71717A]">Majburiy</span>
-          </div>
-          <input
-            id="description-input"
-            type="text"
-            required
-            placeholder={
-              type === 'expense'
-                ? 'Masalan: Tushlik, Supermarket, Yoqilg‘i...'
-                : 'Masalan: Oylik maosh, Keshbek, Mukofot...'
-            }
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white px-3.5 py-2.5 text-sm text-[#17211B] placeholder-[#5A675F] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all font-medium"
-          />
-        </div>
-
-        {/* 4. Kategoriya (AI Titlega qarab avtomatik tanlaydi) */}
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label htmlFor="category-select" className="block text-sm font-medium text-[#47544C]">
-              Kategoriya
-            </label>
-            {isAutoCategory && (
-              <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#15803D] bg-[#F0FDF4] px-2 py-0.5 rounded-full border border-[#BBF7D0]">
-                <Sparkles className="h-3 w-3 text-[#16A34A]" />
-                AI: {predicted.category}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2.5">
-            <CategoryIcon
-              name={isAutoCategory ? 'Auto' : getCategoryDisplayName(compatibleCategories.find((c) => c.id === effectiveCatId)?.name || '')}
-              type={type === 'income' ? 'in' : 'ex'}
-              size="sm"
-            />
-            <div className="relative flex-1">
-              <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#5A675F]">
-                <Tag className="h-4 w-4" />
-              </span>
-              <select
-                id="category-select"
-                value={categoryId || 'auto'}
-                onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white pl-10 pr-3.5 py-2.5 text-sm text-[#17211B] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all font-semibold"
+              <span>{formError}</span>
+              <button
+                type="button"
+                onClick={() => setFormError(null)}
+                className="text-[#C74747] underline text-xs ml-2"
               >
-                <option value="auto">Auto (AI titlega qarab tanlaydi)</option>
-                {compatibleCategories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {getCategoryDisplayName(c.name)}
-                  </option>
-                ))}
-              </select>
+                Yopish
+              </button>
+            </div>
+          )}
+
+          {/* 1. Tranzaksiya turi (Chiqim / Kirim) */}
+          <div>
+            <label className="block text-sm font-medium text-[#47544C] mb-1.5">
+              Tranzaksiya turi
+            </label>
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                id="type-expense-btn"
+                onClick={() => {
+                  setType('expense');
+                  if (!isEditing) setCategoryId('auto');
+                }}
+                className={`min-h-[44px] py-2 px-3 text-sm font-semibold rounded-xl border transition-all ${
+                  type === 'expense'
+                    ? 'border-[#C74747] bg-rose-50 text-[#C74747]'
+                    : 'border-[#D5DED7] bg-white text-[#47544C] hover:bg-[#F7F9F7]'
+                }`}
+              >
+                Chiqim (Xarajat)
+              </button>
+              <button
+                type="button"
+                id="type-income-btn"
+                onClick={() => {
+                  setType('income');
+                  if (!isEditing) setCategoryId('auto');
+                }}
+                className={`min-h-[44px] py-2 px-3 text-sm font-semibold rounded-xl border transition-all ${
+                  type === 'income'
+                    ? 'border-[#176B45] bg-[#DDF3E5] text-[#176B45]'
+                    : 'border-[#D5DED7] bg-white text-[#47544C] hover:bg-[#F7F9F7]'
+                }`}
+              >
+                Kirim (Daromad)
+              </button>
             </div>
           </div>
-          {isAutoCategory && (
-            <p className="text-xs text-[#5A675F] mt-1.5 flex items-center gap-1">
-              <Sparkles className="h-3 w-3 text-[#16A34A] shrink-0" />
-              <span>AI title asosida avtomatik <strong>«{predicted.category}»</strong> toifasini tanlaydi</span>
-            </p>
-          )}
-        </div>
 
-        {/* 5. Izoh, Sana & Vaqt */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* 2. Summa (Amount) */}
           <div>
-            <label htmlFor="notes-input" className="block text-sm font-medium text-[#47544C] mb-1.5">
-              Izoh <span className="text-[#71717A] font-normal">(ixtiyoriy)</span>
+            <label htmlFor="amount-input" className="block text-sm font-medium text-[#47544C] mb-1.5">
+              Summa (so‘m) <span className="text-[#C74747]">*</span>
             </label>
             <div className="relative">
               <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#5A675F]">
-                <FileText className="h-4 w-4" />
+                <Coins className="h-4 w-4" />
+              </span>
+              <GappedNumberInput
+                id="amount-input"
+                required
+                placeholder="0"
+                value={amount}
+                onChange={(formatted) => setAmount(formatted)}
+                className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white pl-10 pr-3.5 py-2.5 text-base text-[#17211B] font-semibold font-mono tabular-nums focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all"
+              />
+            </div>
+          </div>
+
+          {/* 3. Title (Nomi) — ALBATTA BO‘LISHI KERAK */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label htmlFor="description-input" className="block text-sm font-medium text-[#47544C]">
+                Nomi (Title) <span className="text-[#C74747]">*</span>
+              </label>
+              <span className="text-xs text-[#71717A]">Majburiy</span>
+            </div>
+            <input
+              id="description-input"
+              type="text"
+              required
+              placeholder={
+                type === 'expense'
+                  ? 'Masalan: Tushlik, Supermarket, Yoqilg‘i...'
+                  : 'Masalan: Oylik maosh, Keshbek, Mukofot...'
+              }
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white px-3.5 py-2.5 text-sm text-[#17211B] placeholder-[#5A675F] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all font-medium"
+            />
+          </div>
+
+          {/* 4. Kategoriya (AI Titlega qarab avtomatik tanlaydi) */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label htmlFor="category-select" className="block text-sm font-medium text-[#47544C]">
+                Kategoriya
+              </label>
+              {isAutoCategory && (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#15803D] bg-[#F0FDF4] px-2 py-0.5 rounded-full border border-[#BBF7D0]">
+                  <Sparkles className="h-3 w-3 text-[#16A34A]" />
+                  AI: {predicted.category}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2.5">
+              <CategoryIcon
+                name={isAutoCategory ? 'Auto' : getCategoryDisplayName(compatibleCategories.find((c) => c.id === effectiveCatId)?.name || '')}
+                type={type === 'income' ? 'in' : 'ex'}
+                size="sm"
+              />
+              <div className="relative flex-1">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#5A675F]">
+                  <Tag className="h-4 w-4" />
+                </span>
+                <select
+                  id="category-select"
+                  value={categoryId || 'auto'}
+                  onChange={(e) => setCategoryId(e.target.value)}
+                  className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white pl-10 pr-3.5 py-2.5 text-sm text-[#17211B] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all font-semibold"
+                >
+                  <option value="auto">Auto (AI titlega qarab tanlaydi)</option>
+                  {compatibleCategories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {getCategoryDisplayName(c.name)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {isAutoCategory && (
+              <p className="text-xs text-[#5A675F] mt-1.5 flex items-center gap-1">
+                <Sparkles className="h-3 w-3 text-[#16A34A] shrink-0" />
+                <span>AI title asosida avtomatik <strong>«{predicted.category}»</strong> toifasini tanlaydi</span>
+              </p>
+            )}
+          </div>
+
+          {/* 5. Izoh, Sana & Vaqt */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label htmlFor="notes-input" className="block text-sm font-medium text-[#47544C] mb-1.5">
+                Izoh <span className="text-[#71717A] font-normal">(ixtiyoriy)</span>
+              </label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#5A675F]">
+                  <FileText className="h-4 w-4" />
+                </span>
+                <input
+                  id="notes-input"
+                  type="text"
+                  placeholder="Qayd..."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white pl-10 pr-3.5 py-2.5 text-sm text-[#17211B] placeholder-[#5A675F] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="date-input" className="block text-sm font-medium text-[#47544C] mb-1.5">
+                Sana <span className="text-[#C74747]">*</span>
+              </label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#5A675F]">
+                  <Calendar className="h-4 w-4" />
+                </span>
+                <input
+                  id="date-input"
+                  type="date"
+                  required
+                  value={transactionDate}
+                  onChange={(e) => setTransactionDate(e.target.value)}
+                  className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white pl-10 pr-3.5 py-2.5 text-sm text-[#17211B] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all font-medium"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="time-input" className="block text-sm font-medium text-[#47544C] mb-1.5">
+                Vaqt <span className="text-[#C74747]">*</span>
+              </label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#5A675F]">
+                  <Clock className="h-4 w-4" />
+                </span>
+                <input
+                  id="time-input"
+                  type="time"
+                  required
+                  value={transactionTime}
+                  onChange={(e) => setTransactionTime(e.target.value)}
+                  className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white pl-10 pr-3.5 py-2.5 text-sm text-[#17211B] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all font-medium"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Qo'shimcha: Savdo nuqtasi (ixtiyoriy) */}
+          <div>
+            <label htmlFor="merchant-input" className="block text-sm font-medium text-[#47544C] mb-1.5">
+              Savdo nuqtasi <span className="text-[#71717A] font-normal">(ixtiyoriy)</span>
+            </label>
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#5A675F]">
+                <Building2 className="h-4 w-4" />
               </span>
               <input
-                id="notes-input"
+                id="merchant-input"
                 type="text"
-                placeholder="Qayd..."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Masalan: Korzinka, Makro, Shell..."
+                value={merchant}
+                onChange={(e) => setMerchant(e.target.value)}
                 className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white pl-10 pr-3.5 py-2.5 text-sm text-[#17211B] placeholder-[#5A675F] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all"
               />
             </div>
           </div>
-
-          <div>
-            <label htmlFor="date-input" className="block text-sm font-medium text-[#47544C] mb-1.5">
-              Sana <span className="text-[#C74747]">*</span>
-            </label>
-            <div className="relative">
-              <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#5A675F]">
-                <Calendar className="h-4 w-4" />
-              </span>
-              <input
-                id="date-input"
-                type="date"
-                required
-                value={transactionDate}
-                onChange={(e) => setTransactionDate(e.target.value)}
-                className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white pl-10 pr-3.5 py-2.5 text-sm text-[#17211B] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all font-medium"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="time-input" className="block text-sm font-medium text-[#47544C] mb-1.5">
-              Vaqt <span className="text-[#C74747]">*</span>
-            </label>
-            <div className="relative">
-              <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#5A675F]">
-                <Clock className="h-4 w-4" />
-              </span>
-              <input
-                id="time-input"
-                type="time"
-                required
-                value={transactionTime}
-                onChange={(e) => setTransactionTime(e.target.value)}
-                className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white pl-10 pr-3.5 py-2.5 text-sm text-[#17211B] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all font-medium"
-              />
-            </div>
-          </div>
         </div>
 
-        {/* Qo'shimcha: Savdo nuqtasi (ixtiyoriy) */}
-        <div>
-          <label htmlFor="merchant-input" className="block text-sm font-medium text-[#47544C] mb-1.5">
-            Savdo nuqtasi <span className="text-[#71717A] font-normal">(ixtiyoriy)</span>
-          </label>
-          <div className="relative">
-            <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#5A675F]">
-              <Building2 className="h-4 w-4" />
-            </span>
-            <input
-              id="merchant-input"
-              type="text"
-              placeholder="Masalan: Korzinka, Makro, Shell..."
-              value={merchant}
-              onChange={(e) => setMerchant(e.target.value)}
-              className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white pl-10 pr-3.5 py-2.5 text-sm text-[#17211B] placeholder-[#5A675F] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all"
-            />
-          </div>
-        </div>
-
-        {/* 6. Tranzaksiya qo‘shish */}
-        <div className="pt-4 border-t border-[#D5DED7] flex items-center justify-end gap-3">
+        {/* 6. Tranzaksiya qo‘shish — Pinned at bottom of modal */}
+        <div className="shrink-0 p-4 sm:p-6 pt-3 border-t border-[#D5DED7] bg-white flex items-center justify-end gap-3">
           <button
             type="button"
             id="cancel-modal-btn"
@@ -410,12 +416,17 @@ function TransactionModalForm({
 }
 
 export default function TransactionModal(props: TransactionModalProps) {
+  useModalScrollLock(props.isOpen);
+
   if (!props.isOpen) return null;
 
   return (
     <div
       id="transaction-modal-backdrop"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-xs p-0 sm:p-4 overscroll-contain touch-pan-y"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !props.isSaving) props.onClose();
+      }}
     >
       <TransactionModalForm {...props} />
     </div>

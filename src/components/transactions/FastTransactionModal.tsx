@@ -14,6 +14,7 @@ import {
   isValidCalendarDate,
   isValidTimeString,
 } from '@/lib/transactions/dateTime';
+import { useModalScrollLock } from '@/lib/ui/useModalScrollLock';
 
 export interface FastTransactionModalProps {
   isOpen: boolean;
@@ -28,6 +29,8 @@ export default function FastTransactionModal({
   onSuccess,
   categories: initialCategories,
 }: FastTransactionModalProps) {
+  useModalScrollLock(isOpen);
+
   const router = useRouter();
   const amountInputRef = useRef<HTMLInputElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -193,19 +196,20 @@ export default function FastTransactionModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-xs p-0 sm:p-4 animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-xs p-0 sm:p-4 animate-in fade-in duration-150 overscroll-contain touch-pan-y"
       onClick={(e) => {
         if (e.target === e.currentTarget && !isSubmitting) onClose();
       }}
     >
       <div
-        className="w-full max-w-lg bg-white rounded-t-[28px] sm:rounded-[26px] border border-[#E8EBE5] shadow-2xl p-6 sm:p-7 space-y-5 animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto"
+        className="w-full max-w-lg bg-white rounded-t-[28px] sm:rounded-[26px] border border-[#E8EBE5] shadow-2xl flex flex-col max-h-[90dvh] sm:max-h-[85dvh] overscroll-contain touch-pan-y overflow-hidden animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-150"
         role="dialog"
         aria-modal="true"
         aria-labelledby="fast-transaction-title"
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="flex items-center justify-between pb-3.5 border-b border-[#E8EBE5]">
+        <div className="shrink-0 flex items-center justify-between p-5 sm:p-6 pb-3.5 border-b border-[#E8EBE5] bg-white">
           <h2 id="fast-transaction-title" className="text-xl font-bold tracking-tight text-[#163300]">
             Tranzaksiya qo‘shish
           </h2>
@@ -221,29 +225,31 @@ export default function FastTransactionModal({
           </button>
         </div>
 
-        {/* Error Notice */}
-        {error && (
-          <div
-            id="fast-transaction-error"
-            className="p-3.5 rounded-xl bg-[#FDF2F2] border border-[#D64D4D]/20 text-sm text-[#D64D4D] font-medium"
-          >
-            {error}
-          </div>
-        )}
+        {/* Scrollable Form Body */}
+        <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y p-5 sm:p-6 space-y-4">
+            {/* Error Notice */}
+            {error && (
+              <div
+                id="fast-transaction-error"
+                className="p-3.5 rounded-xl bg-[#FDF2F2] border border-[#D64D4D]/20 text-sm text-[#D64D4D] font-medium"
+              >
+                {error}
+              </div>
+            )}
 
-        {/* Success Notice */}
-        {successMessage && (
-          <div
-            id="fast-transaction-success"
-            className="p-3.5 rounded-xl bg-[#EDF8F1] border border-[#26834A]/20 text-sm text-[#26834A] font-medium flex items-center gap-2"
-          >
-            <Check className="h-4 w-4" />
-            <span>{successMessage}</span>
-          </div>
-        )}
+            {/* Success Notice */}
+            {successMessage && (
+              <div
+                id="fast-transaction-success"
+                className="p-3.5 rounded-xl bg-[#EDF8F1] border border-[#26834A]/20 text-sm text-[#26834A] font-medium flex items-center gap-2"
+              >
+                <Check className="h-4 w-4" />
+                <span>{successMessage}</span>
+              </div>
+            )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* 1. Xarajat yoki Daromad (Tranzaksiya turi) */}
+            {/* 1. Xarajat yoki Daromad (Tranzaksiya turi) */}
           <div>
             <label className="block text-sm font-semibold text-[#5C6659] mb-1.5">
               Tranzaksiya turi
@@ -431,8 +437,10 @@ export default function FastTransactionModal({
             </div>
           </div>
 
-          {/* 6. Tranzaksiya qo‘shish */}
-          <div className="pt-2.5 flex items-center gap-3">
+          </div>
+
+          {/* 6. Tranzaksiya qo‘shish — Pinned action buttons */}
+          <div className="shrink-0 p-4 sm:p-6 pt-3 border-t border-[#E8EBE5] bg-white flex items-center gap-3">
             <button
               type="button"
               id="fast-tx-cancel-btn"
