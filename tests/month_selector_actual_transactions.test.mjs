@@ -39,7 +39,11 @@ function createMockSupabase(transactionsTable = []) {
             if (a[col] > b[col]) return ascending ? 1 : -1;
             return 0;
           });
-          return Promise.resolve({ data: filtered, error: null });
+          return queryBuilder;
+        },
+        // Supabase builders are thenable; awaiting the chain resolves the rows.
+        then(resolve, reject) {
+          return Promise.resolve({ data: filtered, error: null }).then(resolve, reject);
         },
       };
 

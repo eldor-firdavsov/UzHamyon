@@ -6,7 +6,7 @@ import fs from 'node:fs';
 
 let envContent = '';
 try {
-  envContent = fs.readFileSync('/home/eldor_firdavsov/Desktop/SpendSense/.env.local', 'utf8');
+  envContent = fs.readFileSync(new URL('../.env.local', import.meta.url).pathname, 'utf8');
 } catch {
   // ignore
 }
@@ -62,9 +62,7 @@ describe('Phase 15 — Functional Frontend and SSR Routing Tests', () => {
       const { execSync } = await import('node:child_process');
       const { createClient } = await import('@supabase/supabase-js');
       const keys = JSON.parse(
-        execSync(
-          '/home/eldor_firdavsov/.local/bin/supabase projects api-keys --project-ref omzreoaaownshtzpqsdt --reveal --output json'
-        ).toString()
+        JSON.stringify([{ name: 'service_role', api_key: (process.env.SUPABASE_SERVICE_ROLE_KEY || (fs.existsSync('.env.local') ? fs.readFileSync('.env.local', 'utf8').match(/SUPABASE_SERVICE_ROLE_KEY=(.+)/)?.[1]?.trim() : '')) }])
       );
       const serviceKey = keys.find(
         (k) => k.name === 'service_role' || k.type === 'service_role' || k.name?.includes('service_role')

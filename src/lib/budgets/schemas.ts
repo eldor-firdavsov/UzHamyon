@@ -60,7 +60,7 @@ export const updateBudgetSchema = z.object({
     .uuid()
     .optional()
     .nullable()
-    .transform((val) => (val === '' || val === undefined ? null : val)),
+    .transform((val) => (val === '' ? null : val)),
 }).refine(
   (data) => {
     if (data.start_date && data.end_date) {

@@ -1,23 +1,55 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { execSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { askFinancialAdvisor } from '../src/lib/ai/advisorService.ts';
 import { createTransaction } from '../src/lib/transactions/service.ts';
 
-const envContent = fs.readFileSync('/home/eldor_firdavsov/Desktop/SpendSense/.env.local', 'utf8');
-const supabaseUrl = envContent.match(/NEXT_PUBLIC_SUPABASE_URL=(.+)/)?.[1]?.trim();
-const anonKey = envContent.match(/NEXT_PUBLIC_SUPABASE_ANON_KEY=(.+)/)?.[1]?.trim();
+function readEnv(name) {
+  if (process.env[name]) return process.env[name];
+  try {
+    const envContent = fs.readFileSync(new URL('../.env.local', import.meta.url), 'utf8');
+    return envContent.match(new RegExp(`^${name}=(.+)$`, 'm'))?.[1]?.trim();
+  } catch {
+    return undefined;
+  }
+}
 
-const BASE_URL = 'http://localhost:3000';
+const supabaseUrl = readEnv('NEXT_PUBLIC_SUPABASE_URL');
+const anonKey = readEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
+const serviceKey = readEnv('SUPABASE_SERVICE_ROLE_KEY');
+const canRun = Boolean(supabaseUrl && anonKey && serviceKey);
 
-describe('SpendSense AI — AI Yordamchi To‘liq Pipeline va Diagnostika Testlari', () => {
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
+
+describe(
+  'SpendSense AI — AI Yordamchi To‘liq Pipeline va Diagnostika Testlari',
+  { skip: !canRun && 'Supabase URL, anon key and service role key are required' },
+  () => {
   let adminClient;
   let userClient;
   let userId;
   let authCookieHeader = '';
+  let accessToken = '';
+
+  async function callAdvisorApi(path, options = {}) {
+    const headers = {
+      'Content-Type': 'application/json',
+      Cookie: authCookieHeader,
+      Authorization: 'Bearer ' + accessToken,
+      ...(options.headers || {}),
+    };
+    try {
+      return await fetch(BASE_URL + path, { ...options, headers });
+    } catch (err) {
+      if (err?.cause?.code === 'ECONNREFUSED' || err?.message?.includes('fetch failed')) {
+        const { default: app } = await import('../server/server.ts');
+        return await app.request(path, { ...options, headers });
+      }
+      throw err;
+    }
+  }
 
   const testUserData = {
     email: `ai_advisor_test_${Date.now()}@example.com`,
@@ -25,16 +57,7 @@ describe('SpendSense AI — AI Yordamchi To‘liq Pipeline va Diagnostika Testla
   };
 
   before(async () => {
-    const keys = JSON.parse(
-      execSync(
-        '/home/eldor_firdavsov/.local/bin/supabase projects api-keys --project-ref omzreoaaownshtzpqsdt --reveal --output json'
-      ).toString()
-    );
-    const serviceKey = keys.find(
-      (k) => k.name === 'service_role' || k.type === 'service_role' || k.name?.includes('service_role')
-    )?.api_key;
     assert.ok(serviceKey, 'Service role key required');
-
     adminClient = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
     // Set up SSR client to capture valid Next.js Supabase cookies
@@ -72,6 +95,7 @@ describe('SpendSense AI — AI Yordamchi To‘liq Pipeline va Diagnostika Testla
       refresh_token: loginRes.session.refresh_token,
     });
 
+    accessToken = loginRes.session.access_token;
     authCookieHeader = Object.entries(capturedCookies)
       .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
       .join('; ');
@@ -206,15 +230,9 @@ describe('SpendSense AI — AI Yordamchi To‘liq Pipeline va Diagnostika Testla
   });
 
   test('Test F: API orqali so‘rov xatolik berganida foydalanuvchiga tushunarli xabar qaytariladi', async () => {
-    const apiRes = await fetch(`${BASE_URL}/api/ai/advisor`, {
+    const apiRes = await callAdvisorApi('/api/ai/advisor', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Cookie: authCookieHeader,
-      },
-      body: JSON.stringify({
-        question: '', // Empty question
-      }),
+      body: JSON.stringify({ question: '' }),
     });
 
     assert.equal(apiRes.status, 400, 'Bo‘sh savol 400 xatolik qaytarishi kerak');
@@ -223,12 +241,8 @@ describe('SpendSense AI — AI Yordamchi To‘liq Pipeline va Diagnostika Testla
   });
 
   test('End-to-End HTTP API: Avtorizatsiyalangan foydalanuvchi /api/ai/advisor orqali to‘liq javob oladi', async () => {
-    const apiRes = await fetch(`${BASE_URL}/api/ai/advisor`, {
+    const apiRes = await callAdvisorApi('/api/ai/advisor', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Cookie: authCookieHeader,
-      },
       body: JSON.stringify({
         question: 'Sentabr va oktabr oylarida qancha pulim tejab qolingan?',
       }),

@@ -5,7 +5,10 @@ import { createClient } from '@supabase/supabase-js';
 import { verifyTelegramWebAppData, getOrCreateTelegramUser } from '../src/lib/telegram/auth.ts';
 import { isReturningTelegramUser } from '../src/lib/telegram/bot.ts';
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '9085840931:AAHXfmvbGSqJYKARmpwsvh352SeR2dMHOo4';
+// Never embed the production bot token in source. Integration runs must supply
+// the real token via the environment; a dummy is used otherwise so the HMAC
+// unit checks can still run offline.
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || 'test-only-token-not-real';
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://omzreoaaownshtzpqsdt.supabase.co';
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -29,7 +32,10 @@ function generateSignedInitData(tgUser, options = {}) {
   return params.toString();
 }
 
-test('1. Telegram Bot Profile & Commands Live API Verification', async () => {
+test(
+  '1. Telegram Bot Profile & Commands Live API Verification',
+  { skip: !process.env.TELEGRAM_BOT_TOKEN && 'TELEGRAM_BOT_TOKEN is not configured' },
+  async () => {
   const get = async (method) => {
     for (let i = 0; i < 3; i++) {
       try {
@@ -101,7 +107,10 @@ test('2. Telegram HMAC-SHA256 Cryptographic Verification', async () => {
   assert.match(noHashResult.error, /hash/i);
 });
 
-test('3. Telegram Authentication: New User Flow (No Email/Password Required)', async () => {
+test(
+  '3. Telegram Authentication: New User Flow (No Email/Password Required)',
+  { skip: (!SERVICE_KEY || !ANON_KEY) && 'Supabase service/anon keys are not configured' },
+  async () => {
   const admin = createClient(SUPABASE_URL, SERVICE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
@@ -177,7 +186,10 @@ test('3. Telegram Authentication: New User Flow (No Email/Password Required)', a
   }
 });
 
-test('4. Data Isolation & Row Level Security for Telegram Users', async () => {
+test(
+  '4. Data Isolation & Row Level Security for Telegram Users',
+  { skip: (!SERVICE_KEY || !ANON_KEY) && 'Supabase service/anon keys are not configured' },
+  async () => {
   const admin = createClient(SUPABASE_URL, SERVICE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
   });

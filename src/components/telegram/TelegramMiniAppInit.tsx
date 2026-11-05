@@ -54,6 +54,26 @@ export default function TelegramMiniAppInit() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
+    // iOS WKWebView (Telegram) still honours Safari gestures in some versions
+    // even with user-scalable=no. Blocking these does not affect panning,
+    // scrolling, text selection or the on-screen keyboard.
+    const inTelegram = Boolean(window.Telegram?.WebApp);
+    if (inTelegram) {
+      const preventGesture = (event: Event) => event.preventDefault();
+      document.addEventListener('gesturestart', preventGesture);
+      document.addEventListener('gesturechange', preventGesture);
+      document.addEventListener('gestureend', preventGesture);
+      return () => {
+        document.removeEventListener('gesturestart', preventGesture);
+        document.removeEventListener('gesturechange', preventGesture);
+        document.removeEventListener('gestureend', preventGesture);
+      };
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     const tg = window.Telegram?.WebApp;
     if (!tg || !tg.initData) {
       // Opened in standard web browser outside Telegram, do nothing
@@ -118,7 +138,7 @@ export default function TelegramMiniAppInit() {
     }
 
     // Check if session already exists
-    supabase.auth.getSession().then(async (res: any) => {
+    supabase.auth.getSession().then(async (res: Awaited<ReturnType<typeof supabase.auth.getSession>>) => {
       const session = res?.data?.session;
 
       if (session) {

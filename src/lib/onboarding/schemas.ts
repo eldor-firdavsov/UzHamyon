@@ -1,25 +1,5 @@
 import { z } from 'zod';
 
-export const onboardingAccountSchema = z
-  .object({
-    email: z
-      .string()
-      .trim()
-      .min(1, 'Elektron pochtangizni kiriting')
-      .email('Haqiqiy elektron pochta manzilini kiriting (masalan: siz@misol.uz)'),
-    password: z
-      .string()
-      .min(8, 'Parol kamida 8 ta belgidan iborat bo‘lishi kerak')
-      .max(72, 'Parol 72 ta belgidan oshmasligi kerak'),
-    confirmPassword: z
-      .string()
-      .min(1, 'Parolni qayta kiriting'),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: 'Kiritilgan parollar bir-biriga mos kelmadi',
-    path: ['confirmPassword'],
-  });
-
 export const onboardingNameSchema = z.object({
   first_name: z
     .string()
@@ -77,7 +57,6 @@ export const completeOnboardingSchema = z.object({
   category_expenses: z.record(z.string(), z.number().min(0)).default({}),
 });
 
-export type OnboardingAccountInput = z.infer<typeof onboardingAccountSchema>;
 export type OnboardingNameInput = z.infer<typeof onboardingNameSchema>;
 export type OnboardingGoalsInput = z.infer<typeof onboardingGoalsSchema>;
 export type OnboardingIncomeInput = z.infer<typeof onboardingIncomeSchema>;

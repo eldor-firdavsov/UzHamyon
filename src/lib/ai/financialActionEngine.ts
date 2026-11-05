@@ -790,6 +790,7 @@ export async function processFinancialIntent(
       .eq('type', 'expense')
       .order('transaction_date', { ascending: false })
       .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .limit(1)
       .maybeSingle();
 

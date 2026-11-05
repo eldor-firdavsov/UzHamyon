@@ -80,7 +80,9 @@ export async function getUserFinancialTimeline(
     .eq('user_id', userId)
     .gt('amount', 0)
     .in('type', ['income', 'expense'])
-    .order('transaction_date', { ascending: false });
+    .order('transaction_date', { ascending: false })
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false });
 
   if (error || !txs || txs.length === 0) {
     return {

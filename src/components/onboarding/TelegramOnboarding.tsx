@@ -93,6 +93,14 @@ export default function TelegramOnboarding({
         } = await supabase.auth.getUser();
 
         if (user) {
+          const { data: existingProfile } = await supabase
+            .from('profiles')
+            .select('onboarding_data')
+            .eq('id', user.id)
+            .maybeSingle();
+          const existingData =
+            (existingProfile?.onboarding_data as Record<string, unknown> | null) || {};
+
           const { error: clientErr } = await supabase
             .from('profiles')
             .update({
@@ -100,6 +108,7 @@ export default function TelegramOnboarding({
               onboarding_completed: true,
               onboarding_step: 8,
               onboarding_data: {
+                ...existingData,
                 goals: goalsToSave,
                 completed_at: new Date().toISOString(),
               },

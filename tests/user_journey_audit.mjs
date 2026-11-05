@@ -3,17 +3,22 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createServerClient } from '@supabase/ssr';
 
-const envContent = fs.readFileSync('/home/eldor_firdavsov/Desktop/SpendSense/.env.local', 'utf8');
+function readEnv(name) {
+  if (process.env[name]) return process.env[name];
+  try {
+    const envContent = fs.readFileSync(new URL('../.env.local', import.meta.url), 'utf8');
+    return envContent.match(new RegExp(`^${name}=(.+)$`, 'm'))?.[1]?.trim();
+  } catch {
+    return undefined;
+  }
+}
+
 const SUPABASE_URL =
-  process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  envContent.match(/NEXT_PUBLIC_SUPABASE_URL=(.+)/)?.[1]?.trim() ||
-  'https://omzreoaaownshtzpqsdt.supabase.co';
+  readEnv('NEXT_PUBLIC_SUPABASE_URL') || 'https://omzreoaaownshtzpqsdt.supabase.co';
 
-const SUPABASE_ANON_KEY =
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  envContent.match(/NEXT_PUBLIC_SUPABASE_ANON_KEY=(.+)/)?.[1]?.trim();
+const SUPABASE_ANON_KEY = readEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
 
-const BASE_URL = 'http://localhost:3000';
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 
 function createAuthSessionClient() {
   const cookies = {};
@@ -40,7 +45,10 @@ function createAuthSessionClient() {
   };
 }
 
-describe('SpendSense AI — Comprehensive User Journey & Financial Audit', () => {
+describe.skip(
+  'SpendSense AI — Comprehensive User Journey & Financial Audit',
+  'Legacy email/password user journey: UzHamyon now authenticates exclusively through Telegram initData. Rewrite this audit against /api/auth/telegram before re-enabling.',
+  () => {
   const sessionA = createAuthSessionClient();
   const sessionB = createAuthSessionClient();
 
@@ -272,7 +280,7 @@ describe('SpendSense AI — Comprehensive User Journey & Financial Audit', () =>
 
     // 2. Preview XLSX file using multipart/form-data
     const xlsxBuffer = fs.readFileSync(
-      '/home/eldor_firdavsov/Desktop/SpendSense/test_fixtures/valid_import.xlsx'
+      new URL('../test_fixtures/valid_import.xlsx', import.meta.url).pathname
     );
     const formXlsx = new FormData();
     formXlsx.append(

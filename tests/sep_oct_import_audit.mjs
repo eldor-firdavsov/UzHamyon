@@ -1,28 +1,12 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import { execSync } from 'node:child_process';
+import { readEnv, getServiceRoleKey } from './helpers/env.mjs';
 import { createClient } from '@supabase/supabase-js';
 import { runImport } from '../scripts/import_sep_oct_transactions.mjs';
 import { askFinancialAdvisor } from '../src/lib/ai/advisorService.ts';
 
-const envContent = fs.readFileSync('/home/eldor_firdavsov/Desktop/SpendSense/.env.local', 'utf8');
-const supabaseUrl = envContent.match(/NEXT_PUBLIC_SUPABASE_URL=(.+)/)?.[1]?.trim();
-
-let serviceKey = null;
-try {
-  const keys = JSON.parse(
-    execSync(
-      '/home/eldor_firdavsov/.local/bin/supabase projects api-keys --project-ref omzreoaaownshtzpqsdt --reveal --output json'
-    ).toString()
-  );
-  serviceKey = keys.find(
-    (k) => k.name === 'service_role' || k.type === 'service_role' || k.name?.includes('service_role')
-  )?.api_key;
-} catch (err) {
-  console.error('Failed to retrieve service key:', err);
-  process.exit(1);
-}
+const supabaseUrl = readEnv('NEXT_PUBLIC_SUPABASE_URL');
+const serviceKey = getServiceRoleKey();
 
 const supabase = createClient(supabaseUrl, serviceKey, {
   auth: { autoRefreshToken: false, persistSession: false },

@@ -108,14 +108,14 @@ export default function ProfileForm({
           )}
         </div>
 
-        {/* Email Address - Responsive, Never-Truncating with Verified Status */}
+        {/* Telegram Identity — never expose the internal derived address */}
         <div className="sm:col-span-2">
           <div className="flex items-center justify-between mb-2">
             <label
               htmlFor="profile-email-display"
               className="block text-xs font-bold uppercase tracking-wider text-[#697168]"
             >
-              Elektron pochta
+              Telegram hisobi
             </label>
             <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#26834A] bg-[#EDF7F0] border border-[#26834A]/20 px-2 py-0.5 rounded-full">
               <ShieldCheck className="h-3 w-3" />
@@ -124,11 +124,10 @@ export default function ProfileForm({
           </div>
 
           <div className="relative">
-            <div className="w-full min-h-[48px] rounded-2xl border border-[#E8EBE5] bg-[#F7F8F5] py-3 pl-10 pr-10 text-sm font-medium text-[#171B16] break-all select-all flex items-center">
+            <div className="w-full min-h-[48px] rounded-2xl border border-[#E8EBE5] bg-[#F7F8F5] py-3 pl-10 pr-10 text-sm font-medium text-[#171B16] flex items-center">
               <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#959E94]" />
-              <span className="truncate sm:overflow-visible">{email}</span>
+              <span>Telegram identifikatingizga bog‘langan</span>
             </div>
-            {/* Hidden field for form action compatibility if needed */}
             <input
               id="profile-email-display"
               type="hidden"
@@ -137,7 +136,7 @@ export default function ProfileForm({
             />
           </div>
           <p className="mt-1.5 text-[11px] text-[#697168]">
-            Xavfsizlik yuzasidan login pochtasi qat’iy bog‘langan. O‘zgartirish uchun qo‘llab-quvvatlashga murojaat qiling.
+            Kirish faqat Telegram orqali amalga oshiriladi. Alohida elektron pochta yoki parol yo‘q.
           </p>
         </div>
       </div>

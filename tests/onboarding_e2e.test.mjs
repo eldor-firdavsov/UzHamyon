@@ -12,7 +12,7 @@ import {
   completeOnboardingSchema,
 } from '../src/lib/onboarding/schemas.ts';
 
-const envContent = fs.readFileSync('/home/eldor_firdavsov/Desktop/SpendSense/.env.local', 'utf8');
+const envContent = fs.readFileSync(new URL('../.env.local', import.meta.url).pathname, 'utf8');
 const supabaseUrl = envContent.match(/NEXT_PUBLIC_SUPABASE_URL=(.+)/)?.[1]?.trim();
 const anonKey = envContent.match(/NEXT_PUBLIC_SUPABASE_ANON_KEY=(.+)/)?.[1]?.trim();
 
@@ -25,9 +25,7 @@ describe('SpendSense AI — Comprehensive Onboarding E2E & Clean Account Verific
   // Retrieve admin service role key for clean isolation
   try {
     const keys = JSON.parse(
-      execSync(
-        '/home/eldor_firdavsov/.local/bin/supabase projects api-keys --project-ref omzreoaaownshtzpqsdt --reveal --output json'
-      ).toString()
+      JSON.stringify([{ name: 'service_role', api_key: (process.env.SUPABASE_SERVICE_ROLE_KEY || (fs.existsSync('.env.local') ? fs.readFileSync('.env.local', 'utf8').match(/SUPABASE_SERVICE_ROLE_KEY=(.+)/)?.[1]?.trim() : '')) }])
     );
     const serviceKey = keys.find(k => k.name === 'service_role' || k.type === 'service_role' || k.name?.includes('service_role'))?.api_key;
     if (serviceKey) {

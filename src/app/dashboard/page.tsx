@@ -43,6 +43,8 @@ export default async function DashboardPage() {
       .select('id, type, amount, description, transaction_date, categories(name)')
       .eq('user_id', user.id)
       .order('transaction_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .limit(300),
     supabase
       .from('budgets')

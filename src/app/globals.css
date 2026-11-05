@@ -161,6 +161,47 @@ body {
   overflow-x: clip;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Telegram Mini App: block pinch-zoom and double-tap zoom while keeping
+     vertical/horizontal panning, scrolling, selection and inputs working. */
+  touch-action: pan-x pan-y;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Interactive controls keep fast taps (no double-tap zoom delay) but never
+   disable text selection inside form fields. */
+button,
+a,
+[role="button"],
+[role="tab"],
+label,
+summary,
+input[type="button"],
+input[type="submit"],
+input[type="checkbox"],
+input[type="radio"] {
+  touch-action: manipulation;
+}
+
+/* Text entry must retain native selection, caret placement and keyboard. */
+input:not([type="button"]):not([type="submit"]):not([type="checkbox"]):not([type="radio"]),
+textarea,
+select,
+[contenteditable="true"] {
+  touch-action: pan-x pan-y;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* iOS/Telegram focus zoom is triggered by controls below 16px. Keep mobile
+   form fields at 16px so focusing them never zooms the whole Mini App. */
+@media (max-width: 767px) {
+  input:not([type="button"]):not([type="submit"]):not([type="checkbox"]):not([type="radio"]),
+  textarea,
+  select,
+  [contenteditable="true"] {
+    font-size: 16px !important;
+  }
 }
 
 /* Hide scrollbars while allowing touch scrolling */

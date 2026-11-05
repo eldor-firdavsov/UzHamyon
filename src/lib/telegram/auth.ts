@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type Session, type User } from '@supabase/supabase-js';
 
 export interface TelegramUser {
   id: number;
@@ -39,15 +39,35 @@ export interface TelegramAuthSession {
 }
 
 /**
+ * Resolves the bot token from the server environment.
+ * A hardcoded fallback is intentionally not provided: a leaked token would
+ * allow forging signed Telegram initData for every user of the bot.
+ */
+function getTelegramBotToken(): string {
+  const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
+  if (!token) {
+    throw new Error('TELEGRAM_BOT_TOKEN muhit o‘zgaruvchisi sozlanmagan');
+  }
+  return token;
+}
+
+/**
  * Validates Telegram WebApp initData string using the official Telegram algorithm:
  * HMAC-SHA256 with key "WebAppData" and bot token.
  */
 export function verifyTelegramWebAppData(
   initData: string,
-  botToken: string = process.env.TELEGRAM_BOT_TOKEN || '9085840931:AAHXfmvbGSqJYKARmpwsvh352SeR2dMHOo4'
+  botToken?: string
 ): TelegramVerificationResult {
   if (!initData || typeof initData !== 'string') {
     return { valid: false, error: 'Initialization data is missing or empty' };
+  }
+
+  let resolvedBotToken: string;
+  try {
+    resolvedBotToken = botToken || getTelegramBotToken();
+  } catch {
+    return { valid: false, error: 'Telegram bot konfiguratsiyasi topilmadi' };
   }
 
   try {
@@ -63,7 +83,7 @@ export function verifyTelegramWebAppData(
       .map(([k, v]) => `${k}=${v}`);
     const dataCheckString = items.join('\n');
 
-    const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
+    const secretKey = crypto.createHmac('sha256', 'WebAppData').update(resolvedBotToken).digest();
     const calculatedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
 
     const calculatedBuf = Buffer.from(calculatedHash, 'hex');
@@ -106,7 +126,7 @@ import {
   getSupabaseUrl,
   getSupabaseAnonKey,
   getSupabaseServiceRoleKey,
-} from '@/lib/supabase/config';
+} from '../supabase/config.ts';
 
 /**
  * Derives a deterministic internal email and secure password for a Telegram user.
@@ -114,7 +134,7 @@ import {
  */
 function deriveTelegramCredentials(telegramId: number) {
   const serviceKey = getSupabaseServiceRoleKey() || 'uzhamyon_telegram_auth_salt_2026';
-  const botToken = process.env.TELEGRAM_BOT_TOKEN || '9085840931:AAHXfmvbGSqJYKARmpwsvh352SeR2dMHOo4';
+  const botToken = getTelegramBotToken();
   
   const internalEmail = `tg_${telegramId}@telegram.uzhamyon.uz`;
   const internalPassword = crypto
@@ -150,8 +170,8 @@ export async function getOrCreateTelegramUser(tgUser: TelegramUser): Promise<Tel
   const lastName = tgUser.last_name || '';
 
   let isNewUser = false;
-  let authUser: any = null;
-  let authSession: any = null;
+  let authUser: User | null = null;
+  let authSession: Session | null = null;
 
   // 1. Attempt login with derived credentials
   const { data: signInData } = await publicClient.auth.signInWithPassword({
@@ -188,7 +208,40 @@ export async function getOrCreateTelegramUser(tgUser: TelegramUser): Promise<Tel
         authUser = retry.data.user;
         authSession = retry.data.session;
         isNewUser = false;
-      } else {
+      } else if (adminClient) {
+        // If password mismatch occurred due to bot token rotation, locate existing user and update password
+        let existingUserId: string | undefined;
+        const { data: prof } = await adminClient
+          .from('profiles')
+          .select('id')
+          .eq('email', internalEmail)
+          .maybeSingle();
+
+        if (prof?.id) {
+          existingUserId = prof.id;
+        } else {
+          const { data: userList } = await adminClient.auth.admin.listUsers();
+          existingUserId = userList?.users?.find((u) => u.email === internalEmail)?.id;
+        }
+
+        if (existingUserId) {
+          await adminClient.auth.admin.updateUserById(existingUserId, {
+            password: internalPassword,
+            email_confirm: true,
+          });
+          const rotatedSignIn = await publicClient.auth.signInWithPassword({
+            email: internalEmail,
+            password: internalPassword,
+          });
+          if (rotatedSignIn.data?.user && rotatedSignIn.data?.session) {
+            authUser = rotatedSignIn.data.user;
+            authSession = rotatedSignIn.data.session;
+            isNewUser = false;
+          }
+        }
+      }
+
+      if (!authUser || !authSession) {
         throw new Error(signUpError?.message || 'Telegram hisobini ro‘yxatdan o‘tkazishda xatolik yuz berdi');
       }
     } else {

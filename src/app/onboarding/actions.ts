@@ -9,7 +9,6 @@ async function getSupabase() {
   return await createClient();
 }
 import {
-  onboardingAccountSchema,
   completeOnboardingSchema,
   type CompleteOnboardingInput,
 } from '@/lib/onboarding/schemas';
@@ -19,127 +18,6 @@ export interface OnboardingActionResult<T = unknown> {
   data?: T;
   error?: string;
   fieldErrors?: Record<string, string[]>;
-}
-
-/**
- * Creates a new Supabase auth user during onboarding Step 2.
- */
-export async function createOnboardingAccountAction(
-  prevState: OnboardingActionResult | null,
-  formData: FormData
-): Promise<OnboardingActionResult<{ email: string; userId: string; requiresVerification?: boolean }>> {
-  const rawData = {
-    email: formData.get('email'),
-    password: formData.get('password'),
-    confirmPassword: formData.get('confirmPassword'),
-  };
-
-  const validated = onboardingAccountSchema.safeParse(rawData);
-  if (!validated.success) {
-    return {
-      success: false,
-      fieldErrors: validated.error.flatten().fieldErrors,
-      error: 'Iltimos, ma’lumotlarni to‘g‘ri kiriting.',
-    };
-  }
-
-  const { email, password } = validated.data;
-
-  try {
-    const supabase = await getSupabase();
-
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-
-    if (error) {
-      const msg = error.message.toLowerCase();
-      if (
-        msg.includes('already registered') ||
-        msg.includes('user already exists')
-      ) {
-        return {
-          success: false,
-          error: 'Ushbu elektron pochta manziliga ega hisob allaqachon mavjud. Iltimos, kirish sahifasidan foydalaning.',
-        };
-      }
-      if (msg.includes('rate limit') || msg.includes('too many requests')) {
-        return {
-          success: false,
-          error: 'Juda ko‘p urinishlar qilindi. Iltimos, biroz kutib qayta urining.',
-        };
-      }
-      return {
-        success: false,
-        error: error.message,
-      };
-    }
-
-    if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
-      return {
-        success: false,
-        error: 'Ushbu elektron pochta manziliga ega hisob allaqachon mavjud. Iltimos, kirish sahifasidan foydalaning.',
-      };
-    }
-
-    // If signUp did not auto-create a session (e.g. email verification disabled in project), try sign in
-    let sessionUser = data.user;
-    if (!data.session) {
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (signInError) {
-        const msg = signInError.message.toLowerCase();
-        if (msg.includes('confirm') || msg.includes('not verified')) {
-          return {
-            success: true,
-            data: {
-              email,
-              userId: data.user?.id || '',
-              requiresVerification: true,
-            },
-          };
-        }
-      } else if (signInData.user) {
-        sessionUser = signInData.user;
-      }
-    }
-
-    const userId = sessionUser?.id || data.user?.id || '';
-
-    // Initialize or update profile to mark onboarding as in-progress at step 3
-    if (userId) {
-      await supabase
-        .from('profiles')
-        .upsert({
-          id: userId,
-          email,
-          onboarding_completed: false,
-          onboarding_step: 3,
-          updated_at: new Date().toISOString(),
-        })
-        .select()
-        .maybeSingle();
-    }
-
-    return {
-      success: true,
-      data: {
-        email,
-        userId,
-        requiresVerification: false,
-      },
-    };
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    console.error('Error in createOnboardingAccountAction:', err);
-    return {
-      success: false,
-      error: `Hisob yaratishda xatolik yuz berdi: ${errorMsg}`,
-    };
-  }
 }
 
 /**
@@ -223,9 +101,20 @@ export async function saveOnboardingStepAction(
       return { success: false, error: 'Avtorizatsiyadan o‘tish talab qilinadi' };
     }
 
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('onboarding_data')
+      .eq('id', user.id)
+      .maybeSingle();
+    const existingOnboardingData =
+      (existingProfile?.onboarding_data as Record<string, unknown> | null) || null;
+
     const updatePayload: Record<string, unknown> = {
       onboarding_step: step,
-      onboarding_data: draftData,
+      onboarding_data: {
+        ...(existingOnboardingData || {}),
+        ...draftData,
+      },
       updated_at: new Date().toISOString(),
     };
 
@@ -291,12 +180,15 @@ export async function completeOnboardingAction(
       category_expenses,
     } = validated.data;
 
-    // 1. Fetch existing profile to preserve existing financial_start_date if present
+    // 1. Fetch existing profile to preserve existing financial_start_date and Telegram identity
     const { data: existingProfile } = await supabase
       .from('profiles')
-      .select('financial_start_date')
+      .select('financial_start_date, onboarding_data')
       .eq('id', user.id)
       .maybeSingle();
+
+    const existingOnboardingData =
+      (existingProfile?.onboarding_data as Record<string, unknown> | null) || {};
 
     const todayDateStr = new Date().toISOString().split('T')[0];
     const effectiveFinancialStartDate = existingProfile?.financial_start_date || todayDateStr;
@@ -314,6 +206,7 @@ export async function completeOnboardingAction(
         onboarding_completed: true,
         onboarding_step: 8,
         onboarding_data: {
+          ...existingOnboardingData,
           goals,
           custom_goal: custom_goal || null,
           category_expenses,

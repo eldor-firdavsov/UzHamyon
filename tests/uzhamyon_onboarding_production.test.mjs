@@ -5,9 +5,9 @@ import { createServerClient } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
 
 // Read local environment variables
-const envPath = fs.existsSync('/home/eldor_firdavsov/Desktop/UzHamyon/.env.local')
-  ? '/home/eldor_firdavsov/Desktop/UzHamyon/.env.local'
-  : '/home/eldor_firdavsov/Desktop/SpendSense/.env.local';
+const envPath = fs.existsSync(new URL('../.env.local', import.meta.url).pathname)
+  ? new URL('../.env.local', import.meta.url).pathname
+  : new URL('../.env.local', import.meta.url).pathname;
 const envContent = fs.readFileSync(envPath, 'utf8');
 
 const SUPABASE_URL = envContent.match(/NEXT_PUBLIC_SUPABASE_URL=(.+)/)?.[1]?.trim();

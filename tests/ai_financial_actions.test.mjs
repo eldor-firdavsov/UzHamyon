@@ -1,14 +1,12 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import { execSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
+import { readEnv } from './helpers/env.mjs';
 import { askFinancialAdvisor, getConversationMessages } from '../src/lib/ai/advisorService.ts';
 import { getAnalyticsSummary } from '../src/lib/analytics/service.ts';
 
-const envContent = fs.readFileSync('/home/eldor_firdavsov/Desktop/SpendSense/.env.local', 'utf8');
-const supabaseUrl = envContent.match(/NEXT_PUBLIC_SUPABASE_URL=(.+)/)?.[1]?.trim();
-const anonKey = envContent.match(/NEXT_PUBLIC_SUPABASE_ANON_KEY=(.+)/)?.[1]?.trim();
+const supabaseUrl = readEnv('NEXT_PUBLIC_SUPABASE_URL');
+const anonKey = readEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
 
 describe('SpendSense AI — Real Financial Actions & Supabase Persistence Tests', () => {
   let adminClient;
@@ -29,14 +27,7 @@ describe('SpendSense AI — Real Financial Actions & Supabase Persistence Tests'
   };
 
   before(async () => {
-    const keys = JSON.parse(
-      execSync(
-        '/home/eldor_firdavsov/.local/bin/supabase projects api-keys --project-ref omzreoaaownshtzpqsdt --reveal --output json'
-      ).toString()
-    );
-    const serviceKey = keys.find(
-      (k) => k.name === 'service_role' || k.type === 'service_role' || k.name?.includes('service_role')
-    )?.api_key;
+    const serviceKey = readEnv('SUPABASE_SERVICE_ROLE_KEY');
     assert.ok(serviceKey, 'Service role key required');
 
     adminClient = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });

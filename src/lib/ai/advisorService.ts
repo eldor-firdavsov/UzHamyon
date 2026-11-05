@@ -39,10 +39,25 @@ function computeMonthsRemaining(today: Date, targetDateStr: string): number {
   return monthDiff <= 0 ? 1 : monthDiff;
 }
 
+interface VerifiedMonthFacts {
+  income: number;
+  expense: number;
+  categories: Record<string, number>;
+}
+
+interface VerifiedFinancialFacts {
+  primaryCurrency: string;
+  transactionCount: number;
+  totalIncome: number;
+  totalExpense: number;
+  months: Record<string, VerifiedMonthFacts>;
+  topCategory: { name: string; amount: number } | null;
+}
+
 async function gatherUserFinancialContext(
   userId: string,
   supabase: SupabaseClient
-): Promise<string> {
+): Promise<{ text: string; facts: VerifiedFinancialFacts }> {
   // Gather profile, all transactions, budgets, and goals concurrently
   const [profileRes, allTxRes, budgetsRes, goalsRes] = await Promise.all([
     supabase
@@ -189,75 +204,19 @@ async function gatherUserFinancialContext(
     }
   }
 
-  // Multi-month Cross-analysis: Sentabr vs Oktabr 2026
-  if (monthlyStats['2026-09'] && monthlyStats['2026-10']) {
-    const sep = monthlyStats['2026-09'];
-    const oct = monthlyStats['2026-10'];
-    const diffExpense = oct.expense - sep.expense;
-    const pctChange = sep.expense > 0 ? ((diffExpense / sep.expense) * 100).toFixed(1) : '0';
+  // Multi-month cross-analysis: compare the two most recent months with real data
+  if (sortedMonths.length >= 2) {
+    const prevKey = sortedMonths[sortedMonths.length - 2];
+    const latestKey = sortedMonths[sortedMonths.length - 1];
+    const prev = monthlyStats[prevKey];
+    const latest = monthlyStats[latestKey];
+    const diffExpense = latest.expense - prev.expense;
+    const pctChange = prev.expense > 0 ? ((diffExpense / prev.expense) * 100).toFixed(1) : '0';
 
-    lines.push(`\n--- Oylarni taqqoslash (Sentabr vs Oktabr 2026) ---`);
-    lines.push(`  * Sentabr xarajati: ${formatUzMoney(sep.expense, primaryCurrency)} (Daromad: ${formatUzMoney(sep.income, primaryCurrency)}, Qoldiq: ${formatUzMoney(sep.income - sep.expense, primaryCurrency)})`);
-    lines.push(`  * Oktabr xarajati: ${formatUzMoney(oct.expense, primaryCurrency)} (Daromad: ${formatUzMoney(oct.income, primaryCurrency)}, Qoldiq: ${formatUzMoney(oct.income - oct.expense, primaryCurrency)})`);
-    lines.push(`  * Farq: Oktabr oyida xarajatlar ${formatUzMoney(Math.abs(diffExpense), primaryCurrency)} ga (${Math.abs(Number(pctChange))}%) ${diffExpense <= 0 ? 'kamaygan (tejalgan)' : 'oshgan'}.`);
-    lines.push(`  * Jami ikki oylik daromad: ${formatUzMoney(sep.income + oct.income, primaryCurrency)}`);
-    lines.push(`  * Jami ikki oylik xarajat: ${formatUzMoney(sep.expense + oct.expense, primaryCurrency)}`);
-    lines.push(`  * Jami ikki oylik sof qoldiq: ${formatUzMoney((sep.income - sep.expense) + (oct.income - oct.expense), primaryCurrency)}`);
-
-    // Kafe va Ichimliklar 2 oylik jamlanmasi (Sentabr + Oktabr)
-    const sepKafe = (sep.categories['Kafe va restoran']?.sum || 0) + (sep.categories['Kafe va restoranlar']?.sum || 0);
-    const octKafe = (oct.categories['Kafe va restoran']?.sum || 0) + (oct.categories['Kafe va restoranlar']?.sum || 0);
-    const totalKafe = sepKafe + octKafe;
-
-    const sepIchimlik = (sep.categories['Ichimliklar']?.sum || 0) + (sep.categories['Ichimliklar va snack']?.sum || 0);
-    const octIchimlik = (oct.categories['Ichimliklar']?.sum || 0) + (oct.categories['Ichimliklar va snack']?.sum || 0);
-    const totalIchimlik = sepIchimlik + octIchimlik;
-
-    const combinedCafeDrinks = totalKafe + totalIchimlik;
-
-    lines.push(`\n--- Ikki oylik (Sentabr + Oktabr) Kafe va Ichimliklar jamlanmasi ---`);
-    lines.push(`  * "Kafe va restoran": ${formatUzMoney(totalKafe, primaryCurrency)} (Sentabrda: ${formatUzMoney(sepKafe, primaryCurrency)}, Oktabrda: ${formatUzMoney(octKafe, primaryCurrency)})`);
-    lines.push(`  * "Ichimliklar": ${formatUzMoney(totalIchimlik, primaryCurrency)} (Sentabrda: ${formatUzMoney(sepIchimlik, primaryCurrency)}, Oktabrda: ${formatUzMoney(octIchimlik, primaryCurrency)})`);
-    lines.push(`  * JAMI Kafe va Ichimliklar birgalikda: ${formatUzMoney(combinedCafeDrinks, primaryCurrency)}`);
-
-    // Top categories combined for Sentabr + Oktabr
-    const combinedCats: Record<string, number> = {};
-    for (const [c, d] of Object.entries(sep.categories)) {
-      combinedCats[c] = (combinedCats[c] || 0) + d.sum;
-    }
-    for (const [c, d] of Object.entries(oct.categories)) {
-      combinedCats[c] = (combinedCats[c] || 0) + d.sum;
-    }
-    const sortedCombined = Object.entries(combinedCats).sort(([, a], [, b]) => b - a);
-    lines.push(`\n--- Ikki oylik (Sentabr + Oktabr) eng ko'p sarflangan kategoriyalar ---`);
-    for (const [cName, sum] of sortedCombined) {
-      lines.push(`  * ${cName}: ${formatUzMoney(sum, primaryCurrency)}`);
-    }
-  } else if (monthlyStats['2026-08'] && monthlyStats['2026-09']) {
-    const aug = monthlyStats['2026-08'];
-    const sep = monthlyStats['2026-09'];
-    const diffExpense = sep.expense - aug.expense;
-    const pctChange = ((diffExpense / aug.expense) * 100).toFixed(1);
-
-    lines.push(`\n--- Oylarni taqqoslash (Avgust vs Sentabr 2026) ---`);
-    lines.push(`  * Avgust xarajati: ${formatUzMoney(aug.expense, primaryCurrency)}`);
-    lines.push(`  * Sentabr xarajati: ${formatUzMoney(sep.expense, primaryCurrency)}`);
-    lines.push(`  * Farq: Sentabr oyida xarajatlar ${formatUzMoney(Math.abs(diffExpense), primaryCurrency)} ga (${Math.abs(Number(pctChange))}%) ${diffExpense < 0 ? 'kamaygan (tejalgan)' : 'oshgan'}.`);
-
-    const augKafe = aug.categories['Kafe va restoran']?.sum || 0;
-    const sepKafe = sep.categories['Kafe va restoran']?.sum || 0;
-    const totalKafe = augKafe + sepKafe;
-
-    const augIchimlik = (aug.categories['Ichimliklar']?.sum || 0) + (aug.categories['Ichimliklar va snack']?.sum || 0);
-    const sepIchimlik = (sep.categories['Ichimliklar']?.sum || 0) + (sep.categories['Ichimliklar va snack']?.sum || 0);
-    const totalIchimlik = augIchimlik + sepIchimlik;
-
-    const combinedCafeDrinks = totalKafe + totalIchimlik;
-
-    lines.push(`\n--- Ikki oylik (Avgust + Sentabr) Kafe va Ichimliklar jamlanmasi ---`);
-    lines.push(`  * "Kafe va restoran": ${formatUzMoney(totalKafe, primaryCurrency)} (Avgustda: ${formatUzMoney(augKafe, primaryCurrency)}, Sentabrda: ${formatUzMoney(sepKafe, primaryCurrency)})`);
-    lines.push(`  * "Ichimliklar va snack": ${formatUzMoney(totalIchimlik, primaryCurrency)} (Avgustda: ${formatUzMoney(augIchimlik, primaryCurrency)}, Sentabrda: ${formatUzMoney(sepIchimlik, primaryCurrency)})`);
-    lines.push(`  * JAMI Kafe va Ichimliklar birgalikda: ${formatUzMoney(combinedCafeDrinks, primaryCurrency)}`);
+    lines.push(`\n--- Oylarni taqqoslash (${prevKey} vs ${latestKey}) ---`);
+    lines.push(`  * ${prevKey} xarajati: ${formatUzMoney(prev.expense, primaryCurrency)} (Daromad: ${formatUzMoney(prev.income, primaryCurrency)}, Qoldiq: ${formatUzMoney(prev.income - prev.expense, primaryCurrency)})`);
+    lines.push(`  * ${latestKey} xarajati: ${formatUzMoney(latest.expense, primaryCurrency)} (Daromad: ${formatUzMoney(latest.income, primaryCurrency)}, Qoldiq: ${formatUzMoney(latest.income - latest.expense, primaryCurrency)})`);
+    lines.push(`  * Farq: ${latestKey} oyida xarajatlar ${formatUzMoney(Math.abs(diffExpense), primaryCurrency)} ga (${Math.abs(Number(pctChange))}%) ${diffExpense <= 0 ? 'kamaygan (tejalgan)' : 'oshgan'}.`);
   }
 
   // Recurring small expenses summary
@@ -324,222 +283,79 @@ async function gatherUserFinancialContext(
     }
   }
 
-  return lines.join('\n');
+  const categoryTotals: Record<string, number> = {};
+  for (const month of Object.values(monthlyStats)) {
+    for (const [name, data] of Object.entries(month.categories)) {
+      categoryTotals[name] = (categoryTotals[name] || 0) + data.sum;
+    }
+  }
+  const topCategoryEntry = Object.entries(categoryTotals).sort(([, a], [, b]) => b - a)[0];
+
+  const facts: VerifiedFinancialFacts = {
+    primaryCurrency,
+    transactionCount: allTxs.length,
+    totalIncome: totalLifetimeIncome,
+    totalExpense: totalLifetimeExpense,
+    months: Object.fromEntries(
+      Object.entries(monthlyStats).map(([key, value]) => [
+        key,
+        {
+          income: value.income,
+          expense: value.expense,
+          categories: Object.fromEntries(
+            Object.entries(value.categories).map(([name, data]) => [name, data.sum])
+          ),
+        },
+      ])
+    ),
+    topCategory: topCategoryEntry ? { name: topCategoryEntry[0], amount: topCategoryEntry[1] } : null,
+  };
+
+  return { text: lines.join('\n'), facts };
 }
 
 /**
- * Builds high-precision deterministic financial answers from verified facts
+ * Honest fallback used only when the AI provider is unavailable.
+ * Every number comes from verified database facts; nothing is invented.
  */
-function buildDeterministicGroundedAnswer(question: string, context: string): string {
+function buildVerifiedFallbackAnswer(question: string, facts: VerifiedFinancialFacts): string {
   const q = question.toLowerCase();
+  const money = (value: number) => formatUzMoney(value, facts.primaryCurrency);
 
-  // If user account is brand new with 0 transactions
-  const hasZeroTransactions = context.includes('Jami tranzaksiyalar soni: 0 ta');
-  if (hasZeroTransactions) {
-    if (q.includes('xarajat') || q.includes('sarfla')) {
-      return 'Hozircha sizda haqiqiy xarajat tranzaksiyalari qayd etilmagan (0 soʻm). Xarajatlaringizni qo‘shishni boshlaganingizdan so‘ng, aniq tahlil va maslahatlar taqdim etiladi.';
-    }
-    if (q.includes('daromad') || q.includes('oylik') || q.includes('maosh') || q.includes('ish haqi')) {
-      return 'Hozircha hisobingizda haqiqiy daromad tranzaksiyalari mavjud emas (0 soʻm). Onboardingda kiritilgan reja bo‘yicha daromadingiz qayd etilgan bo‘lsa-da, haqiqiy mablag‘ kelib tushganda daromad tranzaksiyasini kiritishingiz mumkin.';
-    }
-    if (q.includes('balans') || q.includes('qoldiq') || q.includes('pulim')) {
-      return 'Hozirda umumiy hisob balansingiz 0 soʻm. Yangi daromad yoki xarajat kiritishingiz bilan balansingiz avtomatik hisoblanadi.';
-    }
-    if (q.includes('maqsad') || q.includes('jamg‘arma') || q.includes('jamg\'arma')) {
-      return 'Jamg‘arma maqsadlaringiz yaratilgan, ammo hali mablag‘ ajratilmagan (0 soʻm). Maqsadingizga erishish uchun birinchi jamg‘armani qo‘shishdan boshlang!';
-    }
-    return 'Hozircha hisobingizda moliyaviy amallar yo‘q (0 soʻm). Birinchi daromad yoki xarajatlaringizni kiritishingiz bilan, AI yordamchingiz to‘liq tahlillarni shakllantiradi.';
+  if (facts.transactionCount === 0) {
+    return 'Hozircha hisobingizda haqiqiy daromad yoki xarajat tranzaksiyalari yo‘q, shu sababli aniq moliyaviy raqamlar ko‘rsatib bo‘lmaydi. Tranzaksiya qo‘shganingizdan so‘ng tahlilni qayta so‘rashingiz mumkin.';
   }
 
-  // 1. "2026-yil sentabr oyida qancha oylik olganman?" / "2026-yil sentabr oyida jami qancha daromad olganman?"
-  if (
-    q.includes('sentabr') &&
-    (q.includes('oylik') || q.includes('maosh') || q.includes('daromad') || q.includes('ish haqi') || q.includes('olganman') || q.includes('oldim')) &&
-    !q.includes('xarajat') &&
-    !q.includes('sarfla') &&
-    !q.includes('ortib') &&
-    !q.includes('qoldiq') &&
-    !q.includes('oktabr')
-  ) {
-    return '2026-yil sentabr oyida siz 6 000 000 soʻm daromad (oylik maosh) olgansiz.';
+  const monthKeys = Object.keys(facts.months).sort();
+  const monthNames = ['yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun', 'iyul', 'avgust', 'sentabr', 'oktabr', 'noyabr', 'dekabr'];
+  const mentionedMonths = monthKeys.filter((key) => {
+    const parts = key.split('-');
+    const index = parseInt(parts[1] || '1', 10) - 1;
+    return q.includes(monthNames[index] || '');
+  });
+
+  if (mentionedMonths.length >= 2) {
+    const firstKey = mentionedMonths[0];
+    const lastKey = mentionedMonths[mentionedMonths.length - 1];
+    const first = facts.months[firstKey];
+    const last = facts.months[lastKey];
+    return `${firstKey}: daromad ${money(first.income)}, xarajat ${money(first.expense)}, sof qoldiq ${money(first.income - first.expense)}. ${lastKey}: daromad ${money(last.income)}, xarajat ${money(last.expense)}, sof qoldiq ${money(last.income - last.expense)}.`;
   }
 
-  // 2. "2026-yil sentabr oyida jami qancha xarajat qilganman?"
-  if (
-    q.includes('sentabr') &&
-    (q.includes('xarajat') || q.includes('sarfla')) &&
-    !q.includes('taqqosla') &&
-    !q.includes('oktabr') &&
-    !q.includes('eng ko') &&
-    !q.includes('kategoriya') &&
-    !q.includes('ortib') &&
-    !q.includes('qoldiq') &&
-    !q.includes('qolgan') &&
-    !q.includes('daromad')
-  ) {
-    return '2026-yil sentabr oyida jami xarajatlaringiz 5 000 000 soʻmni tashkil qilgan. 6 000 000 soʻm daromaddan 1 000 000 soʻm sof qoldiq tejalgan.';
+  if (mentionedMonths.length === 1) {
+    const key = mentionedMonths[0];
+    const month = facts.months[key];
+    const top = Object.entries(month.categories).sort(([, a], [, b]) => b - a)[0];
+    const topLine = top ? ` Eng katta xarajat kategoriyasi: ${top[0]} — ${money(top[1])}.` : '';
+    return `${key} oyida haqiqiy tranzaksiyalar bo‘yicha daromad ${money(month.income)}, xarajat ${money(month.expense)}, sof qoldiq ${money(month.income - month.expense)}.${topLine}`;
   }
 
-  // 3. "2026-yil oktabr oyida jami qancha xarajat qilganman?"
-  if (
-    q.includes('oktabr') &&
-    (q.includes('xarajat') || q.includes('sarfla')) &&
-    !q.includes('taqqosla') &&
-    !q.includes('sentabr') &&
-    !q.includes('eng ko') &&
-    !q.includes('kategoriya') &&
-    !q.includes('ortib') &&
-    !q.includes('qoldiq') &&
-    !q.includes('qolgan') &&
-    !q.includes('daromad')
-  ) {
-    return '2026-yil oktabr oyida jami xarajatlaringiz 4 950 000 soʻmni tashkil qilgan. 6 000 000 soʻm daromaddan 1 050 000 soʻm sof qoldiq tejalgan.';
+  if (facts.topCategory && (q.includes('kategoriya') || q.includes('qayerga') || q.includes('eng ko'))) {
+    return `Haqiqiy tranzaksiyalaringiz bo‘yicha eng katta xarajat kategoriyasi — ${facts.topCategory.name} (${money(facts.topCategory.amount)}). Jami xarajat ${money(facts.totalExpense)}, jami daromad ${money(facts.totalIncome)}.`;
   }
 
-  // 4. "Sentabr oyida qancha pul ortib qolgan?"
-  if (
-    q.includes('sentabr') &&
-    (q.includes('ortib') || q.includes('qoldiq') || q.includes('ortgan') || (q.includes('pul') && q.includes('qolgan'))) &&
-    !q.includes('oktabr')
-  ) {
-    return '2026-yil sentabr oyida sizda 1 000 000 soʻm sof qoldiq ortib qolgan. 6 000 000 soʻm daromaddan 5 000 000 soʻm sarflangan.';
-  }
-
-  // 5. "Oktabr oyida qancha pul ortib qolgan?"
-  if (
-    q.includes('oktabr') &&
-    (q.includes('ortib') || q.includes('qoldiq') || q.includes('ortgan') || (q.includes('pul') && q.includes('qolgan'))) &&
-    !q.includes('sentabr')
-  ) {
-    return '2026-yil oktabr oyida sizda 1 050 000 soʻm sof qoldiq ortib qolgan. 6 000 000 soʻm daromaddan 4 950 000 soʻm sarflangan.';
-  }
-
-  // 6. "Sentabr va oktabr xarajatlarimni taqqoslab ber."
-  if (
-    q.includes('taqqosla') ||
-    q.includes('solishtir') ||
-    (q.includes('sentabr') && q.includes('oktabr') && (q.includes('xarajat') || q.includes('farq')))
-  ) {
-    return 'Sentabrda 5 000 000 soʻm, oktabrda esa 4 950 000 soʻm sarflangansiz. Oktabr oyida xarajatlaringiz 50 000 soʻmga (1.0% ga) kamaygan.';
-  }
-
-  // 8. "Kafe, ichimliklar va taksiga jami qancha sarflaganman?"
-  if (
-    (q.includes('kafe') || q.includes('restoran')) &&
-    (q.includes('ichimlik') || q.includes('ichimliklar')) &&
-    (q.includes('taksi') || q.includes('transport'))
-  ) {
-    return 'Ikki oyda kafe, ichimliklar va taksiga jami 2 035 000 soʻm sarflagansiz. Shundan kafe 1 070 000 soʻm, taksi 585 000 soʻm va ichimliklar 380 000 soʻmni tashkil etadi.';
-  }
-
-  // 10. "Ikki oy davomida jami qancha daromad oldim va qancha sarfladim?"
-  if (
-    (q.includes('ikki oy') || q.includes('2 oy') || q.includes('davomida') || (q.includes('sentabr') && q.includes('oktabr'))) &&
-    (q.includes('daromad') && (q.includes('sarfla') || q.includes('xarajat')))
-  ) {
-    return 'Ikki oyda jami 12 000 000 soʻm daromad olib, 9 950 000 soʻm sarflagansiz. Natijada sizda 2 050 000 soʻm sof jamgʻarma (qoldiq) hosil boʻlgan.';
-  }
-
-  // 7. "Qaysi kategoriyalarga eng ko‘p pul sarfladim?" / "Qayerga ko‘p pul sarflayapman?"
-  if (q.includes('eng ko') || q.includes('kategoriya') || q.includes('qayerga')) {
-    return 'Eng ko‘p xarajatingiz — Ijara va uy (3 600 000 soʻm), Oziq-ovqat (2 350 000 soʻm) va Kafe va restoran (1 070 000 soʻm) kategoriyalariga to‘g‘ri keladi. Kafe xarajatlarini kamaytirib, ko‘proq tejashingiz mumkin.';
-  }
-
-  // 5 (legacy). "Ikki oyda kafe va ichimliklarga qancha sarflangan?"
-  if ((q.includes('kafe') || q.includes('restoran')) && (q.includes('ichimlik') || q.includes('ichimliklar') || q.includes('snack'))) {
-    return 'Ikki oyda kafe va ichimliklarga jami 1 450 000 soʻm sarflangan. Shundan kafe 1 070 000 soʻm, ichimliklar esa 380 000 soʻmni tashkil qilgan.';
-  }
-
-  // 9. "Qaysi kichik xarajatlarni kamaytirish orqali ko‘proq pul tejashim mumkin?"
-  if (
-    q.includes('kichik') ||
-    q.includes('mayda') ||
-    q.includes('takroriy') ||
-    (q.includes('tejash') && (q.includes('kamaytirish') || q.includes('mumkin'))) ||
-    q.includes('e\'tibor') ||
-    q.includes('etibor')
-  ) {
-    return 'Eng ko‘p tejash imkoni bor sohalar: kafe (1 070 000 soʻm), taksi (585 000 soʻm) va ichimliklar (380 000 soʻm). Taksini metroga almashtirish va kafelarni optimallashtirish orqali oyiga 500 000 soʻmgacha tejashingiz mumkin.';
-  }
-
-  // Specific goal inquiries
-  if (q.includes('maqsad') || q.includes('jamg‘arma maqsadi') || q.includes('jamg\'arma maqsadi')) {
-    if (q.includes('noutbuk') || q.includes('macbook') || q.includes('kompyuter') || q.includes('laptop')) {
-      return 'M4 MacBook Pro maqsadi uchun 25 000 000 soʻmdan 18 000 000 soʻm yig‘ilgan. Qolgan 7 000 000 soʻm uchun 2 oyda oyiga 3 500 000 soʻm kerak, ammo oylik erkin mablag‘ingiz (1 025 000 soʻm) yetarli emas. Maqsad muddatini uzaytirish yoki oylik xarajatlarni kamaytirish tavsiya etiladi.';
-    }
-    if (q.includes('sayohat') || q.includes('tatil') || q.includes('ta\'til') || q.includes('ta’til')) {
-      return 'Sayohat jamg‘armasi uchun 15 000 000 soʻmdan 8 500 000 soʻm yig‘ilgan (qolgan: 6 500 000 soʻm). 7 oyda oyiga 928 571 soʻm kerak. Oylik erkin mablag‘ingiz (1 025 000 soʻm) yetarli, maqsadga o‘z vaqtida erishish mumkin.';
-    }
-    return 'Jamg‘arma maqsadlaringiz: MacBook Pro (qolgan: 7 000 000 soʻm, kerak: 3 500 000 soʻm/oy — muddatni uzaytirish tavsiya etiladi), Sayohat (qolgan: 6 500 000 soʻm, kerak: 928 571 soʻm/oy) va Zaxira jamg‘armasi (qolgan: 8 000 000 soʻm, kerak: 800 000 soʻm/oy).';
-  }
-
-  // General monthly qoldiq
-  if (
-    q.includes('qancha pul qolgan') ||
-    q.includes('qoldiq') ||
-    q.includes('har oy qancha') ||
-    (q.includes('pul') && q.includes('qolgan')) ||
-    (q.includes('jamg‘arma') && !q.includes('maqsad'))
-  ) {
-    return 'Sentabrda 1 000 000 soʻm, oktabrda esa 1 050 000 soʻm sof qoldiq ortgan. Jami ikki oylik sof jamgʻarmangiz 2 050 000 soʻmni tashkil qiladi.';
-  }
-
-  // 11. "Men oyiga 6 million so‘m topaman. Xarajatlarimni qanday nazorat qilsam bo‘ladi?" / Nazorat va byudjet
-  if (
-    (q.includes('nazorat') || q.includes('boshqarish') || q.includes('rejalashtir') || q.includes('50/30/20')) &&
-    (q.includes('xarajat') || q.includes('daromad') || q.includes('oylik') || q.includes('topaman') || q.includes('topdim'))
-  ) {
-    return 'Oyiga 6 000 000 soʻm daromad uchun 50/30/20 qoidasi boʻyicha taqsimlashni tavsiya qilaman: 3 000 000 soʻm zarur xarajatlarga, 1 800 000 soʻm shaxsiy ehtiyojlarga va 1 200 000 soʻm jamgʻarmaga yoʻnaltiriladi. Barcha xarajatlaringizni doimiy ravishda UzHamyon ilovasiga kiritib boring.';
-  }
-
-  // 12. "Bir yil ichida mashina olmoqchiman" / Katta xarid rejasi
-  if (
-    (q.includes('mashina') || q.includes('avtomobil') || q.includes('uy olmoq') || q.includes('kvartira')) &&
-    (q.includes('olmoq') || q.includes('olish') || q.includes('reja'))
-  ) {
-    const item = q.includes('mashina') || q.includes('avtomobil') ? 'mashina' : 'uy';
-    return `Qancha narxdagi ${item} olmoqchisiz? Maqsadingizga qarab oylik jamg‘arma miqdorini aniq hisoblab beraman.`;
-  }
-
-  // 13. "Moliyaviy holatim qanday?"
-  if (
-    q.includes('moliyaviy holat') ||
-    q.includes('holatim qanday') ||
-    q.includes('moliyaviy ahvol') ||
-    (q.includes('holat') && q.includes('moliya'))
-  ) {
-    if (context.includes('Jami tranzaksiyalar soni: 0 ta')) {
-      return 'Hozircha hisobingizda hech qanday tranzaksiya qayd etilmagan. Moliyaviy holatingizni tahlil qilish uchun avval daromad yoki xarajatingizni kiriting.';
-    }
-    return 'Moliyaviy holatingiz barqaror va ijobiy pul oqimiga ega. Soʻnggi ikki oyda jami 12 000 000 soʻm daromad va 9 950 000 soʻm xarajat qayd etilib, 2 050 000 soʻm sof qoldiq hosil boʻlgan. Oyiga oʻrtacha 1 025 000 soʻm erkin mablagʻ jamgʻarma maqsadlariga yoʻnaltirilmoqda.';
-  }
-
-  // Empty data check
-  if (context.includes('Jami tranzaksiyalar soni: 0 ta') || context.includes('Baza bo‘sh')) {
-    return 'Hozircha hisobingizda hech qanday tranzaksiya qayd etilmagan. Moliyaviy tahlil olish uchun birinchi daromad yoki xarajatingizni qo‘shing.';
-  }
-
-  // Legacy & test suite support: Avgust xarajati
-  if (q.includes('avgust') && (q.includes('xarajat') || q.includes('sarfla'))) {
-    return '2026-yil avgust oyida jami xarajatlaringiz 7 991 000 soʻmni tashkil qilgan. 6 000 000 soʻm daromaddan 1 991 000 soʻm kamomad yuzaga kelgan.';
-  }
-
-  // Test suite support: "Highest expense"
-  if (q.includes('highest expense') || (q.includes('highest') && q.includes('expense'))) {
-    if (context.includes('Cozy Studio Rent')) {
-      return 'Your highest expense this month was Cozy Studio Rent with an amount of 1,500 USD (Housing / Rent).';
-    }
-  }
-
-  // Bu oy qancha sarfladim fallback
-  if (q.includes('bu oy') || q.includes('shu oy')) {
-    return 'Bu oyda sizda hech qanday xarajat qayd etilmagan ($0.00 / 0 soʻm).';
-  }
-
-  return 'Sizning savolingiz tasdiqlangan moliyaviy ma’lumotlar asosida tahlil qilindi. Aniqroq hisob-kitob olish uchun oylik daromad, xarajat yoki jamg‘arma maqsadingiz bo‘yicha batafsil so‘rashingiz mumkin.';
-}
-
-/**
+  return `AI xizmati vaqtincha javob bera olmadi. Tasdiqlangan tranzaksiyalaringiz bo‘yicha: jami daromad ${money(facts.totalIncome)}, jami xarajat ${money(facts.totalExpense)}, sof qoldiq ${money(facts.totalIncome - facts.totalExpense)} (${facts.transactionCount} ta tranzaksiya).`;
+}/**
  * Handles conversational financial advisory with Gemini grounded on verified facts
  */
 export async function askFinancialAdvisor(
@@ -601,8 +417,8 @@ export async function askFinancialAdvisor(
       }
     }
 
-    // 2. Gather verified financial facts
-    const context = await gatherUserFinancialContext(user.id, supabase);
+    // 2. Gather verified financial facts (server-side only; client context is never trusted)
+    const verified = await gatherUserFinancialContext(user.id, supabase);
 
     // 3. Save User message to ai_messages
     await supabase.from('ai_messages').insert({
@@ -618,7 +434,7 @@ export async function askFinancialAdvisor(
 
     if (intentResult.handled) {
       const evidence = {
-        grounded_context: context,
+        grounded_context: verified.text,
         model_used: 'deterministic-financial-engine',
         is_fallback: false,
         pending_action: intentResult.pendingAction || null,
@@ -685,26 +501,20 @@ Asosiy vazifalar va javob tuzilishi:
 
 4. TILI: O'zbek tilida tabiiy, to'liq, ravon va grammatik to'g'ri jumlalar bilan yozing. Javobni aslo chala yoki tugallanmagan qoldirmang.`;
 
-    const fullPrompt = `${context}\n\nUSER QUESTION: ${question.trim()}`;
+    const fullPrompt = `${verified.text}\n\nUSER QUESTION: ${question.trim()}`;
 
     const aiRes = await generateAIContent(fullPrompt, systemInstruction);
 
-    // If AI was rate limited or timed out, use verified deterministic grounded answer
-    let finalAnswer =
+    // If the AI provider is unavailable, answer only from verified database facts
+    const finalAnswer =
       !aiRes.isFallback && aiRes.text.trim()
         ? aiRes.text
-        : buildDeterministicGroundedAnswer(question, context);
-
-    if (question.toLowerCase().includes('highest expense') && context.includes('Cozy Studio Rent')) {
-      if (!finalAnswer.includes('1,500') && !finalAnswer.includes('1500') && !finalAnswer.toLowerCase().includes('rent')) {
-        finalAnswer = `Your highest expense this month was Cozy Studio Rent ($1,500).`;
-      }
-    }
+        : buildVerifiedFallbackAnswer(question, verified.facts);
 
     // 5. Save Assistant response to ai_messages
     const evidence = {
-      grounded_context: context,
-      model_used: aiRes.isFallback ? 'deterministic-grounded-engine' : aiRes.model,
+      grounded_context: verified.text,
+      model_used: aiRes.isFallback ? 'verified-facts-fallback' : aiRes.model,
       is_fallback: aiRes.isFallback,
     };
 

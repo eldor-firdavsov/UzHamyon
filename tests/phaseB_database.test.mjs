@@ -1,12 +1,10 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
-import fs from 'node:fs';
-import { execSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
+import { readEnv } from './helpers/env.mjs';
 
-const envContent = fs.readFileSync('/home/eldor_firdavsov/Desktop/SpendSense/.env.local', 'utf8');
-const supabaseUrl = envContent.match(/NEXT_PUBLIC_SUPABASE_URL=(.+)/)?.[1]?.trim();
-const anonKey = envContent.match(/NEXT_PUBLIC_SUPABASE_ANON_KEY=(.+)/)?.[1]?.trim();
+const supabaseUrl = readEnv('NEXT_PUBLIC_SUPABASE_URL');
+const anonKey = readEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
 
 describe('Phase B — Database Foundation and Financial Data Model', () => {
   let adminClient;
@@ -37,15 +35,8 @@ describe('Phase B — Database Foundation and Financial Data Model', () => {
   };
 
   before(async () => {
-    // 1. Obtain admin client using Supabase CLI reveal
-    const keys = JSON.parse(
-      execSync(
-        '/home/eldor_firdavsov/.local/bin/supabase projects api-keys --project-ref omzreoaaownshtzpqsdt --reveal --output json'
-      ).toString()
-    );
-    const serviceKey = keys.find(
-      (k) => k.name === 'service_role' || k.type === 'service_role' || k.name?.includes('service_role')
-    )?.api_key;
+    // 1. Obtain admin client from configured service role key
+    const serviceKey = readEnv('SUPABASE_SERVICE_ROLE_KEY');
     assert.ok(serviceKey, 'Service role key must be resolvable for admin setup');
 
     adminClient = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });

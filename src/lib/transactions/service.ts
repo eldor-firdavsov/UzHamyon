@@ -209,15 +209,17 @@ export async function listTransactions(
       }
     }
 
-    // Sorting
+    // Sorting — newest transaction date first by default, with a fully
+    // deterministic tie-breaker so pagination can never repeat or skip rows.
     const isAscending = filters.sortDirection === 'asc';
     if (filters.sortBy === 'amount') {
       query = query.order('amount', { ascending: isAscending });
+      query = query.order('transaction_date', { ascending: false });
     } else {
       query = query.order('transaction_date', { ascending: isAscending });
     }
-    // Deterministic tie-breaker
-    query = query.order('id', { ascending: true });
+    query = query.order('created_at', { ascending: isAscending });
+    query = query.order('id', { ascending: isAscending });
 
     // Pagination
     const page = filters.page || 1;

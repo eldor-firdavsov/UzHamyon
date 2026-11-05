@@ -67,19 +67,6 @@ export default async function OnboardingPage({
     return <TelegramOnboarding initialFirstName="" />;
   }
 
-  // Guest user starting the onboarding experience from Welcome screen
-  return (
-    <div className="min-h-screen min-h-dvh bg-[#F7F8F5] text-[#171B16] flex flex-col justify-center items-center px-3 sm:px-4 py-4 sm:py-8 antialiased">
-      <main className="w-full max-w-lg">
-        <OnboardingWizard
-          currentUser={null}
-          initialStep={1}
-          initialFirstName=""
-          initialData={null}
-          initialIncome={0}
-          initialExpenses={0}
-        />
-      </main>
-    </div>
-  );
+  // Guests cannot self-register: authentication happens through Telegram only.
+  redirect('/login');
 }

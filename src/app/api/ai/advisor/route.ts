@@ -29,33 +29,8 @@ export async function POST(request: NextRequest) {
 
     const result = await askFinancialAdvisor(question, conversationId);
     if (result.error) {
-      // If unauthenticated (e.g. prototype preview or guest visitor), provide live OpenRouter AI response
-      if (result.status === 401 || result.error.includes('Avtorizatsiya')) {
-        const { generateAIContent } = await import('@/lib/ai/aiClient');
-        const systemInstruction = `Siz UzHamyon — O‘zbekistondagi eng zamonaviy shaxsiy moliya va budjet boshqaruvi platformasining sun’iy intellekt moliyaviy maslahatchisisiz.
-Foydalanuvchining savoliga o‘zbek tilida aniq, samimiy, tushunarli, dalillarga asoslangan va professional tarzda javob bering.
-Agar hisob-kitob, tejash, xarajatlar yoki budjet haqida so‘ralsa, O‘zbekiston sharoitiga mos amaliy raqamlar va tavsiyalar keltiring.
-${body.context ? `\nFoydalanuvchining joriy moliyaviy konteksti:\n${body.context}` : ''}`;
-
-        const aiRes = await generateAIContent(question, systemInstruction);
-        const replyText = aiRes.text || 'Kechirasiz, hozirda javobni shakllantirishda xatolik yuz berdi. Iltimos qaytadan urinib ko‘ring.';
-
-        return NextResponse.json(
-          {
-            response: {
-              conversationId: 'demo-guest',
-              messageId: 'msg-' + Date.now(),
-              answer: replyText,
-              isAiFallback: aiRes.isFallback,
-              evidence: { model: aiRes.model },
-            },
-            answer: replyText,
-            reply: replyText,
-          },
-          { status: 200 }
-        );
-      }
-
+      // AI is available only to authenticated Telegram Mini App users.
+      // Never accept client-supplied financial context or fabricate guest answers.
       return NextResponse.json({ error: result.error }, { status: result.status });
     }
 

@@ -1,6 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '9085840931:AAHXfmvbGSqJYKARmpwsvh352SeR2dMHOo4';
+function getBotToken(): string {
+  const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
+  if (!token) {
+    throw new Error('TELEGRAM_BOT_TOKEN muhit o‘zgaruvchisi sozlanmagan');
+  }
+  return token;
+}
+
 const MINIAPP_URL = process.env.TELEGRAM_MINIAPP_URL || 'https://uzhamyon.vercel.app/';
 
 interface TelegramUpdate {
@@ -30,9 +37,16 @@ interface TelegramUpdate {
  * Sends a message via Telegram Bot API with optional WebApp inline keyboard.
  */
 export async function sendTelegramMessage(chatId: number, text: string, buttonText?: string, webAppUrl?: string) {
-  const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
+  const url = `https://api.telegram.org/bot${getBotToken()}/sendMessage`;
   
-  const payload: any = {
+  const payload: {
+    chat_id: number;
+    text: string;
+    parse_mode: string;
+    reply_markup?: {
+      inline_keyboard: Array<Array<{ text: string; web_app: { url: string } }>>;
+    };
+  } = {
     chat_id: chatId,
     text,
     parse_mode: 'HTML',
@@ -67,12 +81,13 @@ export async function sendTelegramMessage(chatId: number, text: string, buttonTe
 /**
  * Checks if a Telegram user has completed onboarding in UzHamyon
  */
-import { getSupabaseUrl, getSupabaseServiceRoleKey } from '@/lib/supabase/config';
+import { getSupabaseUrl, getSupabaseServiceRoleKey } from '../supabase/config.ts';
 
 export async function isReturningTelegramUser(telegramId: number): Promise<boolean> {
   try {
     const supabaseUrl = getSupabaseUrl();
     const serviceRoleKey = getSupabaseServiceRoleKey();
+    if (!serviceRoleKey) return false;
 
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
@@ -158,7 +173,7 @@ export async function runTelegramPolling(abortSignal?: AbortSignal) {
 
   while (!abortSignal?.aborted) {
     try {
-      const url = `https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?offset=${offset}&timeout=20`;
+      const url = `https://api.telegram.org/bot${getBotToken()}/getUpdates?offset=${offset}&timeout=20`;
       const res = await fetch(url);
       const data = await res.json();
 

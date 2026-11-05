@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createServerClient } from '@supabase/ssr';
 
-const envContent = fs.readFileSync('/home/eldor_firdavsov/Desktop/SpendSense/.env.local', 'utf8');
+const envContent = fs.readFileSync(new URL('../.env.local', import.meta.url).pathname, 'utf8');
 const SUPABASE_URL = envContent.match(/NEXT_PUBLIC_SUPABASE_URL=(.+)/)?.[1]?.trim();
 const SUPABASE_ANON_KEY = envContent.match(/NEXT_PUBLIC_SUPABASE_ANON_KEY=(.+)/)?.[1]?.trim();
 const BASE_URL = 'http://localhost:3000';
@@ -171,14 +171,14 @@ describe('SpendSense AI — Instant Navigation & Non-Blocking SWR Verification',
   });
 
   it('6. Skeleton Shimmer CSS includes prefers-reduced-motion override', () => {
-    const cssContent = fs.readFileSync('/home/eldor_firdavsov/Desktop/SpendSense/src/app/globals.css', 'utf8');
+    const cssContent = fs.readFileSync(new URL('../src/app/globals.css', import.meta.url).pathname, 'utf8');
     assert.ok(cssContent.includes('.skeleton-shimmer'), 'globals.css must contain .skeleton-shimmer');
     assert.ok(cssContent.includes('@media (prefers-reduced-motion: reduce)'), 'globals.css must support prefers-reduced-motion');
     assert.ok(cssContent.includes('animation: none'), 'Reduced motion must disable shimmer animation');
   });
 
   it('7. Client Cache engine provides SWR, peekCache, and user ID isolation', async () => {
-    const cacheFileContent = fs.readFileSync('/home/eldor_firdavsov/Desktop/SpendSense/src/lib/cache/clientCache.ts', 'utf8');
+    const cacheFileContent = fs.readFileSync(new URL('../src/lib/cache/clientCache.ts', import.meta.url).pathname, 'utf8');
     assert.ok(cacheFileContent.includes('export function peekCache'), 'clientCache must export peekCache');
     assert.ok(cacheFileContent.includes('export async function warmCache'), 'clientCache must export warmCache');
     assert.ok(cacheFileContent.includes('export function setCacheUser'), 'clientCache must export setCacheUser');

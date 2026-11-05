@@ -193,33 +193,8 @@ app.post('/api/ai/advisor', async (c) => {
 
     const result = await askFinancialAdvisor(question, conversationId, client);
     if (result.error) {
-      // If unauthenticated (e.g. prototype preview or guest visitor), provide live OpenRouter AI response
-      if (result.status === 401 || result.error.includes('Avtorizatsiya')) {
-        const { generateAIContent } = await import('../src/lib/ai/aiClient.ts');
-        const systemInstruction = `Siz UzHamyon — O‘zbekistondagi eng zamonaviy shaxsiy moliya va budjet boshqaruvi platformasining sun’iy intellekt moliyaviy maslahatchisisiz.
-Foydalanuvchining savoliga o‘zbek tilida aniq, samimiy, tushunarli, dalillarga asoslangan va professional tarzda javob bering.
-Agar hisob-kitob, tejash, xarajatlar yoki budjet haqida so‘ralsa, O‘zbekiston sharoitiga mos amaliy raqamlar va tavsiyalar keltiring.
-${body.context ? `\nFoydalanuvchining joriy moliyaviy konteksti:\n${body.context}` : ''}`;
-
-        const aiRes = await generateAIContent(question, systemInstruction);
-        const replyText = aiRes.text || 'Kechirasiz, hozirda javobni shakllantirishda xatolik yuz berdi. Iltimos qaytadan urinib ko‘ring.';
-
-        return c.json(
-          {
-            response: {
-              conversationId: 'demo-guest',
-              messageId: 'msg-' + Date.now(),
-              answer: replyText,
-              isAiFallback: aiRes.isFallback,
-              evidence: { model: aiRes.model },
-            },
-            answer: replyText,
-            reply: replyText,
-          },
-          200
-        );
-      }
-
+      // AI is available only to authenticated Telegram Mini App users.
+      // Never accept client-supplied financial context or fabricate guest answers.
       return c.json({ error: result.error }, (result.status as any) || 400);
     }
 
@@ -674,11 +649,13 @@ app.get('/api/imports/jobs/:id', async (c) => {
 });
 
 const port = Number(process.env.API_PORT || 3001);
-console.log(`UzHamyon Hono API Server running on port ${port}...`);
-
-serve({
-  fetch: app.fetch,
-  port,
-});
+const isDirectRun = !process.env.NODE_TEST_CONTEXT && (!process.argv[1] || /server\.[tj]s$/.test(process.argv[1]));
+if (isDirectRun) {
+  console.log(`UzHamyon Hono API Server running on port ${port}...`);
+  serve({
+    fetch: app.fetch,
+    port,
+  });
+}
 
 export default app;

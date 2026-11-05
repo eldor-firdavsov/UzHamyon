@@ -54,6 +54,8 @@ export async function getAnalyticsSummary(
         .select('currency')
         .eq('user_id', user.id)
         .order('transaction_date', { ascending: false })
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
         .limit(1)
         .maybeSingle();
       if (firstTx?.currency) {
@@ -121,7 +123,9 @@ export async function getAnalyticsSummary(
       .eq('currency', currency)
       .gte('transaction_date', startDate)
       .lte('transaction_date', endDate)
-      .order('transaction_date', { ascending: true });
+      .order('transaction_date', { ascending: true })
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true });
 
     if (txError) {
       return { data: null, error: txError.message, status: 500 };

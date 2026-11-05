@@ -90,7 +90,9 @@ export default async function SettingsPage() {
                 </span>
               </div>
               <p className="text-xs sm:text-sm text-[#697168] break-all">
-                {email}
+                {email.startsWith('tg_') && email.endsWith('@telegram.uzhamyon.uz')
+                  ? 'Telegram hisobi orqali ulangan'
+                  : email}
               </p>
               <div className="pt-0.5">
                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#163300] bg-[#F0F9E9] px-2.5 py-0.5 rounded-md">
@@ -227,7 +229,7 @@ export default async function SettingsPage() {
 
           <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-t border-[#F0F2ED]">
             <div className="text-xs text-[#697168]">
-              Sessiyani yakunlaganingizdan so‘ng qayta kirish uchun elektron pochta va parol talab qilinadi.
+              Sessiyani yakunlaganingizdan so‘ng qayta kirish uchun Telegram hisobingizdan foydalanasiz.
             </div>
             <LogoutButton className="w-full sm:w-auto justify-center" />
           </div>

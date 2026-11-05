@@ -24,6 +24,38 @@ async function resolveClient(providedClient?: SupabaseClient): Promise<SupabaseC
 }
 
 /**
+ * Finds an existing budget for the same user, category, currency and overlapping period.
+ * Prevents unintended duplicate budgets.
+ */
+async function findOverlappingBudget(
+  supabase: SupabaseClient,
+  userId: string,
+  data: { category_id?: string | null; currency: string; start_date: string; end_date: string },
+  excludeId?: string
+): Promise<{ id: string } | null> {
+  let query = supabase
+    .from('budgets')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('currency', data.currency)
+    .lte('start_date', data.end_date)
+    .gte('end_date', data.start_date);
+
+  if (data.category_id) {
+    query = query.eq('category_id', data.category_id);
+  } else {
+    query = query.is('category_id', null);
+  }
+
+  if (excludeId) {
+    query = query.neq('id', excludeId);
+  }
+
+  const { data: existing } = await query.limit(1);
+  return existing?.[0] || null;
+}
+
+/**
  * Computes progress and status for a given budget record
  */
 export async function computeBudgetProgress(
@@ -228,6 +260,20 @@ export async function createBudget(
       }
     }
 
+    const duplicate = await findOverlappingBudget(supabase, user.id, {
+      category_id: validated.category_id,
+      currency: validated.currency,
+      start_date: validated.start_date,
+      end_date: validated.end_date,
+    });
+    if (duplicate) {
+      return {
+        data: null,
+        error: 'Bu kategoriya uchun shu davrda budjet allaqachon mavjud',
+        status: 409,
+      };
+    }
+
     const { data: created, error: insertError } = await supabase
       .from('budgets')
       .insert({
@@ -285,7 +331,7 @@ export async function updateBudget(
     // Check ownership
     const { data: existing } = await supabase
       .from('budgets')
-      .select('id, user_id')
+      .select('*')
       .eq('id', id)
       .eq('user_id', user.id)
       .maybeSingle();
@@ -320,6 +366,26 @@ export async function updateBudget(
     if (validated.start_date !== undefined) updatePayload.start_date = validated.start_date;
     if (validated.end_date !== undefined) updatePayload.end_date = validated.end_date;
     if (validated.category_id !== undefined) updatePayload.category_id = validated.category_id;
+
+    const duplicate = await findOverlappingBudget(
+      supabase,
+      user.id,
+      {
+        category_id:
+          validated.category_id !== undefined ? validated.category_id : existing.category_id,
+        currency: validated.currency ?? existing.currency,
+        start_date: validated.start_date ?? existing.start_date,
+        end_date: validated.end_date ?? existing.end_date,
+      },
+      id
+    );
+    if (duplicate) {
+      return {
+        data: null,
+        error: 'Bu kategoriya uchun shu davrda budjet allaqachon mavjud',
+        status: 409,
+      };
+    }
 
     const { data: updated, error: updateErr } = await supabase
       .from('budgets')

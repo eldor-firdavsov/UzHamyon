@@ -6,8 +6,12 @@ import MobileNavBar from '@/components/navigation/MobileNavBar';
 import SlidingSegmentedNav from '@/prototype/components/SlidingSegmentedNav';
 import UzHamyonLogo from '@/components/brand/UzHamyonLogo';
 import CategoryIcon, { getCategoryMeta } from '@/components/categories/CategoryIcon';
-import { predictCategoryFromTitle } from '@/lib/categories/predictCategory';
+import {
+  predictCategoryFromTitle,
+  matchPredictedToDbCategory,
+} from '@/lib/categories/predictCategory';
 import { formatNumberWithGaps } from '@/lib/formatters/numberGaps';
+import type { Category } from '@/types/database';
 import {
   Sparkles,
   ArrowUp,
@@ -56,6 +60,11 @@ export interface Budget {
   id: string;
   cat: string;
   limit: number;
+  categoryId?: string | null;
+  currency?: string;
+  spent?: number;
+  remaining?: number;
+  percentageUsed?: number;
 }
 
 export interface Contribution {
@@ -178,14 +187,6 @@ const DEMO_GOALS: Goal[] = [
 ];
 
 const INITIAL_CONVERSATIONS: Conversation[] = [
-  {
-    id: 'c0',
-    title: 'Oktyabr xarajatlari',
-    msgs: [
-      { r: 'u', t: "Oktyabrda eng ko'p nimaga sarfladim?" },
-      { r: 'a', t: "Namuna: Uy — 2 500 000 so'm." },
-    ],
-  },
   { id: 'c1', title: 'Yangi suhbat', msgs: [] },
 ];
 
@@ -208,6 +209,123 @@ function parseNumber(s: string | number | undefined): number {
 // Maps backend category strings into standardized prototype categories
 function normalizeCategory(rawName?: string, type: 'in' | 'ex' = 'ex'): string {
   return getCategoryMeta(rawName, type).key;
+}
+
+interface ApiTransactionRow {
+  id: string;
+  type: string;
+  amount: number | string;
+  categories?: { name?: string };
+  description?: string;
+  transaction_date?: string;
+}
+
+function mapApiTransaction(t: ApiTransactionRow): Transaction {
+  return {
+    id: t.id,
+    type: t.type === 'income' ? 'in' : 'ex',
+    amount: Number(t.amount) || 0,
+    cat: normalizeCategory(t.categories?.name, t.type === 'income' ? 'in' : 'ex'),
+    desc: t.description || t.categories?.name || '',
+    date: t.transaction_date || TODAY_DATE,
+  };
+}
+
+interface ApiBudgetRow {
+  id: string;
+  name?: string;
+  amount?: number | string;
+  category_id?: string | null;
+  currency?: string;
+  spent?: number | string;
+  remaining?: number | string;
+  percentageUsed?: number | string;
+  categories?: { id?: string; name?: string } | null;
+}
+
+function mapApiBudget(b: ApiBudgetRow): Budget {
+  return {
+    id: b.id,
+    cat: normalizeCategory(b.categories?.name || b.name, 'ex'),
+    limit: Number(b.amount) || 0,
+    categoryId: b.category_id ?? b.categories?.id ?? null,
+    currency: b.currency || 'UZS',
+    spent: typeof b.spent === 'number' || typeof b.spent === 'string' ? Number(b.spent) || 0 : undefined,
+    remaining: typeof b.remaining === 'number' || typeof b.remaining === 'string' ? Number(b.remaining) || 0 : undefined,
+    percentageUsed:
+      typeof b.percentageUsed === 'number' || typeof b.percentageUsed === 'string'
+        ? Number(b.percentageUsed) || 0
+        : undefined,
+  };
+}
+
+/**
+ * Loads every transaction belonging to the signed-in user.
+ *
+ * The list endpoint caps `pageSize` at 100, so asking for 300 was rejected
+ * (400) and the UI silently fell back to stale/demo data. We page through the
+ * API instead, which also keeps the server-side date ordering intact.
+ */
+/**
+ * Converts technical API/database messages into a user-facing Uzbek message.
+ * The raw reason is logged by the caller for diagnostics.
+ */
+function toUzbekTxError(raw?: string, action: 'save' | 'delete' = 'save'): string {
+  const message = (raw || '').toLowerCase();
+
+  if (message.includes('unauthorized') || message.includes('authentication')) {
+    return 'Tizimga kirish talab qilinadi. Iltimos, Telegram orqali qaytadan kiring.';
+  }
+  if (message.includes('failed to fetch') || message.includes('network')) {
+    return 'Server bilan aloqa uzildi. Internetni tekshirib, qayta urining.';
+  }
+  if (message.includes('incompatible') || message.includes('category')) {
+    return 'Kategoriya tranzaksiya turiga mos emas. Iltimos, boshqa kategoriya tanlang.';
+  }
+  if (message.includes('amount')) {
+    return 'Summa noto‘g‘ri kiritilgan. Iltimos, musbat son kiriting.';
+  }
+  if (message.includes('date')) {
+    return 'Sana noto‘g‘ri kiritilgan. Iltimos, sanani qayta tanlang.';
+  }
+  if (message.includes('description')) {
+    return 'Tranzaksiya nomi noto‘g‘ri kiritilgan.';
+  }
+
+  return action === 'delete'
+    ? 'Tranzaksiyani o‘chirishda xatolik yuz berdi. Iltimos, qayta urining.'
+    : 'Tranzaksiyani saqlashda xatolik yuz berdi. Iltimos, qayta urining.';
+}
+
+async function fetchAllTransactions(): Promise<ApiTransactionRow[]> {
+  const rows: ApiTransactionRow[] = [];
+  const pageSize = 100;
+  let page = 1;
+  let totalPages = 1;
+
+  do {
+    const res = await fetch(
+      `/api/transactions?pageSize=${pageSize}&page=${page}&sortBy=date&sortDirection=desc`,
+      { cache: 'no-store' }
+    );
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(
+        typeof payload?.error === 'string'
+          ? payload.error
+          : 'Tranzaksiyalarni yuklab bo‘lmadi'
+      );
+    }
+    const batch: ApiTransactionRow[] = Array.isArray(payload.transactions)
+      ? payload.transactions
+      : [];
+    rows.push(...batch);
+    totalPages = Number(payload.totalPages) || 1;
+    if (batch.length === 0) break;
+    page += 1;
+  } while (page <= totalPages && page <= 50);
+
+  return rows;
 }
 
 export default function UzHamyonPrototypeApp({
@@ -247,6 +365,15 @@ export default function UzHamyonPrototypeApp({
     initialGoals || (allowDemoFallback ? DEMO_GOALS : [])
   );
   const [loading, setLoading] = useState<boolean>(!initialTransactions);
+
+  // ── Persistence State ──
+  // Only a real authenticated session may write to the database. The public
+  // prototype preview keeps local demo interactions.
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!allowDemoFallback);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [txError, setTxError] = useState<string | null>(null);
+  const [isSavingTx, setIsSavingTx] = useState<boolean>(false);
+  const [isSavingBudget, setIsSavingBudget] = useState<boolean>(false);
 
   // ── Transaction-based Available Months ──
   // STRICT REQUIREMENT: Only calendar months with >= 1 actual recorded transaction belonging to the user appear!
@@ -311,6 +438,9 @@ export default function UzHamyonPrototypeApp({
   const [toastMessage, setToastMessage] = useState<string>('');
 
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // Synchronous in-flight guard: state updates are async, so rapid double
+  // taps could otherwise create duplicate transactions.
+  const txSaveInFlightRef = useRef(false);
 
   // Sync tab with browser URL if requested, keeping selected month synchronized
   const switchTab = useCallback(
@@ -404,6 +534,10 @@ export default function UzHamyonPrototypeApp({
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
 
+        if (isMounted) {
+          setIsAuthenticated(Boolean(user));
+        }
+
         if (user && isMounted) {
           // 1. User profile name
           const { data: profile } = await supabase
@@ -418,32 +552,27 @@ export default function UzHamyonPrototypeApp({
             setUserName(`${user.user_metadata.first_name} ${user.user_metadata.last_name || ''}`.trim());
           }
 
-          // 2. Real transactions
-          const txRes = await fetch('/api/transactions?pageSize=300');
-          if (txRes.ok && isMounted) {
-            const data = await txRes.json();
-            if (data.transactions && Array.isArray(data.transactions)) {
-              if (data.transactions.length > 0) {
-                const mapped: Transaction[] = data.transactions.map((t: {
-                  id: string;
-                  type: string;
-                  amount: number;
-                  categories?: { name?: string };
-                  description?: string;
-                  transaction_date?: string;
-                }) => ({
-                  id: t.id,
-                  type: t.type === 'income' ? 'in' : 'ex',
-                  amount: Number(t.amount) || 0,
-                  cat: normalizeCategory(t.categories?.name, t.type === 'income' ? 'in' : 'ex'),
-                  desc: t.description || t.categories?.name || '',
-                  date: t.transaction_date || TODAY_DATE,
-                }));
-                setTransactions(mapped);
-              } else if (!allowDemoFallback) {
-                setTransactions([]);
+          // 2. Categories — required to resolve the user's category_id on save
+          try {
+            const catRes = await fetch('/api/categories', { cache: 'no-store' });
+            if (catRes.ok) {
+              const catData = await catRes.json();
+              if (Array.isArray(catData.categories) && isMounted) {
+                setCategories(catData.categories as Category[]);
               }
             }
+          } catch (catErr) {
+            console.error('Failed to load categories in UzHamyon prototype app:', catErr);
+          }
+
+          // 3. Real transactions — paged newest-first from the server
+          try {
+            const rows = await fetchAllTransactions();
+            if (isMounted && (rows.length > 0 || !allowDemoFallback)) {
+              setTransactions(rows.map(mapApiTransaction));
+            }
+          } catch (txErr) {
+            console.error('Failed to load transactions in UzHamyon prototype app:', txErr);
           }
 
           // 3. Real budgets
@@ -452,17 +581,7 @@ export default function UzHamyonPrototypeApp({
             const data = await bRes.json();
             if (data.budgets && Array.isArray(data.budgets)) {
               if (data.budgets.length > 0) {
-                const mappedB: Budget[] = data.budgets.map((b: {
-                  id: string;
-                  categories?: { name?: string };
-                  name?: string;
-                  amount?: number;
-                }) => ({
-                  id: b.id,
-                  cat: normalizeCategory(b.categories?.name || b.name, 'ex'),
-                  limit: Number(b.amount) || 0,
-                }));
-                setBudgets(mappedB);
+                setBudgets(data.budgets.map(mapApiBudget));
               } else if (!allowDemoFallback) {
                 setBudgets([]);
               }
@@ -515,6 +634,13 @@ export default function UzHamyonPrototypeApp({
     toastTimerRef.current = setTimeout(() => {
       setToastMessage('');
     }, 2200);
+  }, []);
+
+  // Re-reads transactions from the server so the UI reflects committed rows
+  // (including their real IDs, categories and database ordering).
+  const refreshTransactionsFromServer = useCallback(async () => {
+    const rows = await fetchAllTransactions();
+    setTransactions(rows.map(mapApiTransaction));
   }, []);
 
   // ── Month Selection & Navigation (Strictly Based on Actual Transactions) ──
@@ -681,9 +807,14 @@ export default function UzHamyonPrototypeApp({
     };
   }, [daysInCurrentMonth, currentMonthTransactions, selectedWeek]);
 
-  // Recent transactions sorted descending by date
+  // Recent transactions sorted newest-first by actual transaction date.
+  // The id tie-breaker keeps same-day rows in a stable order on every render.
   const sortedTransactions = useMemo(() => {
-    return [...currentMonthTransactions].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+    return [...currentMonthTransactions].sort((a, b) => {
+      const byDate = b.date.localeCompare(a.date);
+      if (byDate !== 0) return byDate;
+      return b.id.localeCompare(a.id);
+    });
   }, [currentMonthTransactions]);
 
   // Category progress breakdown for Tahlil
@@ -708,7 +839,7 @@ export default function UzHamyonPrototypeApp({
   // Budget status cards
   const budgetStatusList = useMemo(() => {
     return budgets.map((b) => {
-      const spent = categoryExpenses[b.cat] || 0;
+      const spent = typeof b.spent === 'number' ? b.spent : categoryExpenses[b.cat] || 0;
       const pct = b.limit > 0 ? Math.round((spent / b.limit) * 100) : 0;
       const over = spent > b.limit;
       const near = !over && pct >= 80;
@@ -779,33 +910,10 @@ export default function UzHamyonPrototypeApp({
     return groups;
   }, [sortedTransactions, searchQuery, activityFilter, month]);
 
-  // ── AI Message Generation Logic ──
+  // ── AI Message Logic ──
   const activeConversation = useMemo(() => {
     return conversations.find((c) => c.id === currentConvId) || conversations[0];
   }, [conversations, currentConvId]);
-
-  const generateAIResponse = useCallback(
-    (question: string): string => {
-      const q = question.toLowerCase();
-      const ml = monthLabel;
-      if (!currentMonthTransactions.length) {
-        return `Namuna: ${ml} uchun tranzaksiya yo'q.`;
-      }
-      if (q.includes('tej') || q.includes('maslahat')) {
-        return `Namuna: ${ml}da daromad ${formatNumber(monthIncome)}, xarajat ${formatNumber(monthExpense)} so'm. ${
-          topExpenseCategory
-            ? `${topExpenseCategory} eng katta xarajat (${formatNumber(
-                categoryExpenses[topExpenseCategory]
-              )}). Shu yerdan boshlab limit belgilash mumkin.`
-            : ''
-        }`;
-      }
-      return `Namuna: ${ml}da eng katta xarajat — ${topExpenseCategory || "yo'q"}${
-        topExpenseCategory ? ` (${formatNumber(categoryExpenses[topExpenseCategory])} so'm)` : ''
-      }. Jami xarajat ${formatNumber(monthExpense)} so'm.`;
-    },
-    [monthLabel, currentMonthTransactions, monthIncome, monthExpense, topExpenseCategory, categoryExpenses]
-  );
 
   const handleLogout = async () => {
     try {
@@ -843,26 +951,16 @@ export default function UzHamyonPrototypeApp({
     setAiSendCount(newSendCount);
     setAiLastQuery(trimmed);
 
-    const financialContextSummary = `Foydalanuvchining joriy moliyaviy holati:
-- Faol oy: ${monthLabel} ${year}
-- Oylik daromad: ${formatNumber(monthIncome)} so'm
-- Oylik xarajat: ${formatNumber(monthExpense)} so'm
-- Eng ko'p xarajat qilingan toifa: ${topExpenseCategory || "Mavjud emas"} (${topExpenseCategory ? formatNumber(categoryExpenses[topExpenseCategory]) + " so'm" : ''})
-- Maqsadlarga jamg'arilgan: ${formatNumber(totalSavedAcrossGoals)} so'm
-- Jami tranzaksiyalar soni: ${transactions.length} ta`;
-
     try {
       const res = await fetch('/api/ai/advisor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          question: trimmed,
-          message: trimmed,
-          context: financialContextSummary,
-        }),
+        body: JSON.stringify({ question: trimmed, message: trimmed }),
       });
-      const data = await res.json();
-      const reply = data.answer || data.reply || data.response?.answer || data.response?.replyText || generateAIResponse(trimmed);
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || 'AI request failed');
+      const reply = data?.answer || data?.reply || data?.response?.answer;
+      if (!reply) throw new Error('Empty AI response');
       setAiLoading(false);
       setAiError(false);
       setConversations((prev) =>
@@ -877,17 +975,7 @@ export default function UzHamyonPrototypeApp({
       );
     } catch {
       setAiLoading(false);
-      setAiError(false);
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === targetConvId
-            ? {
-                ...c,
-                msgs: [...c.msgs, { r: 'a', t: generateAIResponse(trimmed) }],
-              }
-            : c
-        )
-      );
+      setAiError(true);
     }
   };
 
@@ -897,26 +985,16 @@ export default function UzHamyonPrototypeApp({
     setAiLoading(true);
     setAiSendCount((prev) => prev + 1);
 
-    const financialContextSummary = `Foydalanuvchining joriy moliyaviy holati:
-- Faol oy: ${monthLabel} ${year}
-- Oylik daromad: ${formatNumber(monthIncome)} so'm
-- Oylik xarajat: ${formatNumber(monthExpense)} so'm
-- Eng ko'p xarajat qilingan toifa: ${topExpenseCategory || "Mavjud emas"}
-- Maqsadlarga jamg'arilgan: ${formatNumber(totalSavedAcrossGoals)} so'm
-- Jami tranzaksiyalar soni: ${transactions.length} ta`;
-
     try {
       const res = await fetch('/api/ai/advisor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          question: aiLastQuery,
-          message: aiLastQuery,
-          context: financialContextSummary,
-        }),
+        body: JSON.stringify({ question: aiLastQuery, message: aiLastQuery }),
       });
-      const data = await res.json();
-      const reply = data.answer || data.reply || data.response?.answer || data.response?.replyText || generateAIResponse(aiLastQuery);
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || 'AI request failed');
+      const reply = data?.answer || data?.reply || data?.response?.answer;
+      if (!reply) throw new Error('Empty AI response');
       setAiLoading(false);
       setAiError(false);
       setConversations((prev) =>
@@ -931,23 +1009,14 @@ export default function UzHamyonPrototypeApp({
       );
     } catch {
       setAiLoading(false);
-      setAiError(false);
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === activeConversation.id
-            ? {
-                ...c,
-                msgs: [...c.msgs, { r: 'a', t: generateAIResponse(aiLastQuery) }],
-              }
-            : c
-        )
-      );
+      setAiError(true);
     }
   };
 
   // ── Sheet Actions & Handlers ──
   const handleOpenAddTx = () => {
     setEditId(null);
+    setTxError(null);
     setFormData({
       type: 'ex',
       amount: '',
@@ -960,6 +1029,7 @@ export default function UzHamyonPrototypeApp({
 
   const handleOpenEditTx = (t: Transaction) => {
     setEditId(t.id);
+    setTxError(null);
     setFormData({
       type: t.type,
       amount: formatNumberWithGaps(t.amount),
@@ -971,76 +1041,130 @@ export default function UzHamyonPrototypeApp({
   };
 
   const handleSaveTx = async () => {
+    if (txSaveInFlightRef.current) return;
+
+    setTxError(null);
+
     const amt = parseNumber(formData.amount);
     const date = formData.date;
     const desc = (formData.desc || '').trim();
     const type = (formData.type || 'ex') as 'in' | 'ex';
 
+    if (amt <= 0) {
+      setTxError('Iltimos, to‘g‘ri summa kiriting.');
+      return;
+    }
+    if (!desc) {
+      setTxError('Iltimos, tranzaksiya nomini kiriting.');
+      return;
+    }
+    if (!date) {
+      setTxError('Iltimos, sanani tanlang.');
+      return;
+    }
+
     // If Auto is selected, AI dynamically resolves category from title/description
     const predicted = predictCategoryFromTitle(desc, type);
-    const cat = (!formData.cat || formData.cat === 'Auto' || formData.cat === 'Boshqa')
-      ? predicted.category
-      : formData.cat;
+    const cat =
+      !formData.cat || formData.cat === 'Auto' || formData.cat === 'Boshqa'
+        ? predicted.category
+        : formData.cat;
 
-    if (amt <= 0 || !cat || !date) return;
-
-    if (editId) {
-      setTransactions((prev) =>
-        prev.map((t) => (t.id === editId ? { ...t, type, amount: amt, cat, desc, date } : t))
-      );
-      triggerToast('Tranzaksiya yangilandi');
-      invalidateAllFinancialCaches();
-      fetch(`/api/transactions/${editId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          description: desc || cat,
-          amount: amt,
-          type: type === 'in' ? 'income' : 'expense',
-          category: cat,
-          transaction_date: date,
-        }),
-      }).catch(console.error);
-    } else {
-      const tempId = 't' + Date.now();
-      const newTx: Transaction = {
-        id: tempId,
-        type,
-        amount: amt,
-        cat,
-        desc,
-        date,
-      };
-      setTransactions((prev) => [...prev, newTx]);
-      setYear(parseInt(date.slice(0, 4), 10));
-      setMonth(parseInt(date.slice(5, 7), 10));
-      triggerToast(`Tranzaksiya qo‘shildi: ${cat}`);
-      invalidateAllFinancialCaches();
-      fetch('/api/transactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          description: desc || cat,
-          amount: amt,
-          type: type === 'in' ? 'income' : 'expense',
-          category: cat,
-          currency: 'UZS',
-          transaction_date: date,
-        }),
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          if (data?.transaction?.id) {
-            setTransactions((prev) =>
-              prev.map((t) => (t.id === tempId ? { ...t, id: data.transaction.id } : t))
-            );
-          }
-        })
-        .catch(console.error);
+    // Public demo preview (no session): keep interactions local and never
+    // pretend the row was written to the database.
+    if (!isAuthenticated) {
+      if (editId) {
+        setTransactions((prev) =>
+          prev.map((t) => (t.id === editId ? { ...t, type, amount: amt, cat, desc, date } : t))
+        );
+      } else {
+        setTransactions((prev) => [
+          ...prev,
+          { id: `demo-${Date.now()}`, type, amount: amt, cat, desc, date },
+        ]);
+        setYear(parseInt(date.slice(0, 4), 10));
+        setMonth(parseInt(date.slice(5, 7), 10));
+      }
+      setActiveSheet(null);
+      setFormData({});
+      setEditId(null);
+      return;
     }
-    setActiveSheet(null);
-    setFormData({});
-    setEditId(null);
+
+    txSaveInFlightRef.current = true;
+    setIsSavingTx(true);
+
+    try {
+      const targetType = type === 'in' ? 'income' : 'expense';
+      const typedCategories = categories.filter((c) => c.type === targetType);
+      const matched = matchPredictedToDbCategory(cat, typedCategories);
+
+      const payload: Record<string, unknown> = {
+        description: desc,
+        amount: amt,
+        type: targetType,
+        currency: 'UZS',
+        transaction_date: date,
+      };
+      if (matched?.id && matched.type === targetType) {
+        payload.category_id = matched.id;
+      }
+
+      const res = await fetch(
+        editId ? `/api/transactions/${editId}` : '/api/transactions',
+        {
+          method: editId ? 'PUT' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.error) {
+        throw new Error(
+          typeof data?.error === 'string'
+            ? data.error
+            : 'Tranzaksiyani saqlashda xatolik yuz berdi'
+        );
+      }
+
+      // Success is only reported after the database confirmed the write.
+      try {
+        await refreshTransactionsFromServer();
+      } catch (refreshErr) {
+        // The write succeeded; a failed re-read must never prompt the user to
+        // submit the same transaction again (that would create a duplicate).
+        console.error('Transaction saved but reload failed:', refreshErr);
+        const saved = data?.transaction as ApiTransactionRow | undefined;
+        if (saved?.id) {
+          const mapped = mapApiTransaction(saved);
+          setTransactions((prev) =>
+            editId
+              ? prev.map((t) => (t.id === editId ? mapped : t))
+              : [mapped, ...prev]
+          );
+        }
+      }
+      invalidateAllFinancialCaches();
+
+      if (!editId) {
+        setYear(parseInt(date.slice(0, 4), 10));
+        setMonth(parseInt(date.slice(5, 7), 10));
+      }
+      triggerToast(editId ? 'Tranzaksiya yangilandi' : 'Tranzaksiya qo‘shildi');
+      setActiveSheet(null);
+      setFormData({});
+      setEditId(null);
+    } catch (err) {
+      // Keep the sheet open with the user's input intact.
+      console.error('Transaction save failed:', err);
+      setTxError(
+        toUzbekTxError(err instanceof Error ? err.message : undefined, 'save')
+      );
+    } finally {
+      txSaveInFlightRef.current = false;
+      setIsSavingTx(false);
+    }
   };
 
   const handleOpenAddBudget = () => {
@@ -1058,41 +1182,74 @@ export default function UzHamyonPrototypeApp({
   const handleSaveBudget = async () => {
     const limit = parseNumber(formData.limit);
     const cat = formData.cat;
-    if (limit <= 0 || !cat) return;
+    if (limit <= 0 || !cat || isSavingBudget) return;
 
-    if (editId) {
-      setBudgets((prev) =>
-        prev.map((b) => (b.id === editId ? { ...b, cat, limit } : b))
-      );
-      triggerToast('Byudjet yangilandi');
-      fetch(`/api/budgets/${editId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: limit }),
-      }).catch(console.error);
-    } else {
-      const tempId = 'b' + Date.now();
-      const newB: Budget = { id: tempId, cat, limit };
-      setBudgets((prev) => [...prev, newB]);
-      triggerToast('Byudjet qo‘shildi');
-      fetch('/api/budgets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: cat, amount: limit }),
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          if (data?.budget?.id) {
-            setBudgets((prev) =>
-              prev.map((b) => (b.id === tempId ? { ...b, id: data.budget.id } : b))
-            );
-          }
-        })
-        .catch(console.error);
+    const closeSheet = () => {
+      setActiveSheet(null);
+      setFormData({});
+      setEditId(null);
+    };
+
+    if (!isAuthenticated) {
+      if (editId) {
+        setBudgets((prev) => prev.map((b) => (b.id === editId ? { ...b, cat, limit } : b)));
+      } else {
+        setBudgets((prev) => [...prev, { id: 'b' + Date.now(), cat, limit }]);
+      }
+      triggerToast(editId ? 'Byudjet yangilandi' : "Byudjet qo'shildi");
+      closeSheet();
+      return;
     }
-    setActiveSheet(null);
-    setFormData({});
-    setEditId(null);
+
+    const catObj = categories.find(
+      (c) => c.type === 'expense' && normalizeCategory(c.name, 'ex') === cat
+    );
+    if (!catObj) {
+      triggerToast("Tanlangan kategoriya topilmadi. Sahifani yangilab, qayta urining.");
+      return;
+    }
+
+    const startDate = `${year}-${padTwo(month)}-01`;
+    const endDate = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+
+    setIsSavingBudget(true);
+    try {
+      const url = editId ? `/api/budgets/${editId}` : '/api/budgets';
+      const body = editId
+        ? { amount: limit, category_id: catObj.id, name: catObj.name }
+        : {
+            name: catObj.name,
+            amount: limit,
+            currency: 'UZS',
+            period_type: 'monthly',
+            start_date: startDate,
+            end_date: endDate,
+            category_id: catObj.id,
+          };
+
+      const res = await fetch(url, {
+        method: editId ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.budget) {
+        throw new Error(data?.error || 'Byudjetni saqlash muvaffaqiyatsiz bo‘ldi');
+      }
+
+      const saved = mapApiBudget(data.budget);
+      setBudgets((prev) =>
+        editId ? prev.map((b) => (b.id === editId ? saved : b)) : [...prev, saved]
+      );
+      invalidateAllFinancialCaches();
+      triggerToast(editId ? 'Byudjet yangilandi' : "Byudjet qo'shildi");
+      closeSheet();
+    } catch (err) {
+      console.error('Budget save failed:', err);
+      triggerToast('Byudjetni saqlashda xatolik yuz berdi. Qayta urinib ko‘ring.');
+    } finally {
+      setIsSavingBudget(false);
+    }
   };
 
   const handleOpenAddGoal = () => {
@@ -1187,14 +1344,50 @@ export default function UzHamyonPrototypeApp({
     if (!confirmConfig) return;
     const { k, id } = confirmConfig;
     if (k === 'tx') {
-      setTransactions((prev) => prev.filter((t) => t.id !== id));
-      triggerToast("Tranzaksiya o'chirildi");
-      invalidateAllFinancialCaches();
-      fetch(`/api/transactions/${id}`, { method: 'DELETE' }).catch(console.error);
+      if (!isAuthenticated) {
+        setTransactions((prev) => prev.filter((t) => t.id !== id));
+        setActiveSheet(null);
+        setConfirmConfig(null);
+        return;
+      }
+      try {
+        const res = await fetch(`/api/transactions/${id}`, { method: 'DELETE' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data?.error) {
+          throw new Error(
+            typeof data?.error === 'string'
+              ? data.error
+              : "Tranzaksiyani o‘chirishda xatolik yuz berdi"
+          );
+        }
+        setTransactions((prev) => prev.filter((t) => t.id !== id));
+        invalidateAllFinancialCaches();
+        triggerToast("Tranzaksiya o'chirildi");
+      } catch (err) {
+        console.error('Transaction delete failed:', err);
+        triggerToast(
+          toUzbekTxError(err instanceof Error ? err.message : undefined, 'delete')
+        );
+      }
     } else if (k === 'budget') {
-      setBudgets((prev) => prev.filter((b) => b.id !== id));
-      triggerToast("Byudjet o'chirildi");
-      fetch(`/api/budgets/${id}`, { method: 'DELETE' }).catch(console.error);
+      if (!isAuthenticated) {
+        setBudgets((prev) => prev.filter((b) => b.id !== id));
+        triggerToast("Byudjet o'chirildi");
+      } else {
+        try {
+          const res = await fetch(`/api/budgets/${id}`, { method: 'DELETE' });
+          if (!res.ok) {
+            const data = await res.json().catch(() => null);
+            throw new Error(data?.error || 'Budget delete failed');
+          }
+          setBudgets((prev) => prev.filter((b) => b.id !== id));
+          invalidateAllFinancialCaches();
+          triggerToast("Byudjet o'chirildi");
+        } catch (err) {
+          console.error('Budget delete failed:', err);
+          triggerToast("Byudjetni o'chirishda xatolik yuz berdi");
+        }
+      }
     } else if (k === 'goal') {
       setGoals((prev) => prev.filter((g) => g.id !== id));
       triggerToast("Maqsad o'chirildi");
@@ -1211,7 +1404,7 @@ export default function UzHamyonPrototypeApp({
     formData.date < MIN_ALLOWED_DATE ||
     formData.date > TODAY_DATE;
 
-  const isSaveBudgetDisabled = parseNumber(formData.limit) <= 0 || !formData.cat;
+  const isSaveBudgetDisabled = isSavingBudget || parseNumber(formData.limit) <= 0 || !formData.cat;
   const isSaveGoalDisabled = parseNumber(formData.target) <= 0 || !(formData.name || '').trim();
   const isSaveContribDisabled = parseNumber(formData.contrib) <= 0;
 
@@ -2635,6 +2828,7 @@ export default function UzHamyonPrototypeApp({
                   setActiveSheet(null);
                   setFormData({});
                   setEditId(null);
+                  setTxError(null);
                 }}
               >
                 Yopish
@@ -2799,11 +2993,35 @@ export default function UzHamyonPrototypeApp({
                       value={formData.date || ''}
                       onChange={(e) => setFormData((prev) => ({ ...prev, date: e.target.value }))}
                     />
+
+                    {txError && (
+                      <div
+                        id="tx-save-error"
+                        role="alert"
+                        style={{
+                          marginTop: '12px',
+                          padding: '10px 12px',
+                          borderRadius: '10px',
+                          background: '#FDF2F2',
+                          border: '1px solid rgba(214, 77, 77, 0.25)',
+                          color: '#B33A3A',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {txError}
+                      </div>
+                    )}
                   </div>
 
                   <div className="fxf">
-                    <button className="p" disabled={isSaveTxDisabled} onClick={handleSaveTx}>
-                      Saqlash
+                    <button
+                      className="p"
+                      disabled={isSaveTxDisabled || isSavingTx}
+                      onClick={handleSaveTx}
+                    >
+                      {isSavingTx ? 'Saqlanmoqda...' : 'Saqlash'}
                     </button>
                     {editId && (
                       <button

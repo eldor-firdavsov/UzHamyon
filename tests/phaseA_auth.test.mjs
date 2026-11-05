@@ -5,7 +5,7 @@ import { execSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
 import { registerSchema, loginSchema, updateProfileSchema } from '../src/app/auth/schemas.ts';
 
-const envContent = fs.readFileSync('/home/eldor_firdavsov/Desktop/SpendSense/.env.local', 'utf8');
+const envContent = fs.readFileSync(new URL('../.env.local', import.meta.url).pathname, 'utf8');
 const supabaseUrl = envContent.match(/NEXT_PUBLIC_SUPABASE_URL=(.+)/)?.[1]?.trim();
 const anonKey = envContent.match(/NEXT_PUBLIC_SUPABASE_ANON_KEY=(.+)/)?.[1]?.trim();
 
@@ -34,9 +34,7 @@ describe('Phase A — Authentication and User Isolation', () => {
     // Purge test users cleanly from database using admin API
     try {
       const keys = JSON.parse(
-        execSync(
-          '/home/eldor_firdavsov/.local/bin/supabase projects api-keys --project-ref omzreoaaownshtzpqsdt --reveal --output json'
-        ).toString()
+        JSON.stringify([{ name: 'service_role', api_key: (process.env.SUPABASE_SERVICE_ROLE_KEY || (fs.existsSync('.env.local') ? fs.readFileSync('.env.local', 'utf8').match(/SUPABASE_SERVICE_ROLE_KEY=(.+)/)?.[1]?.trim() : '')) }])
       );
       const serviceKey = keys.find(k => k.name === 'service_role' || k.type === 'service_role' || k.name?.includes('service_role'))?.api_key;
       if (serviceKey) {
@@ -142,7 +140,7 @@ describe('Phase A — Authentication and User Isolation', () => {
     });
 
     test('use server contract: actions.ts exports ONLY async functions (no objects/schemas)', async () => {
-      const actionsContent = fs.readFileSync('/home/eldor_firdavsov/Desktop/SpendSense/src/app/auth/actions.ts', 'utf8');
+      const actionsContent = fs.readFileSync(new URL('../src/app/auth/actions.ts', import.meta.url).pathname, 'utf8');
       assert.ok(!actionsContent.includes('export {\n  registerSchema'), 'actions.ts must not re-export Zod schemas');
       assert.ok(!actionsContent.includes('export { registerSchema'), 'actions.ts must not re-export Zod schemas');
     });

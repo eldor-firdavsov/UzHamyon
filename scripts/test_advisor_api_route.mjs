@@ -19,8 +19,11 @@ const secret =
   process.env.INTERNAL_AUTH_SECRET ||
   process.env.OPENROUTER_API_KEY ||
   process.env.AI_API_KEY ||
-  process.env.GEMINI_API_KEY ||
-  'uzhamyon_cryptographic_internal_secret_key_2026';
+  process.env.GEMINI_API_KEY;
+
+if (!secret) {
+  throw new Error('INTERNAL_AUTH_SECRET yoki AI API kaliti .env.local faylida kerak');
+}
 
 // Create a valid internal auth header for firdavsove1@gmail.com
 const userId = 'b7ddb69e-df81-449f-beff-0bedaa6ceafe';

@@ -13,12 +13,21 @@ import crypto from 'node:crypto';
  * 4. Constant-time comparison prevents timing attacks.
  */
 
-const INTERNAL_SECRET =
-  process.env.INTERNAL_AUTH_SECRET ||
-  process.env.OPENROUTER_API_KEY ||
-  process.env.AI_API_KEY ||
-  process.env.GEMINI_API_KEY ||
-  'uzhamyon_cryptographic_internal_secret_key_2026';
+/**
+ * Internal signing secret. Never ship a hardcoded fallback: a known secret
+ * would let an attacker forge the identity forwarded between proxy and server.
+ */
+function getInternalSecret(): string {
+  const secret =
+    process.env.INTERNAL_AUTH_SECRET ||
+    process.env.OPENROUTER_API_KEY ||
+    process.env.AI_API_KEY ||
+    process.env.GEMINI_API_KEY;
+  if (!secret) {
+    throw new Error('INTERNAL_AUTH_SECRET muhit o‘zgaruvchisi sozlanmagan');
+  }
+  return secret;
+}
 
 export const INTERNAL_AUTH_HEADER = 'x-internal-auth';
 
@@ -42,7 +51,7 @@ export function signInternalAuth(
   const nonce = crypto.randomBytes(8).toString('hex');
   const metaStr = metadata ? Buffer.from(JSON.stringify(metadata)).toString('base64url') : '';
   const payload = `${userId}:${userEmail}:${timestamp}:${nonce}:${metaStr}`;
-  const hmac = crypto.createHmac('sha256', INTERNAL_SECRET).update(payload).digest('hex');
+  const hmac = crypto.createHmac('sha256', getInternalSecret()).update(payload).digest('hex');
   return `${payload}:${hmac}`;
 }
 
@@ -87,7 +96,7 @@ export function verifyInternalAuth(token: string | null | undefined): VerifiedIn
     parts.length === 6
       ? `${id}:${email}:${timestamp}:${nonce}:${metaStr}`
       : `${id}:${email}:${timestamp}:${nonce}`;
-  const expectedHmac = crypto.createHmac('sha256', INTERNAL_SECRET).update(payload).digest('hex');
+  const expectedHmac = crypto.createHmac('sha256', getInternalSecret()).update(payload).digest('hex');
 
   try {
     const receivedBuf = Buffer.from(receivedHmac, 'hex');

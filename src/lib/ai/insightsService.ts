@@ -39,7 +39,9 @@ export async function generateAndSaveInsights(
       .select('id, description, amount, type, currency, transaction_date, merchant, category_id, categories(name)')
       .eq('user_id', user.id)
       .gte('transaction_date', thirtyDaysAgo)
-      .order('transaction_date', { ascending: false });
+      .order('transaction_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false });
 
     const transactions = rawTxs || [];
     const newInsights: Array<Record<string, unknown>> = [];

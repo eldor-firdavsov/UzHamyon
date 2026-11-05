@@ -24,10 +24,6 @@ import {
   MoreHorizontal,
   Loader2,
   AlertCircle,
-  Mail,
-  Lock,
-  Eye,
-  EyeOff,
   User,
   Sparkles,
   Lightbulb,
@@ -37,7 +33,6 @@ import CurrencyInput, { formatWithSpaces } from './CurrencyInput';
 import {
   saveOnboardingStepAction,
   completeOnboardingAction,
-  createOnboardingAccountAction,
 } from '@/app/onboarding/actions';
 import {
   ONBOARDING_GOAL_OPTIONS,
@@ -63,23 +58,14 @@ export default function OnboardingWizard({
 }: OnboardingWizardProps) {
 
 
-  // If user already authenticated, minimum step is 1, but if step 1 is requested, they can view Welcome
+  // Only authenticated users can reach the wizard; Telegram onboarding handles
+  // account creation, so the wizard starts at the profile-name step.
   const [step, setStep] = useState<number>(() => {
-    if (initialStep >= 1 && initialStep <= 7) return initialStep;
-    return currentUser ? 3 : 1;
+    if (initialStep >= 1 && initialStep <= 7) return initialStep === 2 ? 3 : initialStep;
+    return 3;
   });
 
-  const [user, setUser] = useState<{ id: string; email: string } | null>(currentUser);
-
-  // Step 2 (Account Creation) State
-  const [accountEmail, setAccountEmail] = useState<string>(currentUser?.email || '');
-  const [accountPassword, setAccountPassword] = useState<string>('');
-  const [accountConfirmPassword, setAccountConfirmPassword] = useState<string>('');
-  const [showPassword, setShowPassword] = useState<boolean>(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState<boolean>(false);
-  const [accountErrors, setAccountErrors] = useState<Record<string, string>>({});
-  const [isCreatingAccount, setIsCreatingAccount] = useState<boolean>(false);
-  const [verificationPending, setVerificationPending] = useState<boolean>(false);
+  const user = currentUser;
 
   // Step 3 (User Name) State
   const [firstName, setFirstName] = useState<string>(
@@ -142,74 +128,8 @@ export default function OnboardingWizard({
   // Step Navigation Handlers
   const handleWelcomeNext = () => {
     setGeneralError(null);
-    if (user) {
-      setStep(3);
-      persistDraft(3);
-    } else {
-      setStep(2);
-    }
-  };
-
-  const handleAccountCreationSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setGeneralError(null);
-    setAccountErrors({});
-
-    const errors: Record<string, string> = {};
-    if (!accountEmail.trim() || !accountEmail.includes('@')) {
-      errors.email = 'Haqiqiy elektron pochta manzilini kiriting';
-    }
-    if (!accountPassword || accountPassword.length < 8) {
-      errors.password = 'Parol kamida 8 ta belgidan iborat bo‘lishi kerak';
-    }
-    if (accountPassword !== accountConfirmPassword) {
-      errors.confirmPassword = 'Kiritilgan parollar bir-biriga mos kelmadi';
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setAccountErrors(errors);
-      return;
-    }
-
-    setIsCreatingAccount(true);
-    try {
-      const formData = new FormData();
-      formData.set('email', accountEmail.trim());
-      formData.set('password', accountPassword);
-      formData.set('confirmPassword', accountConfirmPassword);
-
-      const res = await createOnboardingAccountAction(null, formData);
-
-      if (!res.success) {
-        if (res.fieldErrors) {
-          const mapped: Record<string, string> = {};
-          Object.entries(res.fieldErrors).forEach(([k, msgs]) => {
-            if (msgs?.[0]) mapped[k] = msgs[0];
-          });
-          setAccountErrors(mapped);
-        }
-        setGeneralError(res.error || 'Hisob yaratishda xatolik yuz berdi');
-        setIsCreatingAccount(false);
-        return;
-      }
-
-      if (res.data?.requiresVerification) {
-        setVerificationPending(true);
-        setIsCreatingAccount(false);
-        return;
-      }
-
-      if (res.data?.userId) {
-        setUser({ id: res.data.userId, email: res.data.email });
-      }
-
-      setStep(3);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Kutilmagan xatolik yuz berdi';
-      setGeneralError(msg);
-    } finally {
-      setIsCreatingAccount(false);
-    }
+    setStep(3);
+    persistDraft(3);
   };
 
   const handleNameNext = () => {
@@ -306,11 +226,6 @@ export default function OnboardingWizard({
   const handleBack = () => {
     setGeneralError(null);
     if (step <= 1) return;
-    if (step === 3 && user && !accountPassword) {
-      // If user came into onboarding already authenticated, jumping back from step 3 goes to step 1
-      setStep(1);
-      return;
-    }
     setStep((prev) => prev - 1);
   };
 
@@ -375,7 +290,7 @@ export default function OnboardingWizard({
               id="onboarding-back-button"
               type="button"
               onClick={handleBack}
-              disabled={isSubmitting || isCreatingAccount}
+              disabled={isSubmitting}
               className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-[#52525B] hover:text-[#18181B] transition-colors p-1.5 -ml-1.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#163300]/20"
               aria-label="Orqaga qaytish"
             >
@@ -444,191 +359,6 @@ export default function OnboardingWizard({
           </div>
         )}
 
-        {/* ========================================================================= */}
-        {/* STEP 2 — ACCOUNT CREATION                                                 */}
-        {/* ========================================================================= */}
-        {step === 2 && (
-          <div id="onboarding-step-2" className="space-y-6">
-            <div className="space-y-1.5 text-center sm:text-left">
-              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-[#163300]">
-                Hisobingizni yarating
-              </h2>
-              <p className="text-xs sm:text-sm text-[#52525B]">
-                UzHamyon hisobini oching va moliyaviy ma’lumotlaringiz xavfsiz saqlansin.
-              </p>
-            </div>
-
-            {user ? (
-              <div className="rounded-2xl border border-[#D8DED3] bg-[#F8F9FA] p-5 space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-[#163300] text-[#9FE870] flex items-center justify-center">
-                    <Check className="h-5 w-5 stroke-[2.5]" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-[#52525B] font-medium">Siz tizimga kirdingiz</p>
-                    <p className="text-sm font-semibold text-[#18181B]">{user.email}</p>
-                  </div>
-                </div>
-                <button
-                  id="account-logged-in-continue-button"
-                  type="button"
-                  onClick={() => {
-                    setStep(3);
-                    persistDraft(3);
-                  }}
-                  className="w-full min-h-[48px] rounded-xl bg-[#163300] hover:bg-[#1f4700] text-[#9FE870] font-semibold text-sm flex items-center justify-center gap-2 transition-all"
-                >
-                  <span>Davom etish</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-            ) : verificationPending ? (
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 space-y-3 text-center">
-                <Mail className="w-8 h-8 text-emerald-600 mx-auto" />
-                <h3 className="text-base font-semibold text-emerald-900">
-                  Pochtani tasdiqlash xabari yuborildi
-                </h3>
-                <p className="text-xs sm:text-sm text-emerald-800 leading-relaxed">
-                  <strong>{accountEmail}</strong> manziliga tasdiqlash havolasi yuborildi. Iltimos, pochtangizni tekshirib havolani bosing va qayta kiring.
-                </p>
-                <div className="pt-2">
-                  <a
-                    href="/login"
-                    className="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-[#163300] text-[#9FE870] text-xs font-semibold"
-                  >
-                    Kirish sahifasiga o‘tish
-                  </a>
-                </div>
-              </div>
-            ) : (
-              <form onSubmit={handleAccountCreationSubmit} className="space-y-4">
-                <div>
-                  <label
-                    htmlFor="onboarding-email"
-                    className="block text-xs sm:text-sm font-medium text-[#18181B] mb-1.5"
-                  >
-                    Elektron pochta manzili
-                  </label>
-                  <div className="relative">
-                    <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#71717A]" />
-                    <input
-                      id="onboarding-email"
-                      type="email"
-                      autoComplete="email"
-                      required
-                      value={accountEmail}
-                      onChange={(e) => setAccountEmail(e.target.value)}
-                      placeholder="siz@example.com"
-                      className="w-full min-h-[48px] rounded-xl border border-[#E5E7EB] bg-white py-2.5 pl-10 pr-3.5 text-sm text-[#18181B] placeholder-[#71717A] focus:border-[#163300] focus:outline-none focus:ring-2 focus:ring-[#163300]/15 transition-all"
-                    />
-                  </div>
-                  {accountErrors.email && (
-                    <p className="mt-1 text-xs text-[#DC2626] font-medium">{accountErrors.email}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="onboarding-password"
-                    className="block text-xs sm:text-sm font-medium text-[#18181B] mb-1.5"
-                  >
-                    Parol
-                  </label>
-                  <div className="relative">
-                    <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#71717A]" />
-                    <input
-                      id="onboarding-password"
-                      type={showPassword ? 'text' : 'password'}
-                      autoComplete="new-password"
-                      required
-                      value={accountPassword}
-                      onChange={(e) => setAccountPassword(e.target.value)}
-                      placeholder="Kamida 8 ta belgi"
-                      className="w-full min-h-[48px] rounded-xl border border-[#E5E7EB] bg-white py-2.5 pl-10 pr-11 text-sm text-[#18181B] placeholder-[#71717A] focus:border-[#163300] focus:outline-none focus:ring-2 focus:ring-[#163300]/15 transition-all"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      aria-label={showPassword ? 'Parolni yashirish' : 'Parolni ko‘rsatish'}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#71717A] hover:text-[#18181B] p-1.5 rounded-lg focus:outline-none"
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  {accountErrors.password && (
-                    <p className="mt-1 text-xs text-[#DC2626] font-medium">{accountErrors.password}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="onboarding-confirm-password"
-                    className="block text-xs sm:text-sm font-medium text-[#18181B] mb-1.5"
-                  >
-                    Parolni tasdiqlang
-                  </label>
-                  <div className="relative">
-                    <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#71717A]" />
-                    <input
-                      id="onboarding-confirm-password"
-                      type={showConfirmPassword ? 'text' : 'password'}
-                      autoComplete="new-password"
-                      required
-                      value={accountConfirmPassword}
-                      onChange={(e) => setAccountConfirmPassword(e.target.value)}
-                      placeholder="Parolni qayta kiriting"
-                      className="w-full min-h-[48px] rounded-xl border border-[#E5E7EB] bg-white py-2.5 pl-10 pr-11 text-sm text-[#18181B] placeholder-[#71717A] focus:border-[#163300] focus:outline-none focus:ring-2 focus:ring-[#163300]/15 transition-all"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      aria-label={showConfirmPassword ? 'Parolni yashirish' : 'Parolni ko‘rsatish'}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#71717A] hover:text-[#18181B] p-1.5 rounded-lg focus:outline-none"
-                    >
-                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  {accountErrors.confirmPassword && (
-                    <p className="mt-1 text-xs text-[#DC2626] font-medium">{accountErrors.confirmPassword}</p>
-                  )}
-                </div>
-
-                <div className="pt-2">
-                  <button
-                    id="account-creation-submit-button"
-                    type="submit"
-                    disabled={isCreatingAccount}
-                    className="w-full min-h-[48px] rounded-xl bg-[#163300] hover:bg-[#1f4700] text-[#9FE870] font-semibold text-sm flex items-center justify-center gap-2 transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isCreatingAccount ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Hisob yaratilmoqda...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>Hisob yaratish</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                <p className="text-center text-xs text-[#52525B] pt-1">
-                  Hisobingiz bormi?{' '}
-                  <a
-                    href="/login"
-                    className="font-semibold text-[#163300] hover:underline"
-                  >
-                    Kirish
-                  </a>
-                </p>
-              </form>
-            )}
-          </div>
-        )}
-
-        {/* ========================================================================= */}
         {/* STEP 3 — USER NAME                                                        */}
         {/* ========================================================================= */}
         {step === 3 && (
