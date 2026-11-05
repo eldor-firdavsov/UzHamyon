@@ -30,6 +30,8 @@ import {
   User,
   Check,
   Calendar,
+  Trash2,
+  X,
 } from 'lucide-react';
 import { invalidateAllFinancialCaches } from '@/lib/cache/clientCache';
 import { getNowLocalDateString, getNowLocalTimeString, isValidCalendarDate, isValidTimeString } from '@/lib/transactions/dateTime';
@@ -2801,13 +2803,16 @@ export default function UzHamyonPrototypeApp({
           }}
         >
           <div
-            className={`sh ${activeSheet === 'tx' ? 'fx' : ''}`}
+            className={`sh ${['tx', 'budget', 'goal', 'contrib'].includes(activeSheet || '') ? 'fx' : ''}`}
             role="dialog"
             aria-label="Modal oyna"
           >
+            {/* Grab Handle for Mobile */}
+            <div style={{ width: '40px', height: '4px', backgroundColor: '#D8DED3', borderRadius: '2px', margin: '0 auto 12px auto' }} />
+
             {/* Sheet Header */}
             <div className="hd">
-              <h2>
+              <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#163300', margin: 0 }}>
                 {activeSheet === 'tx'
                   ? editId
                     ? 'Tranzaksiyani tahrirlash'
@@ -2833,15 +2838,32 @@ export default function UzHamyonPrototypeApp({
                   : ''}
               </h2>
               <button
-                className="t"
+                type="button"
                 onClick={() => {
                   setActiveSheet(null);
                   setFormData({});
                   setEditId(null);
                   setTxError(null);
                 }}
+                style={{
+                  height: '34px',
+                  padding: '0 12px',
+                  borderRadius: '17px',
+                  background: '#F0F3ED',
+                  color: '#47544C',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  border: '1px solid #D8DED3',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.15s ease',
+                }}
+                aria-label="Yopish"
               >
-                Yopish
+                <X size={14} />
+                <span>Yopish</span>
               </button>
             </div>
 
@@ -2875,17 +2897,48 @@ export default function UzHamyonPrototypeApp({
                     />
 
                     {/* 2. Summa (Price) */}
-                    <label className="lb" htmlFor="tx-amount">
+                    <label className="lb" htmlFor="tx-amount" style={{ display: 'block', marginBottom: '6px' }}>
                       Summa (so&apos;m) <span style={{ color: '#D64D4D' }}>*</span>
                     </label>
-                    <input
-                      id="tx-amount"
-                      className="in num"
-                      inputMode="numeric"
-                      placeholder="0"
-                      value={formData.amount || ''}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, amount: formatNumberWithGaps(e.target.value) }))}
-                    />
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        id="tx-amount"
+                        className="in num"
+                        inputMode="numeric"
+                        placeholder="0"
+                        value={formData.amount || ''}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, amount: formatNumberWithGaps(e.target.value) }))}
+                        style={{
+                          width: '100%',
+                          height: '50px',
+                          borderRadius: '16px',
+                          paddingRight: '64px',
+                          paddingLeft: '14px',
+                          fontSize: '18px',
+                          fontWeight: 700,
+                          border: '1.5px solid #D8DED3',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                      <span
+                        style={{
+                          position: 'absolute',
+                          right: '12px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          color: '#5C6659',
+                          background: '#F0F3ED',
+                          padding: '4px 8px',
+                          borderRadius: '8px',
+                          border: '1px solid #E0E5DC',
+                          pointerEvents: 'none',
+                        }}
+                      >
+                        UZS
+                      </span>
+                    </div>
 
                     {/* 3. Nomi (Title) — Summadan keyin albatta kiritilishi kerak */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '14px', marginBottom: '6px' }}>
@@ -2900,10 +2953,20 @@ export default function UzHamyonPrototypeApp({
                       placeholder={formData.type === 'in' ? 'Masalan: Oylik maosh, Keshbek, Mukofot...' : 'Masalan: Tushlik, Korzinka, Taksi, Benzin...'}
                       value={formData.desc || ''}
                       onChange={(e) => setFormData((prev) => ({ ...prev, desc: e.target.value }))}
+                      style={{
+                        width: '100%',
+                        height: '48px',
+                        borderRadius: '14px',
+                        padding: '0 14px',
+                        border: '1.5px solid #D8DED3',
+                        fontSize: '14px',
+                        fontWeight: 500,
+                        boxSizing: 'border-box',
+                      }}
                     />
 
                     {/* 4. Kategoriya — ixcham ro‘yxat, AI avtomatik tanlaydi */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '14px', marginBottom: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '14px', marginBottom: '8px' }}>
                       <div className="lb" style={{ margin: 0 }}>Kategoriya</div>
                       {isAutoActive && (
                         <span
@@ -2915,7 +2978,7 @@ export default function UzHamyonPrototypeApp({
                             fontWeight: 600,
                             color: '#15803D',
                             background: '#F0FDF4',
-                            padding: '2px 9px',
+                            padding: '3px 10px',
                             borderRadius: '999px',
                             border: '1px solid #BBF7D0',
                           }}
@@ -2939,22 +3002,33 @@ export default function UzHamyonPrototypeApp({
                               display: 'inline-flex',
                               alignItems: 'center',
                               gap: '6px',
+                              padding: '8px 14px',
+                              borderRadius: '20px',
                               cursor: 'pointer',
-                              ...(isAuto && isSelected
+                              fontSize: '13px',
+                              border: '1.5px solid',
+                              transition: 'all 0.15s ease',
+                              ...(isSelected
                                 ? {
                                     backgroundColor: '#163300',
                                     color: '#9FE870',
-                                    borderColor: '#9FE870',
-                                    fontWeight: 600,
+                                    borderColor: '#163300',
+                                    fontWeight: 700,
+                                    boxShadow: '0 2px 8px rgba(22, 51, 0, 0.18)',
                                   }
                                 : isAuto
                                 ? {
                                     backgroundColor: '#F0FDF4',
                                     color: '#15803D',
                                     borderColor: '#BBF7D0',
-                                    fontWeight: 500,
+                                    fontWeight: 600,
                                   }
-                                : {}),
+                                : {
+                                    backgroundColor: '#FFFFFF',
+                                    color: '#374151',
+                                    borderColor: '#E5E7EB',
+                                    fontWeight: 500,
+                                  }),
                             }}
                           >
                             {isAuto ? (
@@ -2993,8 +3067,9 @@ export default function UzHamyonPrototypeApp({
                     {/* 5. Sana & Vaqt */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '14px' }}>
                       <div>
-                        <label className="lb" htmlFor="tx-date">
-                          Sana
+                        <label className="lb" htmlFor="tx-date" style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '6px' }}>
+                          <Calendar size={13} style={{ color: '#163300' }} />
+                          <span>Sana</span>
                         </label>
                         <input
                           id="tx-date"
@@ -3004,11 +3079,22 @@ export default function UzHamyonPrototypeApp({
                           max={TODAY_DATE}
                           value={formData.date || TODAY_DATE}
                           onChange={(e) => setFormData((prev) => ({ ...prev, date: e.target.value }))}
+                          style={{
+                            width: '100%',
+                            height: '46px',
+                            borderRadius: '14px',
+                            border: '1.5px solid #D8DED3',
+                            padding: '0 10px',
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            boxSizing: 'border-box',
+                          }}
                         />
                       </div>
                       <div>
-                        <label className="lb" htmlFor="tx-time">
-                          Vaqt
+                        <label className="lb" htmlFor="tx-time" style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '6px' }}>
+                          <Clock size={13} style={{ color: '#163300' }} />
+                          <span>Vaqt</span>
                         </label>
                         <input
                           id="tx-time"
@@ -3016,6 +3102,16 @@ export default function UzHamyonPrototypeApp({
                           type="time"
                           value={formData.time || getNowLocalTimeString()}
                           onChange={(e) => setFormData((prev) => ({ ...prev, time: e.target.value }))}
+                          style={{
+                            width: '100%',
+                            height: '46px',
+                            borderRadius: '14px',
+                            border: '1.5px solid #D8DED3',
+                            padding: '0 10px',
+                            fontSize: '13px',
+                            fontWeight: 500,
+                            boxSizing: 'border-box',
+                          }}
                         />
                       </div>
                     </div>
@@ -3042,22 +3138,61 @@ export default function UzHamyonPrototypeApp({
                   </div>
 
                   <div className="fxf">
-                    <button
-                      className="p"
-                      disabled={isSaveTxDisabled || isSavingTx}
-                      onClick={handleSaveTx}
-                    >
-                      {isSavingTx ? 'Saqlanmoqda...' : 'Saqlash'}
-                    </button>
-                    {editId && (
+                    {editId ? (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '10px', width: '100%' }}>
+                        <button
+                          type="button"
+                          className="d"
+                          style={{
+                            width: '100%',
+                            height: '48px',
+                            borderRadius: '16px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            fontSize: '14px',
+                            fontWeight: 600,
+                          }}
+                          onClick={() => {
+                            setConfirmConfig({ k: 'tx', id: editId });
+                            setActiveSheet('confirm');
+                          }}
+                        >
+                          <Trash2 size={16} />
+                          <span>O&apos;chirish</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="p"
+                          style={{
+                            width: '100%',
+                            height: '48px',
+                            borderRadius: '16px',
+                            fontSize: '15px',
+                            fontWeight: 700,
+                          }}
+                          disabled={isSaveTxDisabled || isSavingTx}
+                          onClick={handleSaveTx}
+                        >
+                          {isSavingTx ? 'Saqlanmoqda...' : 'Saqlash'}
+                        </button>
+                      </div>
+                    ) : (
                       <button
-                        className="d"
-                        onClick={() => {
-                          setConfirmConfig({ k: 'tx', id: editId });
-                          setActiveSheet('confirm');
+                        type="button"
+                        className="p"
+                        style={{
+                          width: '100%',
+                          height: '48px',
+                          borderRadius: '16px',
+                          fontSize: '15px',
+                          fontWeight: 700,
                         }}
+                        disabled={isSaveTxDisabled || isSavingTx}
+                        onClick={handleSaveTx}
                       >
-                        O&apos;chirish
+                        {isSavingTx ? 'Saqlanmoqda...' : 'Tranzaksiya qo‘shish'}
                       </button>
                     )}
                   </div>
@@ -3100,18 +3235,38 @@ export default function UzHamyonPrototypeApp({
                 </div>
 
                 <div className="fxf">
-                  <button className="p" disabled={isSaveBudgetDisabled} onClick={handleSaveBudget}>
-                    Saqlash
-                  </button>
-                  {editId && (
+                  {editId ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '10px', width: '100%' }}>
+                      <button
+                        type="button"
+                        className="d"
+                        style={{ width: '100%', height: '48px', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '14px', fontWeight: 600 }}
+                        onClick={() => {
+                          setConfirmConfig({ k: 'budget', id: editId });
+                          setActiveSheet('confirm');
+                        }}
+                      >
+                        <Trash2 size={16} />
+                        <span>O&apos;chirish</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="p"
+                        style={{ width: '100%', height: '48px', borderRadius: '16px', fontSize: '15px', fontWeight: 700 }}
+                        disabled={isSaveBudgetDisabled}
+                        onClick={handleSaveBudget}
+                      >
+                        Saqlash
+                      </button>
+                    </div>
+                  ) : (
                     <button
-                      className="d"
-                      onClick={() => {
-                        setConfirmConfig({ k: 'budget', id: editId });
-                        setActiveSheet('confirm');
-                      }}
+                      className="p"
+                      style={{ width: '100%', height: '48px', borderRadius: '16px', fontSize: '15px', fontWeight: 700 }}
+                      disabled={isSaveBudgetDisabled}
+                      onClick={handleSaveBudget}
                     >
-                      O&apos;chirish
+                      Saqlash
                     </button>
                   )}
                 </div>
@@ -3158,18 +3313,38 @@ export default function UzHamyonPrototypeApp({
                 </div>
 
                 <div className="fxf">
-                  <button className="p" disabled={isSaveGoalDisabled} onClick={handleSaveGoal}>
-                    Saqlash
-                  </button>
-                  {editId && (
+                  {editId ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '10px', width: '100%' }}>
+                      <button
+                        type="button"
+                        className="d"
+                        style={{ width: '100%', height: '48px', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '14px', fontWeight: 600 }}
+                        onClick={() => {
+                          setConfirmConfig({ k: 'goal', id: editId });
+                          setActiveSheet('confirm');
+                        }}
+                      >
+                        <Trash2 size={16} />
+                        <span>O&apos;chirish</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="p"
+                        style={{ width: '100%', height: '48px', borderRadius: '16px', fontSize: '15px', fontWeight: 700 }}
+                        disabled={isSaveGoalDisabled}
+                        onClick={handleSaveGoal}
+                      >
+                        Saqlash
+                      </button>
+                    </div>
+                  ) : (
                     <button
-                      className="d"
-                      onClick={() => {
-                        setConfirmConfig({ k: 'goal', id: editId });
-                        setActiveSheet('confirm');
-                      }}
+                      className="p"
+                      style={{ width: '100%', height: '48px', borderRadius: '16px', fontSize: '15px', fontWeight: 700 }}
+                      disabled={isSaveGoalDisabled}
+                      onClick={handleSaveGoal}
                     >
-                      O&apos;chirish
+                      Saqlash
                     </button>
                   )}
                 </div>

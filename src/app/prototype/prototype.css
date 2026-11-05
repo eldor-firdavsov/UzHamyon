@@ -576,12 +576,23 @@ button:focus-visible {
 }
 
 .sh.fx {
-  height: min(680px, 94dvh);
+  height: min(700px, 92dvh);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   overscroll-behavior: contain;
   touch-action: pan-y;
+  padding: 16px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+}
+
+.sh.fx .hd {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #E8EBE5;
+  margin-bottom: 8px;
 }
 
 .fxb {
@@ -590,6 +601,19 @@ button:focus-visible {
   overflow-y: auto;
   overscroll-behavior: contain;
   touch-action: pan-y;
+  padding-right: 4px;
+}
+
+.fxf {
+  flex-shrink: 0;
+  padding-top: 14px;
+  margin-top: 8px;
+  border-top: 1px solid #E8EBE5;
+  background: #fff;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
 }
 
 /* Segmented Controls */
