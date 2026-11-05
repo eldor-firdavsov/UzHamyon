@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, ArrowDownLeft, ArrowUpRight, Check, Calendar, Sparkles } from 'lucide-react';
+import { X, ArrowDownLeft, ArrowUpRight, Check, Calendar, Clock, Sparkles } from 'lucide-react';
 import { DEMO_CATEGORIES, type DemoTransaction } from '../demoData';
 import { formatUzbekCurrency } from '../tokens';
 import { predictCategoryFromTitle } from '@/lib/categories/predictCategory';
 import { formatNumberWithGaps } from '@/lib/formatters/numberGaps';
+import { getNowLocalDateString, getNowLocalTimeString, isValidCalendarDate, isValidTimeString } from '@/lib/transactions/dateTime';
 
 interface AddTransactionModalProps {
   isOpen: boolean;
@@ -22,7 +23,8 @@ export function AddTransactionModal({
   const [amountStr, setAmountStr] = useState('');
   const [name, setName] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Auto');
-  const [dateStr, setDateStr] = useState('2026-10-31');
+  const [dateStr, setDateStr] = useState(() => getNowLocalDateString());
+  const [timeStr, setTimeStr] = useState(() => getNowLocalTimeString());
 
   if (!isOpen) return null;
 
@@ -33,6 +35,7 @@ export function AddTransactionModal({
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (numericAmount <= 0 || !name.trim()) return;
+    if (!isValidCalendarDate(dateStr)) return;
 
     const finalCategory = (!selectedCategory || selectedCategory === 'Auto')
       ? predicted.category
@@ -43,8 +46,8 @@ export function AddTransactionModal({
       name: name.trim() || (type === 'income' ? 'Qo‘shimcha daromad' : 'Kutilmagan xarajat'),
       category: finalCategory,
       categoryIcon: type === 'income' ? 'wallet' : 'cart',
-      date: dateStr || '2026-10-31',
-      time: '12:00',
+      date: dateStr,
+      time: timeStr && isValidTimeString(timeStr) ? timeStr : getNowLocalTimeString(),
       amount: numericAmount,
       type,
       account: 'Asosiy karta',
@@ -211,18 +214,34 @@ export function AddTransactionModal({
             )}
           </div>
 
-          {/* 5. Date selection */}
-          <div className="flex items-center justify-between text-xs pt-1 text-[#697168]">
-            <span className="flex items-center gap-1">
-              <Calendar className="h-3.5 w-3.5 text-[#163300]" />
-              Sana:
-            </span>
-            <input
-              type="date"
-              value={dateStr}
-              onChange={(e) => setDateStr(e.target.value)}
-              className="rounded-lg border border-[#E8EBE5] px-2 py-1 text-xs text-[#171B16] bg-[#F7F8F5] focus:outline-none"
-            />
+          {/* 5. Date & Time selection */}
+          <div className="grid grid-cols-2 gap-2 pt-1 text-xs text-[#697168]">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1 font-medium">
+                <Calendar className="h-3.5 w-3.5 text-[#163300]" />
+                Sana:
+              </span>
+              <input
+                type="date"
+                required
+                value={dateStr}
+                onChange={(e) => setDateStr(e.target.value)}
+                className="rounded-lg border border-[#E8EBE5] px-2 py-1 text-xs text-[#171B16] bg-[#F7F8F5] focus:outline-none"
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1 font-medium">
+                <Clock className="h-3.5 w-3.5 text-[#163300]" />
+                Vaqt:
+              </span>
+              <input
+                type="time"
+                required
+                value={timeStr}
+                onChange={(e) => setTimeStr(e.target.value)}
+                className="rounded-lg border border-[#E8EBE5] px-2 py-1 text-xs text-[#171B16] bg-[#F7F8F5] focus:outline-none"
+              />
+            </div>
           </div>
 
           {/* 6. Action Buttons */}

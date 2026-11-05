@@ -31,6 +31,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { invalidateAllFinancialCaches } from '@/lib/cache/clientCache';
+import { getNowLocalDateString, getNowLocalTimeString, isValidCalendarDate, isValidTimeString } from '@/lib/transactions/dateTime';
 
 // ── Types & Interfaces ──
 export type TabType = 'dash' | 'act' | 'tahlil' | 'ai';
@@ -106,7 +107,7 @@ export interface UzHamyonPrototypeAppProps {
 
 // ── Constants from Specification ──
 const MIN_ALLOWED_DATE = '2020-01-01';
-const TODAY_DATE = new Date().toISOString().slice(0, 10);
+const TODAY_DATE = getNowLocalDateString();
 
 const CATEGORY_ICONS: Record<string, string> = {
   Uy: 'M3 11l9-8 9 8v10H3z',
@@ -1022,7 +1023,8 @@ export default function UzHamyonPrototypeApp({
       amount: '',
       cat: 'Auto',
       desc: '',
-      date: `${year}-${padTwo(month)}-${month === 11 ? '02' : '01'}`,
+      date: getNowLocalDateString(),
+      time: getNowLocalTimeString(),
     });
     setActiveSheet('tx');
   };
@@ -1046,7 +1048,8 @@ export default function UzHamyonPrototypeApp({
     setTxError(null);
 
     const amt = parseNumber(formData.amount);
-    const date = formData.date;
+    const date = formData.date || getNowLocalDateString();
+    const time = formData.time || getNowLocalTimeString();
     const desc = (formData.desc || '').trim();
     const type = (formData.type || 'ex') as 'in' | 'ex';
 
@@ -1058,8 +1061,12 @@ export default function UzHamyonPrototypeApp({
       setTxError('Iltimos, tranzaksiya nomini kiriting.');
       return;
     }
-    if (!date) {
-      setTxError('Iltimos, sanani tanlang.');
+    if (!date || !isValidCalendarDate(date)) {
+      setTxError('Iltimos, to‘g‘ri sanani tanlang (YYYY-MM-DD).');
+      return;
+    }
+    if (time && !isValidTimeString(time)) {
+      setTxError('Iltimos, to‘g‘ri vaqtni kiriting (HH:mm).');
       return;
     }
 
@@ -1105,6 +1112,7 @@ export default function UzHamyonPrototypeApp({
         type: targetType,
         currency: 'UZS',
         transaction_date: date,
+        transaction_time: time,
       };
       if (matched?.id && matched.type === targetType) {
         payload.category_id = matched.id;
@@ -2980,19 +2988,35 @@ export default function UzHamyonPrototypeApp({
                       </div>
                     )}
 
-                    {/* 5. Sana */}
-                    <label className="lb" htmlFor="tx-date" style={{ marginTop: '14px' }}>
-                      Sana
-                    </label>
-                    <input
-                      id="tx-date"
-                      className="in"
-                      type="date"
-                      min={MIN_ALLOWED_DATE}
-                      max={TODAY_DATE}
-                      value={formData.date || ''}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, date: e.target.value }))}
-                    />
+                    {/* 5. Sana & Vaqt */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '14px' }}>
+                      <div>
+                        <label className="lb" htmlFor="tx-date">
+                          Sana
+                        </label>
+                        <input
+                          id="tx-date"
+                          className="in"
+                          type="date"
+                          min={MIN_ALLOWED_DATE}
+                          max={TODAY_DATE}
+                          value={formData.date || TODAY_DATE}
+                          onChange={(e) => setFormData((prev) => ({ ...prev, date: e.target.value }))}
+                        />
+                      </div>
+                      <div>
+                        <label className="lb" htmlFor="tx-time">
+                          Vaqt
+                        </label>
+                        <input
+                          id="tx-time"
+                          className="in"
+                          type="time"
+                          value={formData.time || getNowLocalTimeString()}
+                          onChange={(e) => setFormData((prev) => ({ ...prev, time: e.target.value }))}
+                        />
+                      </div>
+                    </div>
 
                     {txError && (
                       <div

@@ -61,6 +61,12 @@ export const createTransactionSchema = z.object({
       },
       { message: 'Invalid calendar date' }
     ),
+  transaction_time: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/, 'Time must be formatted as HH:mm')
+    .optional()
+    .nullable()
+    .transform((val) => (val === '' || val === undefined ? null : val)),
   category_id: z
     .union([z.string().uuid(), z.literal(''), z.null()])
     .optional()

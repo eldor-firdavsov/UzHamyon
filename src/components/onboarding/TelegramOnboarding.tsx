@@ -477,7 +477,7 @@ export default function TelegramOnboarding({
               ) : (
                 <>
                   <Sparkles className="h-4 w-4 text-[#9FE870]" />
-                  <span>UzHamyon'ni boshlash</span>
+                  <span>UzHamyon’ni boshlash</span>
                 </>
               )}
             </button>

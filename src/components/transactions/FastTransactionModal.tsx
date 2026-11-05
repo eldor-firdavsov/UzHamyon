@@ -8,6 +8,12 @@ import { cachedFetch, invalidateAllFinancialCaches, CACHE_TTL } from '@/lib/cach
 import { getCategoryDisplayName } from '@/lib/categories/schemas';
 import CategoryIcon from '@/components/categories/CategoryIcon';
 import { predictCategoryFromTitle, matchPredictedToDbCategory } from '@/lib/categories/predictCategory';
+import {
+  getNowLocalDateString,
+  getNowLocalTimeString,
+  isValidCalendarDate,
+  isValidTimeString,
+} from '@/lib/transactions/dateTime';
 
 export interface FastTransactionModalProps {
   isOpen: boolean;
@@ -31,7 +37,8 @@ export default function FastTransactionModal({
   const [amount, setAmount] = useState('');
   const [title, setTitle] = useState('');
   const [chosenCategoryId, setChosenCategoryId] = useState('auto');
-  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(() => getNowLocalDateString());
+  const [time, setTime] = useState(() => getNowLocalTimeString());
   const [note, setNote] = useState('');
   const currency = 'UZS';
   const [categories, setCategories] = useState<Category[]>(initialCategories || []);
@@ -124,6 +131,16 @@ export default function FastTransactionModal({
       return;
     }
 
+    if (!date || !isValidCalendarDate(date)) {
+      setError('Tranzaksiya sanasi to‘g‘ri formatda kiritilishi shart (YYYY-MM-DD).');
+      return;
+    }
+
+    if (time && !isValidTimeString(time)) {
+      setError('Tranzaksiya vaqti to‘g‘ri formatda kiritilishi shart (HH:mm).');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -134,7 +151,8 @@ export default function FastTransactionModal({
         amount: Math.round(parsedAmount * 100) / 100,
         currency: currency.toUpperCase(),
         type: finalType,
-        transaction_date: date || new Date().toISOString().split('T')[0],
+        transaction_date: date,
+        transaction_time: time || undefined,
         category_id: effectiveCategoryId || undefined,
         notes: note.trim() || undefined,
       };
@@ -366,31 +384,47 @@ export default function FastTransactionModal({
             )}
           </div>
 
-          {/* 5. Izoh (va Sana) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="fast-tx-note" className="block text-sm font-semibold text-[#5C6659] mb-1.5">
-                Izoh <span className="text-[#71717A] font-normal">(ixtiyoriy)</span>
-              </label>
-              <input
-                id="fast-tx-note"
-                type="text"
-                placeholder="Qo‘shimcha tafsilotlar..."
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                disabled={isSubmitting}
-                className="w-full min-h-[48px] rounded-xl border border-[#E8EBE5] bg-white px-3.5 py-2.5 text-sm text-[#163300] placeholder-[#8C9886] focus:border-[#163300] focus:outline-none focus:ring-2 focus:ring-[#9FE870]/30 transition-all"
-              />
-            </div>
+          {/* 5. Izoh, Sana va Vaqt */}
+          <div>
+            <label htmlFor="fast-tx-note" className="block text-sm font-semibold text-[#5C6659] mb-1.5">
+              Izoh <span className="text-[#71717A] font-normal">(ixtiyoriy)</span>
+            </label>
+            <input
+              id="fast-tx-note"
+              type="text"
+              placeholder="Qo‘shimcha tafsilotlar..."
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              disabled={isSubmitting}
+              className="w-full min-h-[48px] rounded-xl border border-[#E8EBE5] bg-white px-3.5 py-2.5 text-sm text-[#163300] placeholder-[#8C9886] focus:border-[#163300] focus:outline-none focus:ring-2 focus:ring-[#9FE870]/30 transition-all"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label htmlFor="fast-tx-date" className="block text-sm font-semibold text-[#5C6659] mb-1.5">
-                Sana
+                Sana <span className="text-[#D64D4D]">*</span>
               </label>
               <input
                 id="fast-tx-date"
                 type="date"
+                required
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
+                disabled={isSubmitting}
+                className="w-full min-h-[48px] rounded-xl border border-[#E8EBE5] bg-white px-3.5 py-2.5 text-sm text-[#163300] font-medium focus:border-[#163300] focus:outline-none focus:ring-2 focus:ring-[#9FE870]/30 transition-all"
+              />
+            </div>
+            <div>
+              <label htmlFor="fast-tx-time" className="block text-sm font-semibold text-[#5C6659] mb-1.5">
+                Vaqt <span className="text-[#D64D4D]">*</span>
+              </label>
+              <input
+                id="fast-tx-time"
+                type="time"
+                required
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
                 disabled={isSubmitting}
                 className="w-full min-h-[48px] rounded-xl border border-[#E8EBE5] bg-white px-3.5 py-2.5 text-sm text-[#163300] font-medium focus:border-[#163300] focus:outline-none focus:ring-2 focus:ring-[#9FE870]/30 transition-all"
               />

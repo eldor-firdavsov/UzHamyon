@@ -91,20 +91,26 @@ export async function createTransaction(
     }
 
     // 3. Insert transaction with server-verified user_id
+    const insertPayload: Record<string, unknown> = {
+      user_id: user.id,
+      description: validData.description,
+      amount: validData.amount,
+      currency: validData.currency,
+      type: validData.type,
+      transaction_date: validData.transaction_date,
+      category_id: validData.category_id,
+      merchant: validData.merchant,
+      notes: validData.notes,
+      source: validData.source,
+    };
+
+    if (validData.transaction_time) {
+      insertPayload.created_at = `${validData.transaction_date}T${validData.transaction_time.slice(0, 5)}:00Z`;
+    }
+
     const { data: created, error: insertError } = await supabase
       .from('transactions')
-      .insert({
-        user_id: user.id,
-        description: validData.description,
-        amount: validData.amount,
-        currency: validData.currency,
-        type: validData.type,
-        transaction_date: validData.transaction_date,
-        category_id: validData.category_id,
-        merchant: validData.merchant,
-        notes: validData.notes,
-        source: validData.source,
-      })
+      .insert(insertPayload)
       .select('*, categories(id, name, type, icon, color)')
       .single();
 
@@ -390,6 +396,10 @@ export async function updateTransaction(
     if (validData.type !== undefined) updatePayload.type = validData.type;
     if (validData.transaction_date !== undefined)
       updatePayload.transaction_date = validData.transaction_date;
+    if (validData.transaction_time !== undefined && validData.transaction_time !== null) {
+      const baseDate = validData.transaction_date || existing.transaction_date;
+      updatePayload.created_at = `${baseDate}T${validData.transaction_time.slice(0, 5)}:00Z`;
+    }
     if (validData.category_id !== undefined) updatePayload.category_id = validData.category_id;
     if (validData.merchant !== undefined) updatePayload.merchant = validData.merchant;
     if (validData.notes !== undefined) updatePayload.notes = validData.notes;

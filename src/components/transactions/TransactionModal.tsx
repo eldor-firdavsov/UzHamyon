@@ -1,11 +1,19 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Loader2, Coins, Calendar, Tag, Building2, FileText, Sparkles } from 'lucide-react';
+import { X, Loader2, Coins, Calendar, Clock, Tag, Building2, FileText, Sparkles } from 'lucide-react';
 import { Category, TransactionWithCategory, TransactionType } from '@/types/database';
 import { getCategoryDisplayName } from '@/lib/categories/schemas';
 import CategoryIcon from '@/components/categories/CategoryIcon';
 import { predictCategoryFromTitle, matchPredictedToDbCategory } from '@/lib/categories/predictCategory';
+import {
+  getNowLocalDateString,
+  getNowLocalTimeString,
+  extractLocalDate,
+  extractLocalTime,
+  isValidCalendarDate,
+  isValidTimeString,
+} from '@/lib/transactions/dateTime';
 
 import { GappedNumberInput } from '@/components/ui/GappedNumberInput';
 import { formatNumberWithGaps, parseNumberFromGaps, cleanNumberGaps } from '@/lib/formatters/numberGaps';
@@ -22,6 +30,7 @@ interface TransactionModalProps {
     currency: string;
     type: TransactionType;
     transaction_date: string;
+    transaction_time?: string | null;
     category_id: string | null;
     merchant?: string | null;
     notes?: string | null;
@@ -43,8 +52,15 @@ function TransactionModalForm({
   );
   const currency = transactionToEdit?.currency || 'UZS';
   const [type, setType] = useState<TransactionType>(transactionToEdit?.type || 'expense');
-  const [transactionDate, setTransactionDate] = useState(
-    transactionToEdit?.transaction_date || new Date().toISOString().split('T')[0]
+  const [transactionDate, setTransactionDate] = useState(() =>
+    transactionToEdit
+      ? extractLocalDate(transactionToEdit.transaction_date)
+      : getNowLocalDateString()
+  );
+  const [transactionTime, setTransactionTime] = useState(() =>
+    transactionToEdit
+      ? extractLocalTime(transactionToEdit.created_at)
+      : getNowLocalTimeString()
   );
   const [categoryId, setCategoryId] = useState<string>(transactionToEdit?.category_id || 'auto');
   const [merchant, setMerchant] = useState(transactionToEdit?.merchant || '');
@@ -82,8 +98,13 @@ function TransactionModalForm({
       return;
     }
 
-    if (!transactionDate) {
-      setFormError('Tranzaksiya sanasi kiritilishi shart.');
+    if (!transactionDate || !isValidCalendarDate(transactionDate)) {
+      setFormError('Tranzaksiya sanasi to‘g‘ri formatda kiritilishi shart (YYYY-MM-DD).');
+      return;
+    }
+
+    if (transactionTime && !isValidTimeString(transactionTime)) {
+      setFormError('Tranzaksiya vaqti to‘g‘ri formatda kiritilishi shart (HH:mm).');
       return;
     }
 
@@ -93,6 +114,7 @@ function TransactionModalForm({
       currency: currency.toUpperCase().trim(),
       type,
       transaction_date: transactionDate,
+      transaction_time: transactionTime || null,
       category_id: effectiveCatId,
       merchant: merchant.trim() ? merchant.trim() : null,
       notes: notes.trim() ? notes.trim() : null,
@@ -275,8 +297,8 @@ function TransactionModalForm({
           )}
         </div>
 
-        {/* 5. Izoh & Sana */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* 5. Izoh, Sana & Vaqt */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label htmlFor="notes-input" className="block text-sm font-medium text-[#47544C] mb-1.5">
               Izoh <span className="text-[#71717A] font-normal">(ixtiyoriy)</span>
@@ -288,7 +310,7 @@ function TransactionModalForm({
               <input
                 id="notes-input"
                 type="text"
-                placeholder="Qayd yoki tafsilot..."
+                placeholder="Qayd..."
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white pl-10 pr-3.5 py-2.5 text-sm text-[#17211B] placeholder-[#5A675F] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all"
@@ -310,7 +332,26 @@ function TransactionModalForm({
                 required
                 value={transactionDate}
                 onChange={(e) => setTransactionDate(e.target.value)}
-                className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white pl-10 pr-3.5 py-2.5 text-sm text-[#17211B] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all"
+                className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white pl-10 pr-3.5 py-2.5 text-sm text-[#17211B] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all font-medium"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="time-input" className="block text-sm font-medium text-[#47544C] mb-1.5">
+              Vaqt <span className="text-[#C74747]">*</span>
+            </label>
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#5A675F]">
+                <Clock className="h-4 w-4" />
+              </span>
+              <input
+                id="time-input"
+                type="time"
+                required
+                value={transactionTime}
+                onChange={(e) => setTransactionTime(e.target.value)}
+                className="w-full min-h-[48px] rounded-xl border border-[#D5DED7] bg-white pl-10 pr-3.5 py-2.5 text-sm text-[#17211B] focus:border-[#176B45] focus:outline-none focus:ring-2 focus:ring-[#176B45]/20 transition-all font-medium"
               />
             </div>
           </div>

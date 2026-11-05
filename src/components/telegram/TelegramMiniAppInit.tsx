@@ -137,21 +137,20 @@ export default function TelegramMiniAppInit() {
       }
     }
 
-    // Check if session already exists
+    // Check if valid session already exists in client storage
     supabase.auth.getSession().then(async (res: Awaited<ReturnType<typeof supabase.auth.getSession>>) => {
       const session = res?.data?.session;
 
-      if (session) {
-        // If user already has a session and landed on /login or /register, redirect to dashboard or onboarding
-        if (pathname === '/login' || pathname === '/register') {
-          // Re-sync with backend to ensure fresh cookies and redirect to dashboard
-          await syncTelegramAuth();
+      if (session && session.user) {
+        // Session already valid: fast-path directly to dashboard or onboarding without blocking auth spinner
+        if (pathname === '/login' || pathname === '/register' || pathname === '/') {
+          window.location.replace('/dashboard');
           return;
         }
         return;
       }
 
-      // No session yet: authenticate via Telegram backend
+      // No active session in storage: authenticate via Telegram backend initData
       await syncTelegramAuth();
     });
   }, []);

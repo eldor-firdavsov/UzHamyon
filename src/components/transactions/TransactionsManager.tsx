@@ -195,6 +195,7 @@ export default function TransactionsManager() {
     currency: string;
     type: TransactionType;
     transaction_date: string;
+    transaction_time?: string | null;
     category_id: string | null;
     merchant?: string | null;
     notes?: string | null;
