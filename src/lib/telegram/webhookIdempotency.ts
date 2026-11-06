@@ -52,7 +52,17 @@ export async function claimWebhookUpdate(
       }
 
       // If insert failed because table does not exist (pre-migration), fall back to memory
-      if (insertError.code === '42P01') {
+      if (
+        insertError.code === '42P01' ||
+        insertError.code === 'PGRST205' ||
+        insertError.message?.includes('schema cache') ||
+        insertError.message?.includes('telegram_webhook_updates')
+      ) {
+        if (process.env.NODE_ENV === 'production') {
+          console.warn(
+            '[webhookIdempotency] WARNING: telegram_webhook_updates table does not exist. Memory fallback is not persistent across Vercel serverless lambdas. Please apply migration 010.'
+          );
+        }
         return claimMemoryUpdate(updateId);
       }
 

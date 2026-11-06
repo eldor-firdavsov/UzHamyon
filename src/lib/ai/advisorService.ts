@@ -470,6 +470,188 @@ export async function askFinancialAdvisor(
       };
     }
 
+    // 3.2 Check active pending actions confirmation / cancellation from pendingActionStore
+    const {
+      getLatestActivePendingAction,
+      savePendingAction,
+      isUserConfirmation,
+      isUserCancellation,
+      cancelPendingAction,
+    } = await import('./pendingActionStore.ts');
+    const { executePendingActionRecord } = await import('./actionExecutor.ts');
+
+    const latestPending = await getLatestActivePendingAction(user.id);
+    if (latestPending && latestPending.status === 'pending') {
+      if (isUserConfirmation(question)) {
+        const execRes = await executePendingActionRecord(latestPending, supabase);
+        const evidence = {
+          grounded_context: verified.text,
+          model_used: 'gemini-action-engine',
+          is_fallback: false,
+          action_result: execRes,
+        };
+        const { data: assistantMsg, error: msgErr } = await supabase
+          .from('ai_messages')
+          .insert({
+            conversation_id: convId,
+            user_id: user.id,
+            role: 'assistant',
+            content: execRes.message,
+            evidence_references: evidence,
+          })
+          .select('id')
+          .single();
+
+        if (msgErr) return { data: null, error: msgErr.message, status: 500 };
+        return {
+          data: {
+            conversationId: convId!,
+            messageId: assistantMsg.id,
+            answer: execRes.message,
+            isAiFallback: false,
+            evidence,
+          },
+          error: null,
+          status: 200,
+        };
+      }
+
+      if (isUserCancellation(question)) {
+        await cancelPendingAction(latestPending.actionId, user.id);
+        const cancelMsg = 'Amal bekor qilindi. Hech qanday moliyaviy yozuv kiritilmadi.';
+        const evidence = {
+          grounded_context: verified.text,
+          model_used: 'gemini-action-engine',
+          is_fallback: false,
+          action_result: { success: true, message: cancelMsg },
+        };
+        const { data: assistantMsg, error: msgErr } = await supabase
+          .from('ai_messages')
+          .insert({
+            conversation_id: convId,
+            user_id: user.id,
+            role: 'assistant',
+            content: cancelMsg,
+            evidence_references: evidence,
+          })
+          .select('id')
+          .single();
+
+        if (msgErr) return { data: null, error: msgErr.message, status: 500 };
+        return {
+          data: {
+            conversationId: convId!,
+            messageId: assistantMsg.id,
+            answer: cancelMsg,
+            isAiFallback: false,
+            evidence,
+          },
+          error: null,
+          status: 200,
+        };
+      }
+    }
+
+    // 3.3 Gemini structured action extraction (multi-transaction, goals, savings)
+    const { extractFinancialActions } = await import('./actionExtractionEngine.ts');
+    const extraction = await extractFinancialActions(question, verified.text);
+
+    if (extraction.intent === 'action_proposal' && extraction.actions.length > 0) {
+      const saveRes = await savePendingAction(user.id, extraction.actions, extraction.summaryUzbek);
+      const pending = saveRes.record;
+      if (!pending) {
+        return {
+          data: null,
+          error: saveRes.error || 'Amalni saqlashda xatolik',
+          status: 500,
+        };
+      }
+      const primary = extraction.actions[0];
+      const evidence = {
+        grounded_context: verified.text,
+        model_used: 'gemini-action-extraction',
+        is_fallback: false,
+        pending_action: {
+          action_id: pending.actionId,
+          type:
+            primary.actionType === 'create_transaction'
+              ? primary.transactionType === 'income'
+                ? 'create_income'
+                : 'create_expense'
+              : primary.actionType,
+          status: 'pending',
+          params: {
+            amount: primary.amount,
+            currency: primary.currency,
+            description: primary.description,
+            category_name: primary.categoryName,
+            goal_name: primary.goalName,
+            date: primary.date,
+          },
+        },
+      };
+
+      const { data: assistantMsg, error: msgErr } = await supabase
+        .from('ai_messages')
+        .insert({
+          conversation_id: convId,
+          user_id: user.id,
+          role: 'assistant',
+          content: extraction.summaryUzbek,
+          evidence_references: evidence,
+        })
+        .select('id')
+        .single();
+
+      if (msgErr) return { data: null, error: msgErr.message, status: 500 };
+
+      return {
+        data: {
+          conversationId: convId!,
+          messageId: assistantMsg.id,
+          answer: extraction.summaryUzbek,
+          isAiFallback: false,
+          evidence,
+        },
+        error: null,
+        status: 200,
+      };
+    }
+
+    if (extraction.intent === 'clarification' && extraction.clarificationQuestion) {
+      const evidence = {
+        grounded_context: verified.text,
+        model_used: 'gemini-action-extraction',
+        is_fallback: false,
+      };
+
+      const { data: assistantMsg, error: msgErr } = await supabase
+        .from('ai_messages')
+        .insert({
+          conversation_id: convId,
+          user_id: user.id,
+          role: 'assistant',
+          content: extraction.clarificationQuestion,
+          evidence_references: evidence,
+        })
+        .select('id')
+        .single();
+
+      if (msgErr) return { data: null, error: msgErr.message, status: 500 };
+
+      return {
+        data: {
+          conversationId: convId!,
+          messageId: assistantMsg.id,
+          answer: extraction.clarificationQuestion,
+          isAiFallback: false,
+          evidence,
+        },
+        error: null,
+        status: 200,
+      };
+    }
+
     // 4. Prompt Gemini with factual grounding and conciseness rules
     const systemInstruction = `Siz UzHamyon shaxsiy moliya platformasining professional va yuqori intellektli moliyaviy yordamchisiz.
 
@@ -501,7 +683,9 @@ Asosiy vazifalar va javob tuzilishi:
 
 4. TILI: O'zbek tilida tabiiy, to'liq, ravon va grammatik to'g'ri jumlalar bilan yozing. Javobni aslo chala yoki tugallanmagan qoldirmang.`;
 
-    const fullPrompt = `${verified.text}\n\nUSER QUESTION: ${question.trim()}`;
+    const { sanitizeUserInputForAi } = await import('./actionExtractionEngine.ts');
+    const sanitizedQuestion = sanitizeUserInputForAi(question.trim());
+    const fullPrompt = `${verified.text}\n\nUSER QUESTION: ${sanitizedQuestion}`;
 
     const aiRes = await generateAIContent(fullPrompt, systemInstruction);
 

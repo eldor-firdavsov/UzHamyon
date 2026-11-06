@@ -1,9 +1,11 @@
 /**
- * UzHamyon AI Client (OpenRouter API)
+ * UzHamyon Unified AI Client (Google Gemini API & OpenRouter Fallback)
  *
- * Uses OpenRouter as the unified AI provider with model routing,
- * automatic retries, credit-safe max_tokens, and deterministic fallback.
+ * Uses Google Gemini API as the primary direct provider with model routing,
+ * automatic retries, credit-safe max_tokens, and OpenRouter / deterministic fallback.
  */
+
+import { callGeminiApi } from './geminiClient.ts';
 
 function getApiKey(): string {
   return (
@@ -24,13 +26,50 @@ export interface AIResponse {
 }
 
 /**
- * Sends a structured prompt to OpenRouter via direct HTTPS API
+ * Sends a structured prompt to Gemini / OpenRouter via direct HTTPS API
  */
 export async function generateAIContent(
   prompt: string,
   systemInstruction?: string,
   timeoutMs: number = 25000
 ): Promise<AIResponse> {
+  // 1. Try Google Gemini API directly if GEMINI_API_KEY is configured
+  const geminiKey = process.env.GEMINI_API_KEY?.trim();
+  if (geminiKey) {
+    try {
+      const body: Record<string, unknown> = {
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: prompt }],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: 1500,
+        },
+      };
+
+      if (systemInstruction) {
+        body.system_instruction = {
+          parts: [{ text: systemInstruction }],
+        };
+      }
+
+      const geminiRes = await callGeminiApi(body, undefined, timeoutMs);
+      if (geminiRes.text) {
+        return {
+          text: geminiRes.text,
+          isFallback: false,
+          model: geminiRes.model,
+        };
+      }
+    } catch (geminiErr) {
+      console.warn('[aiClient] Direct Gemini API failed, falling back to OpenRouter:', geminiErr);
+    }
+  }
+
+  // 2. OpenRouter fallback
   const apiKey = getApiKey();
   const defaultModel = getModel();
 
@@ -62,7 +101,7 @@ export async function generateAIContent(
     const payload = {
       model,
       messages,
-      max_tokens: 1500, // Credit-safe to avoid OpenRouter 402 error on max_tokens calculation
+      max_tokens: 600, // Credit-safe to avoid OpenRouter 402 error on max_tokens calculation
       temperature: 0.2,
     };
 
