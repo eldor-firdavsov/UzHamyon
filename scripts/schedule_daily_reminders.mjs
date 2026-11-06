@@ -54,3 +54,4 @@ console.log('🚀 UzHamyon Daily 20:00 Reminder Scheduler ishga tushdi.');
 console.log('Vaqt mintaqasi: Asia/Tashkent (UTC+5). Har kuni soat 20:00 da avtomatik ishlaydi.');
 
 scheduleNext();
+
