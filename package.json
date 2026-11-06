@@ -8,6 +8,7 @@
     "dev:api": "node --env-file=.env.local server/server.ts",
     "telegram:bot": "node --env-file=.env.local server/telegramBot.ts",
     "telegram:reminders": "node --dns-result-order=ipv4first --env-file=.env.local scripts/send_transaction_reminders.mjs",
+    "telegram:scheduler": "node --dns-result-order=ipv4first --env-file=.env.local scripts/schedule_daily_reminders.mjs",
     "build": "next build",
     "build:vite": "vite build",
     "preview:vite": "vite preview",
