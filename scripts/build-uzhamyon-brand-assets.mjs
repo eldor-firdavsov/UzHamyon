@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 const root = process.cwd();
-const sourcePath = path.join(root, 'public/uzhamyon-bot-avatar.png');
+const sourcePath = path.join(root, 'public/uzhamyon-brand-source.jpg');
 
 if (!fs.existsSync(sourcePath)) {
   console.error('Source logo not found:', sourcePath);
@@ -83,32 +83,54 @@ function createDibIco(images) {
 }
 
 async function main() {
-  console.log('🎨 UzHamyon yangi rasmiy logolari va faviconlarni yaratish boshlandi...\n');
+  console.log('🎨 UzHamyon rasmiy yangi yashil logotipi va barcha brend aktivlarini yaratish boshlandi...\n');
 
-  // 1. Create Transparent Cutout of the Emblem
+  // 1. High-precision De-fringed Transparent Cutout of the Green "U" Emblem
   const { data: rawData, info: rawInfo } = await sharp(sourcePath).raw().toBuffer({ resolveWithObject: true });
   const w = rawInfo.width, h = rawInfo.height;
   const transparentBuffer = Buffer.alloc(w * h * 4);
+  const whiteThreshold = 251;
 
   for (let i = 0; i < w * h; i++) {
     const r = rawData[i * 3];
     const g = rawData[i * 3 + 1];
     const b = rawData[i * 3 + 2];
-    const brightness = (r + g + b) / 3;
 
-    let alpha = 0;
-    if (brightness < 35) {
-      alpha = 0;
-    } else if (brightness > 65) {
-      alpha = 255;
-    } else {
-      alpha = Math.round(((brightness - 35) / 30) * 255);
+    if (r >= whiteThreshold && g >= whiteThreshold && b >= whiteThreshold) {
+      transparentBuffer[i * 4] = 0;
+      transparentBuffer[i * 4 + 1] = 0;
+      transparentBuffer[i * 4 + 2] = 0;
+      transparentBuffer[i * 4 + 3] = 0;
+      continue;
     }
 
-    transparentBuffer[i * 4] = r;
-    transparentBuffer[i * 4 + 1] = g;
-    transparentBuffer[i * 4 + 2] = b;
-    transparentBuffer[i * 4 + 3] = alpha;
+    // Measure color distance from white
+    const diffR = 255 - r;
+    const diffG = 255 - g;
+    const diffB = 255 - b;
+    const maxDiff = Math.max(diffR, diffG, diffB);
+
+    let alpha = 1.0;
+    if (maxDiff < 32) {
+      alpha = Math.min(1.0, maxDiff / 32);
+    }
+
+    // Mathematical de-fringing to eliminate any edge white halo:
+    // observed = alpha * fg + (1 - alpha) * 255
+    // => fg = (observed - (1 - alpha) * 255) / alpha
+    let fgR = r;
+    let fgG = g;
+    let fgB = b;
+    if (alpha > 0.05 && alpha < 0.99) {
+      fgR = Math.max(0, Math.min(255, Math.round((r - (1 - alpha) * 255) / alpha)));
+      fgG = Math.max(0, Math.min(255, Math.round((g - (1 - alpha) * 255) / alpha)));
+      fgB = Math.max(0, Math.min(255, Math.round((b - (1 - alpha) * 255) / alpha)));
+    }
+
+    transparentBuffer[i * 4] = fgR;
+    transparentBuffer[i * 4 + 1] = fgG;
+    transparentBuffer[i * 4 + 2] = fgB;
+    transparentBuffer[i * 4 + 3] = Math.round(alpha * 255);
   }
 
   const transparentEmblemTrimmed = await sharp(transparentBuffer, { raw: { width: w, height: h, channels: 4 } })
@@ -116,8 +138,8 @@ async function main() {
     .trim()
     .toBuffer();
 
-  // Master Transparent 512x512 (with 8% padding for aesthetic balance)
-  const masterInnerSize = Math.round(512 * 0.84);
+  // Master Transparent 512x512 with balanced padding (86% scale)
+  const masterInnerSize = Math.round(512 * 0.86);
   const masterTransparent512 = await sharp(transparentEmblemTrimmed)
     .resize(masterInnerSize, masterInnerSize, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
     .resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
@@ -128,59 +150,64 @@ async function main() {
   fs.writeFileSync(path.join(root, 'public/uzhamyon-logo-transparent.png'), masterTransparent512);
   console.log('✓ Yaratildi: public/uzhamyon-icon-transparent.png va uzhamyon-logo-transparent.png (512x512 shaffof)');
 
-  // 2. Create Circular Badge Master Icon (512x512) for browser tab / PWA
-  const circleSvg = `<svg width="512" height="512">
-    <circle cx="256" cy="256" r="254" fill="white" />
-  </svg>`;
+  // 2. Master App Icon (512x512) for browser tab & PWA
+  // Transparent crisp emblem directly for modern browsers
+  fs.writeFileSync(path.join(root, 'public/icon.png'), masterTransparent512);
+  fs.writeFileSync(path.join(root, 'src/app/icon.png'), masterTransparent512);
+  console.log('✓ Yaratildi: public/icon.png va src/app/icon.png (512x512 master icon)');
 
-  const circularMaster512 = await sharp(sourcePath)
-    .resize(512, 512, { fit: 'cover' })
-    .composite([
-      {
-        input: Buffer.from(circleSvg),
-        blend: 'dest-in',
-      },
-    ])
+  // 3. Brand Icon & Logo with crisp white background (512x512)
+  const masterSolid512 = await sharp({
+    create: {
+      width: 512,
+      height: 512,
+      channels: 4,
+      background: { r: 255, g: 255, b: 255, alpha: 1 },
+    },
+  })
+    .composite([{ input: masterTransparent512, gravity: 'center' }])
     .png()
     .toBuffer();
 
-  fs.writeFileSync(path.join(root, 'public/uzhamyon-icon.png'), circularMaster512);
-  fs.writeFileSync(path.join(root, 'public/uzhamyon-logo.png'), circularMaster512);
-  fs.writeFileSync(path.join(root, 'public/icon.png'), circularMaster512);
-  fs.writeFileSync(path.join(root, 'src/app/icon.png'), circularMaster512);
-  console.log('✓ Yaratildi: public/icon.png va src/app/icon.png (512x512 circular emblem)');
+  fs.writeFileSync(path.join(root, 'public/uzhamyon-icon.png'), masterSolid512);
+  fs.writeFileSync(path.join(root, 'public/uzhamyon-logo.png'), masterSolid512);
+  console.log('✓ Yaratildi: public/uzhamyon-icon.png va uzhamyon-logo.png (512x512 solid)');
 
-  // 3. Apple Touch Icon (180x180)
-  const appleIcon = await sharp(circularMaster512)
-    .resize(180, 180, { fit: 'contain' })
+  // 4. Apple Touch Icon (180x180) - Requires opaque background per Apple HIG
+  const appleInner = Math.round(180 * 0.84);
+  const appleEmblem = await sharp(transparentEmblemTrimmed)
+    .resize(appleInner, appleInner, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .toBuffer();
+
+  const appleIcon = await sharp({
+    create: {
+      width: 180,
+      height: 180,
+      channels: 4,
+      background: { r: 255, g: 255, b: 255, alpha: 1 },
+    },
+  })
+    .composite([{ input: appleEmblem, gravity: 'center' }])
     .png()
     .toBuffer();
 
   fs.writeFileSync(path.join(root, 'public/apple-icon.png'), appleIcon);
   fs.writeFileSync(path.join(root, 'src/app/apple-icon.png'), appleIcon);
-  console.log('✓ Yaratildi: public/apple-icon.png va src/app/apple-icon.png (180x180)');
+  console.log('✓ Yaratildi: public/apple-icon.png va src/app/apple-icon.png (180x180 Apple)');
 
-  // 4. Multi-size Favicon ICO (48x48, 32x32, 16x16)
+  // 5. Multi-size Favicon ICO (48x48, 32x32, 16x16)
   const icoSizes = [48, 32, 16];
   const dibImages = [];
 
   for (const s of icoSizes) {
-    const sCircleSvg = `<svg width="${s}" height="${s}">
-      <circle cx="${s/2}" cy="${s/2}" r="${s/2 - 0.5}" fill="white" />
-    </svg>`;
-
-    const sResized = await sharp(sourcePath)
-      .resize(s, s, { fit: 'cover' })
-      .composite([
-        {
-          input: Buffer.from(sCircleSvg),
-          blend: 'dest-in',
-        },
-      ])
+    const inner = Math.max(12, Math.round(s * 0.92));
+    const resized = await sharp(transparentEmblemTrimmed)
+      .resize(inner, inner, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .resize(s, s, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
       .raw()
       .toBuffer({ resolveWithObject: true });
 
-    dibImages.push({ width: s, height: s, rawBuffer: sResized.data });
+    dibImages.push({ width: s, height: s, rawBuffer: resized.data });
   }
 
   const icoBuffer = createDibIco(dibImages);
@@ -188,7 +215,50 @@ async function main() {
   fs.writeFileSync(path.join(root, 'src/app/favicon.ico'), icoBuffer);
   console.log('✓ Yaratildi: public/favicon.ico va src/app/favicon.ico (Multi-size DIB ICO 48x48, 32x32, 16x16)');
 
-  console.log('\n🎉 Barcha UzHamyon rasmiy brend va favicon fayllari muvaffaqiyatli yangilandi!');
+  // 6. BotFather Mini App Preview (640x360)
+  const previewEmblemSize = 180;
+  const previewEmblem = await sharp(transparentEmblemTrimmed)
+    .resize(previewEmblemSize, previewEmblemSize, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .toBuffer();
+
+  // Create an elegant dark/emerald gradient card for BotFather preview
+  const svgCard = `
+    <svg width="640" height="360" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#0E1E08" />
+          <stop offset="100%" stop-color="#163300" />
+        </linearGradient>
+        <radialGradient id="glow" cx="50%" cy="38%" r="45%">
+          <stop offset="0%" stop-color="#9FE870" stop-opacity="0.18" />
+          <stop offset="100%" stop-color="#9FE870" stop-opacity="0" />
+        </radialGradient>
+      </defs>
+      <rect width="640" height="360" fill="url(#bg)" />
+      <rect width="640" height="360" fill="url(#glow)" />
+      
+      <!-- Brand Name -->
+      <text x="320" y="270" font-family="system-ui, -apple-system, Inter, sans-serif" font-size="34" font-weight="800" fill="#FFFFFF" text-anchor="middle" letter-spacing="-0.5">UzHamyon</text>
+      <!-- Subtitle -->
+      <text x="320" y="304" font-family="system-ui, -apple-system, Inter, sans-serif" font-size="15" font-weight="500" fill="#9FE870" text-anchor="middle">Aqlli shaxsiy moliya va Telegram Mini App</text>
+    </svg>
+  `;
+
+  const telegramPreview = await sharp(Buffer.from(svgCard))
+    .composite([
+      {
+        input: previewEmblem,
+        top: 42,
+        left: Math.round((640 - previewEmblemSize) / 2),
+      },
+    ])
+    .png()
+    .toBuffer();
+
+  fs.writeFileSync(path.join(root, 'public/telegram-app-preview.png'), telegramPreview);
+  console.log('✓ Yaratildi: public/telegram-app-preview.png (640x360 BotFather preview)');
+
+  console.log('\n🎉 Barcha UzHamyon yangi yashil logotiplari muvaffaqiyatli yangilandi!');
 }
 
 main().catch((err) => {
