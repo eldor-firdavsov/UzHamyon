@@ -21,7 +21,39 @@ function getBotToken(): string {
   return token;
 }
 
-const MINIAPP_URL = process.env.TELEGRAM_MINIAPP_URL || 'https://uzhamyon.vercel.app/';
+export const MINIAPP_URL = process.env.TELEGRAM_MINIAPP_URL || 'https://uzhamyon.vercel.app/';
+
+/**
+ * Sets the Telegram Chat Menu Button to open the Web App.
+ * When set, Telegram shows a dedicated Mini App button on the bottom-left of the chat interface.
+ * If chatId is provided, sets it specifically for that chat; otherwise sets default for all users.
+ */
+export async function setTelegramChatMenuButton(chatId?: number): Promise<{ ok: boolean; error?: string }> {
+  const url = `https://api.telegram.org/bot${getBotToken()}/setChatMenuButton`;
+  const payload: Record<string, unknown> = {
+    menu_button: {
+      type: 'web_app',
+      text: 'UzHamyon',
+      web_app: { url: MINIAPP_URL },
+    },
+  };
+  if (chatId) {
+    payload.chat_id = chatId;
+  }
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    return { ok: Boolean(data?.ok), error: data?.description };
+  } catch (err) {
+    console.error('Failed to set Telegram chat menu button:', err);
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
 
 export interface TelegramUpdate {
   update_id: number;
@@ -277,6 +309,7 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
     if (!from || !message || typeof from.id !== 'number' || from.id <= 0) return;
 
     await answerTelegramCallbackQuery(cb.id);
+    setTelegramChatMenuButton(message.chat.id).catch(() => {});
 
     if (data.startsWith('act_confirm:')) {
       const actionId = data.replace('act_confirm:', '');
@@ -335,6 +368,9 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
   const from = message.from;
   const text = message.text.trim();
   const firstName = from.first_name || 'aziz foydalanuvchi';
+
+  // Ensure Chat Menu Button is always active on the left side of the chat
+  setTelegramChatMenuButton(chatId).catch(() => {});
 
   // 2.1 Slash command: /start
   if (text.startsWith('/start')) {
