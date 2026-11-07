@@ -94,21 +94,7 @@ export async function getRegisteredTelegramUsers(client?: SupabaseClient): Promi
  * Builds a friendly, motivating transaction reminder message in Uzbek
  */
 export function buildTransactionReminderMessage(firstName: string): string {
-  return `Assalomu alaykum, <b>${firstName}</b>! 👋
-
-Bugungi daromad va xarajatlaringizni UzHamyon'ga kiritishni unutmadingizmi? ✍️
-
-Moliyaviy nazorat va jamg‘arma maqsadlariga erishishning eng muhim qoidasi — har kungi xarajatlarni o‘z vaqtida qayd etib borishdir.
-
-<b>Siz uchun 2 ta juda oson yo‘l bor:</b>
-1️⃣ <b>Quyidagi tugma orqali</b> UzHamyon ilovasini ochib kiritish;
-2️⃣ <b>Shu yerning o‘ziga xabar yozish</b> (UzHamyon AI darhol tushunadi):
-   • <i>«Tushlikka 45 000 so‘m ishlatdim»</i>
-   • <i>«Bozorlik 200 000 so‘m»</i>
-   • <i>«Taksiga 18 000 so‘m»</i>
-   • <i>«Oylik maoshim 5 000 000 so‘m tushdi»</i>
-
-Ilovani ochish uchun pastdagi tugmani bosing yoki chatning pastki chap burchagidagi <b>«UzHamyon»</b> menyu tugmasidan foydalaning! 👇`;
+  return `Salom, <b>${firstName}</b>! 👋\n\nBugungi o‘tkazmalarni ilovaga kiritishni unutmang yoki shunchaki bugungi o‘tkazmalaringizni shu chatga yozib qo‘ying! ✍️`;
 }
 
 /**

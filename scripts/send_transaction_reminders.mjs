@@ -128,7 +128,7 @@ async function main() {
       },
     }).catch(() => {});
 
-    const reminderText = `Assalomu alaykum, <b>${user.firstName}</b>! 👋\n\nBugungi daromad va xarajatlaringizni UzHamyon'ga kiritishni unutmadingizmi? ✍️\n\nMoliyaviy nazorat va jamg‘arma maqsadlariga erishishning eng muhim qoidasi — har kungi xarajatlarni o‘z vaqtida qayd etib borishdir.\n\n<b>Siz uchun 2 ta juda oson yo‘l bor:</b>\n1️⃣ <b>Quyidagi tugma orqali</b> UzHamyon ilovasini ochib kiritish;\n2️⃣ <b>Shu yerning o‘ziga xabar yozish</b> (UzHamyon AI darhol tushunadi):\n   • <i>«Tushlikka 45 000 so‘m ishlatdim»</i>\n   • <i>«Bozorlik 200 000 so‘m»</i>\n   • <i>«Taksiga 18 000 so‘m»</i>\n   • <i>«Oylik maoshim 5 000 000 so‘m tushdi»</i>\n\nIlovani ochish uchun pastdagi tugmani bosing yoki chatning pastki chap burchagidagi <b>«UzHamyon»</b> menyu tugmasidan foydalaning! 👇`;
+    const reminderText = `Salom, <b>${user.firstName}</b>! 👋\n\nBugungi o‘tkazmalarni ilovaga kiritishni unutmang yoki shunchaki bugungi o‘tkazmalaringizni shu chatga yozib qo‘ying! ✍️`;
 
     try {
       const sendRes = await callTelegram('sendMessage', {
