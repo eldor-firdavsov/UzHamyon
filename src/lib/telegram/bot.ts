@@ -468,12 +468,6 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
   }
 
   if (extracted.intent === 'clarification') {
-    const q = extracted.clarificationQuestion || 'Iltimos, summani yoki boshqa tafsilotlarni aniqlashtirib yozing.';
-    await sendTelegramMessage(chatId, q);
-    return;
-  }
-
-  if (extracted.intent === 'clarification') {
     const q = extracted.clarificationQuestion || 'Tranzaksiyani aniqlash uchun summani va nima uchun to‘lov qilganingizni yozing.';
     await sendTelegramMessage(chatId, q);
     return;
