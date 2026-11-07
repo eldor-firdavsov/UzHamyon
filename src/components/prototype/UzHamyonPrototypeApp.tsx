@@ -2508,6 +2508,7 @@ export default function UzHamyonPrototypeApp({
 
         {/* Old AI chat UI is temporarily disabled; keep its state/handlers for a later relaunch. */}
         {false && (
+          <>
         {/* ── TAB 4: AI ADVISOR (Mobile-First Full-Page Experience) ── */}
         {tab === 'ai' && (
           <div className="uz-ai-page-wrapper">
@@ -2800,6 +2801,8 @@ export default function UzHamyonPrototypeApp({
           </div>
         )}
 
+        )}
+          </>
         )}
       </main>
 
