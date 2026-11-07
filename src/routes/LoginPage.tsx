@@ -1,5 +1,5 @@
 import React from 'react';
-import { Send, ShieldCheck, ExternalLink } from 'lucide-react';
+import { Send, ExternalLink } from 'lucide-react';
 import UzHamyonLogo from '@/components/brand/UzHamyonLogo';
 
 const BOT_USERNAME =
@@ -12,41 +12,17 @@ const TELEGRAM_WEB_FALLBACK = `https://web.telegram.org/a/#?tgaddr=resolve%3Fdom
 export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#F7F8F5] px-4 py-12 text-[#171B16]">
-      <div className="w-full max-w-md space-y-6 rounded-[24px] border border-[#E8EBE5] bg-white p-7 sm:p-9 shadow-card">
-        <div className="text-center">
+      <div className="w-full max-w-sm space-y-6 rounded-[24px] border border-[#E8EBE5] bg-white p-7 sm:p-8 shadow-card text-center">
+        <div>
           <div className="flex justify-center mb-4">
             <UzHamyonLogo variant="icon" size="xl" />
           </div>
-          <div className="text-2xl font-bold tracking-tight text-[#163300] mb-1">
+          <h1 className="text-2xl font-bold tracking-tight text-[#163300] mb-2">
             UzHamyon
-          </div>
-          <h1 className="text-xl font-bold tracking-tight text-[#171B16]">
-            Telegram Mini App orqali ishlaydi
           </h1>
-          <p className="mt-2 text-xs sm:text-sm text-[#697168] leading-relaxed">
-            UzHamyon shaxsiy moliya tizimi faqat Telegram Mini App muhitida xavfsiz ishlaydi. Alohida elektron pochta yoki parol talab etilmaydi.
+          <p className="text-sm text-[#697168] leading-relaxed">
+            Ilovadan foydalanish uchun Telegram botimiz orqali kiring.
           </p>
-        </div>
-
-        <div className="rounded-2xl border border-[#E8EBE5] bg-[#F7F8F5] p-4 text-xs sm:text-sm text-[#171B16] space-y-3">
-          <div className="font-semibold text-[#163300] flex items-center gap-1.5">
-            <ShieldCheck className="h-4 w-4 text-[#16A34A] shrink-0" />
-            <span>Qanday boshlash mumkin?</span>
-          </div>
-          <ol className="space-y-2 text-xs text-[#5C6659] pl-1">
-            <li className="flex items-start gap-2">
-              <span className="w-4 h-4 rounded-full bg-[#163300] text-[#9FE870] font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">1</span>
-              <span><strong>“Telegram’da boshlash”</strong> tugmasini bosing</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="w-4 h-4 rounded-full bg-[#163300] text-[#9FE870] font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">2</span>
-              <span>Telegram bot ochilgach, <strong>/start</strong> buyrug‘ini yuboring</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="w-4 h-4 rounded-full bg-[#163300] text-[#9FE870] font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">3</span>
-              <span>Botdagi <strong>“Ilovani ochish”</strong> tugmasi orqali hisobingizga kiring</span>
-            </li>
-          </ol>
         </div>
 
         <a
@@ -56,10 +32,10 @@ export default function LoginPage() {
           className="flex w-full min-h-[50px] items-center justify-center gap-2 rounded-2xl bg-[#9FE870] hover:bg-[#8ED660] px-5 py-3.5 text-sm font-bold text-[#163300] transition-all shadow-xs active:scale-[0.98]"
         >
           <Send className="h-4 w-4" />
-          <span>Telegram’da boshlash</span>
+          <span>Telegram’da ochish</span>
         </a>
 
-        <div className="pt-1 text-center">
+        <div className="pt-1">
           <a
             id="telegram-web-fallback-link"
             href={TELEGRAM_WEB_FALLBACK}
