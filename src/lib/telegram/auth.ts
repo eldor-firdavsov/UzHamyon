@@ -183,83 +183,103 @@ export async function getOrCreateTelegramUser(tgUser: TelegramUser): Promise<Tel
     authUser = signInData.user;
     authSession = signInData.session;
   } else {
-    // 2. User doesn't exist yet, sign up automatically
-    isNewUser = true;
-    const { data: signUpData, error: signUpError } = await publicClient.auth.signUp({
-      email: internalEmail,
-      password: internalPassword,
-      options: {
-        data: {
-          first_name: firstName,
-          last_name: lastName,
-          telegram_id: tgUser.id,
-          telegram_username: tgUser.username || null,
-        },
-      },
-    });
+    // 2. Sign-in failed: check if user already exists (e.g. password mismatch from bot token / salt rotation)
+    let existingUserId: string | undefined;
 
-    if (signUpError || !signUpData.user) {
-      // If error indicates already registered (e.g. race condition), attempt re-login
-      const retry = await publicClient.auth.signInWithPassword({
+    if (adminClient) {
+      const { data: prof } = await adminClient
+        .from('profiles')
+        .select('id')
+        .eq('email', internalEmail)
+        .maybeSingle();
+
+      if (prof?.id) {
+        existingUserId = prof.id;
+      } else {
+        const { data: userList } = await adminClient.auth.admin.listUsers();
+        existingUserId = userList?.users?.find((u) => u.email === internalEmail)?.id;
+      }
+
+      if (existingUserId) {
+        // User already exists in database: synchronize password to current internalPassword
+        await adminClient.auth.admin.updateUserById(existingUserId, {
+          password: internalPassword,
+          email_confirm: true,
+        });
+
+        const recoveredSignIn = await publicClient.auth.signInWithPassword({
+          email: internalEmail,
+          password: internalPassword,
+        });
+
+        if (recoveredSignIn.data?.user && recoveredSignIn.data?.session) {
+          authUser = recoveredSignIn.data.user;
+          authSession = recoveredSignIn.data.session;
+          isNewUser = false;
+        }
+      }
+    }
+
+    // 3. User does not exist yet: sign up automatically
+    if (!authUser || !authSession) {
+      isNewUser = true;
+      const { data: signUpData, error: signUpError } = await publicClient.auth.signUp({
         email: internalEmail,
         password: internalPassword,
+        options: {
+          data: {
+            first_name: firstName,
+            last_name: lastName,
+            telegram_id: tgUser.id,
+            telegram_username: tgUser.username || null,
+          },
+        },
       });
-      if (retry.data?.user && retry.data?.session) {
-        authUser = retry.data.user;
-        authSession = retry.data.session;
-        isNewUser = false;
-      } else if (adminClient) {
-        // If password mismatch occurred due to bot token rotation, locate existing user and update password
-        let existingUserId: string | undefined;
-        const { data: prof } = await adminClient
-          .from('profiles')
-          .select('id')
-          .eq('email', internalEmail)
-          .maybeSingle();
 
-        if (prof?.id) {
-          existingUserId = prof.id;
-        } else {
-          const { data: userList } = await adminClient.auth.admin.listUsers();
-          existingUserId = userList?.users?.find((u) => u.email === internalEmail)?.id;
-        }
+      // Supabase anti-enumeration: existing users return error=null, identities=[]
+      const isAlreadyRegistered =
+        Boolean(signUpError?.message?.toLowerCase().includes('already')) ||
+        Boolean(signUpData?.user && Array.isArray(signUpData.user.identities) && signUpData.user.identities.length === 0);
 
-        if (existingUserId) {
-          await adminClient.auth.admin.updateUserById(existingUserId, {
+      if (isAlreadyRegistered && adminClient) {
+        // User already exists: locate real user and synchronize password
+        const { data: userList } = await adminClient.auth.admin.listUsers();
+        const found = userList?.users?.find((u) => u.email === internalEmail);
+        if (found?.id) {
+          await adminClient.auth.admin.updateUserById(found.id, {
             password: internalPassword,
             email_confirm: true,
           });
-          const rotatedSignIn = await publicClient.auth.signInWithPassword({
+          const reSignIn = await publicClient.auth.signInWithPassword({
             email: internalEmail,
             password: internalPassword,
           });
-          if (rotatedSignIn.data?.user && rotatedSignIn.data?.session) {
-            authUser = rotatedSignIn.data.user;
-            authSession = rotatedSignIn.data.session;
+          if (reSignIn.data?.user && reSignIn.data?.session) {
+            authUser = reSignIn.data.user;
+            authSession = reSignIn.data.session;
             isNewUser = false;
           }
+        }
+      } else if (signUpData?.user && !isAlreadyRegistered) {
+        authUser = signUpData.user;
+        authSession = signUpData.session;
+
+        // If signUp did not immediately issue session (due to email confirm settings), sign in directly
+        if (!authSession) {
+          if (adminClient) {
+            await adminClient.auth.admin.updateUserById(authUser.id, { email_confirm: true });
+          }
+          const postConfirmSignIn = await publicClient.auth.signInWithPassword({
+            email: internalEmail,
+            password: internalPassword,
+          });
+          authUser = postConfirmSignIn.data.user;
+          authSession = postConfirmSignIn.data.session;
         }
       }
 
       if (!authUser || !authSession) {
         throw new Error(signUpError?.message || 'Telegram hisobini ro‘yxatdan o‘tkazishda xatolik yuz berdi');
-      }
-    } else {
-      authUser = signUpData.user;
-      authSession = signUpData.session;
-
-      // If signUp did not immediately issue session (due to email confirm settings), sign in directly
-      if (!authSession) {
-        if (adminClient) {
-          // Confirm user email automatically via admin
-          await adminClient.auth.admin.updateUserById(authUser.id, { email_confirm: true });
-        }
-        const postConfirmSignIn = await publicClient.auth.signInWithPassword({
-          email: internalEmail,
-          password: internalPassword,
-        });
-        authUser = postConfirmSignIn.data.user;
-        authSession = postConfirmSignIn.data.session;
       }
     }
   }
