@@ -6,6 +6,8 @@ import {
   failWebhookUpdate,
 } from '@/lib/telegram/webhookIdempotency';
 
+export const maxDuration = 30;
+
 function isTransientError(err: unknown): boolean {
   if (!err) return false;
   const msg = err instanceof Error ? err.message : String(err);

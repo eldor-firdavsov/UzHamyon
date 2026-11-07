@@ -54,11 +54,10 @@ export async function callGeminiApi(
     new Set([
       primaryModel,
       fallbackModel,
-      'gemini-3.5-flash-lite',
-      'gemini-flash-lite-latest',
-      'gemini-3.6-flash',
-      'gemini-3.5-flash',
       'gemini-flash-latest',
+      'gemini-flash-lite-latest',
+      'gemini-3.5-flash-lite',
+      'gemini-3.8-flash',
     ])
   );
 
@@ -67,7 +66,8 @@ export async function callGeminiApi(
   for (const model of candidateModels) {
     if (disabledModels.has(model)) continue;
 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    // Standard Google Generative Language API endpoint with X-goog-api-key header
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
@@ -75,6 +75,7 @@ export async function callGeminiApi(
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'X-goog-api-key': apiKey,
           },
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(timeoutMs),
@@ -183,9 +184,6 @@ async function callOpenRouterGemini(
 
   if (messages.length === 0) return null;
 
-  const genConfig = geminiBody.generationConfig as { responseMimeType?: string } | undefined;
-  const isJson = genConfig?.responseMimeType === 'application/json';
-
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -197,9 +195,8 @@ async function callOpenRouterGemini(
     body: JSON.stringify({
       model: 'google/gemini-2.5-flash',
       messages,
-      max_tokens: 1000,
+      max_tokens: 1500,
       temperature: 0.1,
-      ...(isJson ? { response_format: { type: 'json_object' } } : {}),
     }),
     signal: AbortSignal.timeout(timeoutMs),
   });

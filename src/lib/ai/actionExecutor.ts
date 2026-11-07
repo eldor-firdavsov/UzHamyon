@@ -130,6 +130,12 @@ export async function executePendingActionRecord(
 
     if (!rpcError && rpcData) {
       if (rpcData.success) {
+        if (rpcData.already_executed) {
+          return {
+            success: false,
+            message: 'Ushbu amal allaqachon bajarilgan',
+          };
+        }
         return {
           success: true,
           message: rpcData.message,

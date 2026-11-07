@@ -57,7 +57,7 @@ function isMissingTableError(error: { code?: string; message?: string } | null):
     error.code === 'PGRST205' ||
     error.code === '42P01' ||
     Boolean(error.message?.includes('schema cache')) ||
-    Boolean(error.message?.includes('pending_ai_actions'))
+    (Boolean(error.message?.includes('pending_ai_actions')) && Boolean(error.message?.includes('does not exist')))
   );
 }
 
@@ -322,7 +322,7 @@ export async function claimPendingAction(
 
       // Verify identities
       if (record.userId !== userId) {
-        return { success: false, reason: 'Ruxsat berilmagan: foydalanuvchi mos kelmadi' };
+        return { success: false, reason: 'Ruxsat berilmagan' };
       }
 
       if (telegramUserId && record.telegramUserId && record.telegramUserId !== telegramUserId) {

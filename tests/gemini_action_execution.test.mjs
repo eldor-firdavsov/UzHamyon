@@ -485,6 +485,19 @@ describe('Gemini API Integration & Safe AI Financial Action Execution', () => {
     const prevEnv = process.env.NODE_ENV;
     try {
       process.env.NODE_ENV = 'production';
+      // Simulate client encountering missing table schema error
+      const mockClient = {
+        from: () => ({
+          insert: () => ({
+            select: () => ({
+              maybeSingle: async () => ({
+                data: null,
+                error: { code: 'PGRST205', message: "Could not find the table 'public.pending_ai_actions' in the schema cache" },
+              }),
+            }),
+          }),
+        }),
+      };
       const prodRes = await savePendingAction(
         testUserId,
         [
@@ -497,7 +510,9 @@ describe('Gemini API Integration & Safe AI Financial Action Execution', () => {
             date: '2026-11-05',
           },
         ],
-        'Tasdiqlaysizmi?'
+        'Tasdiqlaysizmi?',
+        undefined,
+        mockClient
       );
 
       // In production mode without the migration applied, it must fail safely without memory fallback
