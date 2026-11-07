@@ -492,8 +492,8 @@ export default function UzHamyonPrototypeApp({
       const p = window.location.pathname;
       if (p.startsWith('/transactions')) setTab('act');
       else if (p.startsWith('/analytics')) setTab('tahlil');
-      else if (p.startsWith('/advisor') || p.startsWith('/ai')) setTab('ai');
       else if (p.startsWith('/dashboard') || p === '/') setTab('dash');
+      else setTab('dash');
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -505,7 +505,7 @@ export default function UzHamyonPrototypeApp({
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const qTab = params.get('tab') as TabType;
-      if (qTab && ['dash', 'act', 'tahlil', 'ai'].includes(qTab)) {
+      if (qTab && ['dash', 'act', 'tahlil'].includes(qTab)) {
         setTab(qTab);
       }
       const qSub = params.get('sub') as SubTabType;
@@ -1498,20 +1498,6 @@ export default function UzHamyonPrototypeApp({
               <ChartNoAxesCombined className={`h-4 w-4 ${tab === 'tahlil' ? 'text-[#059669]' : 'text-[#71717A]'}`} />
               <span>Tahlil</span>
             </button>
-
-            <button
-              type="button"
-              id="nav-advisor-link"
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 text-sm rounded-full transition-all cursor-pointer ${
-                tab === 'ai'
-                  ? 'bg-white text-[#18181B] font-medium shadow-xs'
-                  : 'text-[#52525B] hover:text-[#18181B] font-normal'
-              }`}
-              onClick={() => switchTab('ai')}
-            >
-              <Brain className={`h-4 w-4 ${tab === 'ai' ? 'text-[#059669]' : 'text-[#71717A]'}`} />
-              <span>AI</span>
-            </button>
           </nav>
 
           {/* Right Actions: Month Switcher next to Tranzaksiya CTA + Profile Pill */}
@@ -1914,12 +1900,9 @@ export default function UzHamyonPrototypeApp({
                   <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: '#163300' }}>
                     {recommendationInfo.title}
                   </h3>
-                  <div style={{ color: '#2C4A26', fontSize: '14px', margin: '6px 0 14px', lineHeight: 1.45 }}>
+                  <div style={{ color: '#2C4A26', fontSize: '14px', margin: '6px 0 0', lineHeight: 1.45 }}>
                     {recommendationInfo.text}
                   </div>
-                  <button className="t" style={{ color: '#1E7440', fontWeight: 600, padding: 0 }} onClick={() => switchTab('ai')}>
-                    AI bilan muhokama →
-                  </button>
                 </div>
 
                 {/* Savings Goals Block */}
@@ -2483,298 +2466,7 @@ export default function UzHamyonPrototypeApp({
           </div>
         )}
 
-        {/* ── TAB 4: AI ADVISOR (Mobile-First Full-Page Experience) ── */}
-        {tab === 'ai' && (
-          <div className="uz-ai-page-wrapper">
-            <span className="sr-only">AI yordamchi AI maslahatchi</span>
-            {/* Top Bar / Header */}
-            <div className="uz-ai-top-bar">
-              <div className="flex items-center gap-2">
-                {activeConversation.msgs.length > 0 && (
-                  <span className="text-sm font-semibold text-[#171B16] truncate max-w-[160px] sm:max-w-[240px]">
-                    {activeConversation.title}
-                  </span>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2">
-                {aiView === 'hist' ? (
-                  <button
-                    type="button"
-                    className="uz-ai-action-btn"
-                    onClick={() => setAiView('chat')}
-                  >
-                    ← Suhbatga qaytish
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      className="uz-ai-action-btn"
-                      aria-label="Suhbatlar tarixi"
-                      onClick={() => setAiView('hist')}
-                    >
-                      <Clock className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Tarix</span>
-                      {conversations.filter((c) => c.msgs.length).length > 0 && (
-                        <span className="text-xs bg-[#E8EBE5] px-1.5 py-0.5 rounded-full text-[#163300]">
-                          {conversations.filter((c) => c.msgs.length).length}
-                        </span>
-                      )}
-                    </button>
-                    {activeConversation.msgs.length > 0 && (
-                      <button
-                        type="button"
-                        className="uz-ai-action-btn primary"
-                        aria-label="Yangi suhbat boshlash"
-                        onClick={() => {
-                          const emptyConv = conversations.find((c) => !c.msgs.length);
-                          if (emptyConv) {
-                            setCurrentConvId(emptyConv.id);
-                            setAiView('chat');
-                            setAiError(false);
-                          } else {
-                            const newId = 'c' + Date.now();
-                            setConversations((prev) => [
-                              { id: newId, title: 'Yangi suhbat', msgs: [] },
-                              ...prev,
-                            ]);
-                            setCurrentConvId(newId);
-                            setAiView('chat');
-                            setAiError(false);
-                          }
-                        }}
-                      >
-                        <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                        <span>Yangi</span>
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* View A: Conversation History List */}
-            {aiView === 'hist' ? (
-              <div className="flex-1 flex flex-col gap-3 py-4">
-                <div className="flex items-center justify-between pb-2 border-b border-[#D8DED3]">
-                  <h2 className="text-lg font-bold text-[#171B16] m-0">Suhbatlar tarixi</h2>
-                  <button
-                    type="button"
-                    className="uz-ai-action-btn primary"
-                    onClick={() => {
-                      const emptyConv = conversations.find((c) => !c.msgs.length);
-                      if (emptyConv) {
-                        setCurrentConvId(emptyConv.id);
-                        setAiView('chat');
-                        setAiError(false);
-                      } else {
-                        const newId = 'c' + Date.now();
-                        setConversations((prev) => [
-                          { id: newId, title: 'Yangi suhbat', msgs: [] },
-                          ...prev,
-                        ]);
-                        setCurrentConvId(newId);
-                        setAiView('chat');
-                        setAiError(false);
-                      }
-                    }}
-                  >
-                    <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                    <span>Yangi suhbat</span>
-                  </button>
-                </div>
-
-                {conversations.filter((c) => c.msgs.length).length === 0 ? (
-                  <div className="text-center py-16 text-[#697168]">
-                    <Clock className="w-10 h-10 mx-auto text-[#A3ACA0] mb-3 stroke-[1.5]" />
-                    <div className="text-sm font-medium">Hozircha saqlangan suhbatlar yo&apos;q.</div>
-                    <div className="text-xs text-[#8A9287] mt-1">Yangi savol yozib, muloqotni boshlang.</div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-2 pt-2">
-                    {conversations
-                      .filter((c) => c.msgs.length)
-                      .map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          className={`flex items-center justify-between p-3.5 rounded-2xl border text-left transition-all ${
-                            c.id === currentConvId
-                              ? 'bg-[#FFFFFF] border-[#163300] shadow-sm'
-                              : 'bg-[#FFFFFF] border-[#D8DED3] hover:border-[#CBD3C6]'
-                          }`}
-                          onClick={() => {
-                            setCurrentConvId(c.id);
-                            setAiView('chat');
-                            setAiError(false);
-                          }}
-                        >
-                          <div>
-                            <div className="text-sm font-semibold text-[#171B16]">{c.title}</div>
-                            <div className="text-xs text-[#697168] mt-0.5">{c.msgs.length} ta xabar almashildi</div>
-                          </div>
-                          <span className="text-xs font-semibold text-[#163300] bg-[#EBF4E5] px-2.5 py-1 rounded-full">
-                            Ochish →
-                          </span>
-                        </button>
-                      ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              /* View B: Dedicated Single-Page AI Chat View */
-              <>
-                {/* 1. Empty Hero State (Spotify AI Style) */}
-                {activeConversation.msgs.length === 0 ? (
-                  <div className="flex-1 flex flex-col justify-between py-2 sm:py-4">
-                    {/* Big Bold Hero Typography */}
-                    <div className="uz-ai-hero-section">
-                      <h1 className="uz-ai-hero-title">Bugun nimani tahlil qilamiz?</h1>
-                      <p className="uz-ai-hero-subtitle">
-                        Keling, xarajatlaringiz va budjetingizni birga ko&apos;rib chiqamiz.
-                      </p>
-                    </div>
-
-                    {/* Suggestions Section */}
-                    <div className="uz-ai-try-asking">
-                      <div className="uz-ai-try-asking-header">Sinab ko&apos;ring</div>
-                      <div className="uz-ai-cards-carousel">
-                        <button
-                          type="button"
-                          className="uz-ai-card-item"
-                          onClick={() => handleSendAIMessage("O'tgan oyga nisbatan qancha tejadim?")}
-                        >
-                          <div className="uz-ai-card-sparkle">
-                            <Sparkles className="w-4 h-4 text-[#163300]" />
-                          </div>
-                          <span className="uz-ai-card-text">
-                            O&apos;tgan oyga nisbatan qancha tejadim?
-                          </span>
-                        </button>
-
-                        <button
-                          type="button"
-                          className="uz-ai-card-item"
-                          onClick={() => handleSendAIMessage("Oziq-ovqat xarajatlarini qanday qisqartirish mumkin?")}
-                        >
-                          <div className="uz-ai-card-sparkle">
-                            <Sparkles className="w-4 h-4 text-[#163300]" />
-                          </div>
-                          <span className="uz-ai-card-text">
-                            Oziq-ovqat xarajatlarini qanday qisqartirish mumkin?
-                          </span>
-                        </button>
-
-                        <button
-                          type="button"
-                          className="uz-ai-card-item"
-                          onClick={() => handleSendAIMessage("Yillik jamg'arma maqsadimga erisha olamanmi?")}
-                        >
-                          <div className="uz-ai-card-sparkle">
-                            <Sparkles className="w-4 h-4 text-[#163300]" />
-                          </div>
-                          <span className="uz-ai-card-text">
-                            Yillik jamg&apos;arma maqsadimga erisha olamanmi?
-                          </span>
-                        </button>
-
-                        <button
-                          type="button"
-                          className="uz-ai-card-item"
-                          onClick={() => handleSendAIMessage("Eng ko'p qaysi toifada ortiqcha pul sarfladim?")}
-                        >
-                          <div className="uz-ai-card-sparkle">
-                            <Sparkles className="w-4 h-4 text-[#163300]" />
-                          </div>
-                          <span className="uz-ai-card-text">
-                            Eng ko&apos;p qaysi toifada ortiqcha pul sarfladim?
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  /* 2. Chat Conversation View */
-                  <div className="uz-ai-conversation-stream">
-                    {activeConversation.msgs.map((m, i) => (
-                      <div
-                        key={i}
-                        className={m.r === 'u' ? 'uz-ai-msg-bubble-user' : 'uz-ai-msg-bubble-assistant'}
-                      >
-                        {m.r === 'a' && (
-                          <div className="uz-ai-assistant-header">
-                            <UzHamyonLogo variant="icon" size="sm" />
-                            <span>UzHamyon AI</span>
-                          </div>
-                        )}
-                        <div>{m.t}</div>
-                      </div>
-                    ))}
-
-                    {/* AI Loading State */}
-                    {aiLoading && (
-                      <div className="uz-ai-typing-indicator">
-                        <div className="uz-ai-typing-dot" />
-                        <div className="uz-ai-typing-dot" />
-                        <div className="uz-ai-typing-dot" />
-                      </div>
-                    )}
-
-                    {/* AI Error with Retry */}
-                    {aiError && (
-                      <div className="p-3 rounded-xl bg-[#FEE2E2] border border-[#FECACA] flex items-center justify-between text-xs text-[#991B1B]">
-                        <span>Xatolik yuz berdi. Qayta urinib ko&apos;ring.</span>
-                        <button
-                          type="button"
-                          className="px-2.5 py-1 rounded-lg bg-[#DC2626] text-white font-medium hover:bg-[#B91C1C] flex items-center gap-1 cursor-pointer"
-                          onClick={handleRetryAI}
-                        >
-                          <RefreshCw className="w-3 h-3" />
-                          <span>Qayta urinish</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* 3. Modern Floating Prompt Input (Wise & Perplexity Style) */}
-                <div className="uz-ai-bottom-anchor">
-                  <div className="uz-ai-pill-input">
-                    <div className="uz-ai-pill-sparkle">
-                      <Sparkles className="w-5 h-5 text-[#163300]" />
-                    </div>
-                    <input
-                      id="advisor-question-input"
-                      className="uz-ai-text-input"
-                      aria-label="Xabar"
-                      placeholder="Moliyaviy savolingizni yozing..."
-                      value={aiInput}
-                      onChange={(e) => setAiInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleSendAIMessage(aiInput);
-                      }}
-                    />
-                    <button
-                      id="advisor-send-btn"
-                      type="button"
-                      className="uz-ai-submit-btn"
-                      aria-label="Yuborish"
-                      disabled={!aiInput.trim() || aiLoading}
-                      onClick={() => handleSendAIMessage(aiInput)}
-                    >
-                      <ArrowUp className="w-5 h-5 stroke-[2.8]" />
-                    </button>
-                  </div>
-                  <div className="uz-ai-caption">
-                    UzHamyon AI moliyaviy maslahatchisi bilan muloqotdasiz.
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-      </main>
+        </main>
 
       {/* ══════════════════════════════════════════════════════════
           UZHAMYON AI — Mobile Bottom Navbar (Liquid Glass Edition)

@@ -237,23 +237,7 @@ export default function GoalAIFeedbackModal({
             </div>
           </div>
 
-          {/* AI Advisor Action Banner */}
-          <div className="p-4 rounded-2xl bg-[#F9FAFB] border border-[#E5E7EB] flex items-center justify-between gap-3">
-            <div className="space-y-0.5">
-              <span className="text-xs font-semibold text-[#059669]">Savollaringiz bormi?</span>
-              <p className="text-xs text-[#52525B]">
-                AI yordamchidan ushbu maqsadni tezlashtirish rejasini so‘rang.
-              </p>
-            </div>
-            <Link
-              href="/advisor"
-              onClick={onClose}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#18181B] hover:bg-[#27272A] text-white text-xs font-medium transition-all shrink-0 shadow-xs"
-            >
-              <span>AI Suhbat</span>
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          </div>
+
         </div>
 
         {/* Modal Footer */}

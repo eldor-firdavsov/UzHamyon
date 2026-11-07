@@ -192,27 +192,7 @@ export default async function SettingsPage() {
               </div>
             </Link>
 
-            <Link
-              href="/advisor"
-              className="bg-white rounded-3xl p-4 sm:p-5 border border-[#E8EBE5] hover:border-[#163300]/30 hover:shadow-card transition-all flex items-center justify-between group cursor-pointer"
-            >
-              <div className="flex items-center gap-3.5 min-w-0">
-                <div className="p-2.5 rounded-2xl bg-[#F5F0FF] text-[#7C3AED] group-hover:scale-105 transition-transform shrink-0">
-                  <Sparkles className="h-5 w-5" />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="text-sm font-bold text-[#171B16] truncate">
-                    AI Moliyaviy maslahatchi
-                  </h3>
-                  <p className="text-xs text-[#697168] truncate mt-0.5">
-                    Shaxsiy moliyaviy tahlil va tavsiyalar
-                  </p>
-                </div>
-              </div>
-              <div className="h-8 w-8 rounded-xl bg-[#F7F8F5] flex items-center justify-center text-[#697168] group-hover:text-[#163300] group-hover:bg-[#F0F9E9] transition-colors shrink-0">
-                <ChevronRight className="h-4 w-4" />
-              </div>
-            </Link>
+
           </div>
         </section>
 
