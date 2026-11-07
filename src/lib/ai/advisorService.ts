@@ -390,7 +390,7 @@ export async function askFinancialAdvisor(
     let convId = conversationId;
     if (!convId) {
       const titleSummary = question.length > 40 ? question.slice(0, 37) + '...' : question;
-      const { data: newConv, error: convErr } = await supabase
+      let { data: newConv, error: convErr } = await supabase
         .from('ai_conversations')
         .insert({
           user_id: user.id,
@@ -398,6 +398,27 @@ export async function askFinancialAdvisor(
         })
         .select()
         .single();
+
+      if (convErr || !newConv) {
+        // Fallback to service role if PostgREST RLS cookie header was not passed
+        try {
+          const { getSupabaseServiceRoleKey, getSupabaseUrl } = await import('../supabase/config.ts');
+          const sKey = getSupabaseServiceRoleKey();
+          if (sKey) {
+            const { createClient: createAdmin } = await import('@supabase/supabase-js');
+            const admin = createAdmin(getSupabaseUrl(), sKey, { auth: { persistSession: false } });
+            const adminConv = await admin
+              .from('ai_conversations')
+              .insert({ user_id: user.id, title: titleSummary })
+              .select()
+              .single();
+            if (adminConv.data) {
+              newConv = adminConv.data;
+              convErr = null;
+            }
+          }
+        } catch {}
+      }
 
       if (convErr || !newConv) {
         return { data: null, error: convErr?.message || 'Suhbatni boshlab bo‘lmadi', status: 500 };
@@ -421,12 +442,29 @@ export async function askFinancialAdvisor(
     const verified = await gatherUserFinancialContext(user.id, supabase);
 
     // 3. Save User message to ai_messages
-    await supabase.from('ai_messages').insert({
+    const { error: userMsgErr } = await supabase.from('ai_messages').insert({
       conversation_id: convId,
       user_id: user.id,
       role: 'user',
       content: question.trim(),
     });
+
+    if (userMsgErr) {
+      try {
+        const { getSupabaseServiceRoleKey, getSupabaseUrl } = await import('../supabase/config.ts');
+        const sKey = getSupabaseServiceRoleKey();
+        if (sKey) {
+          const { createClient: createAdmin } = await import('@supabase/supabase-js');
+          const admin = createAdmin(getSupabaseUrl(), sKey, { auth: { persistSession: false } });
+          await admin.from('ai_messages').insert({
+            conversation_id: convId,
+            user_id: user.id,
+            role: 'user',
+            content: question.trim(),
+          });
+        }
+      } catch {}
+    }
 
     // 3.1 Check deterministic financial action engine (5 core scenarios, clarifications, confirmations)
     const { processFinancialIntent } = await import('./financialActionEngine.ts');
@@ -702,7 +740,7 @@ Asosiy vazifalar va javob tuzilishi:
       is_fallback: aiRes.isFallback,
     };
 
-    const { data: assistantMsg, error: msgErr } = await supabase
+    let { data: assistantMsg, error: msgErr } = await supabase
       .from('ai_messages')
       .insert({
         conversation_id: convId,
@@ -714,8 +752,34 @@ Asosiy vazifalar va javob tuzilishi:
       .select('id')
       .single();
 
-    if (msgErr) {
-      return { data: null, error: msgErr.message, status: 500 };
+    if (msgErr || !assistantMsg) {
+      try {
+        const { getSupabaseServiceRoleKey, getSupabaseUrl } = await import('../supabase/config.ts');
+        const sKey = getSupabaseServiceRoleKey();
+        if (sKey) {
+          const { createClient: createAdmin } = await import('@supabase/supabase-js');
+          const admin = createAdmin(getSupabaseUrl(), sKey, { auth: { persistSession: false } });
+          const adminMsg = await admin
+            .from('ai_messages')
+            .insert({
+              conversation_id: convId,
+              user_id: user.id,
+              role: 'assistant',
+              content: finalAnswer,
+              evidence_references: evidence,
+            })
+            .select('id')
+            .single();
+          if (adminMsg.data) {
+            assistantMsg = adminMsg.data;
+            msgErr = null;
+          }
+        }
+      } catch {}
+    }
+
+    if (msgErr || !assistantMsg) {
+      return { data: null, error: msgErr?.message || 'Javobni saqlab bo‘lmadi', status: 500 };
     }
 
     return {

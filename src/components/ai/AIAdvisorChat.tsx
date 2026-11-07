@@ -20,6 +20,7 @@ import {
 import { MessageBubbleSkeleton } from '@/components/ui/Skeleton';
 import { cachedFetch, peekCache } from '@/lib/cache/clientCache';
 import UzHamyonLogo from '@/components/brand/UzHamyonLogo';
+import { createClient } from '@/lib/supabase/client';
 
 let messageCounter = 0;
 function generateId(prefix: string) {
@@ -399,9 +400,18 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
     setLoading(true);
 
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      try {
+        const supabase = createClient();
+        const { data: sessData } = await supabase.auth.getSession();
+        if (sessData?.session?.access_token) {
+          headers['Authorization'] = `Bearer ${sessData.session.access_token}`;
+        }
+      } catch {}
+
       const res = await fetch('/api/ai/advisor', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           question: textToSend,
           conversationId: activeConversationId || undefined,
@@ -453,9 +463,18 @@ export default function AIAdvisorChat({ userName = 'Asal Design' }: AIAdvisorCha
     setSimLoading(true);
     setSimResult(null);
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      try {
+        const supabase = createClient();
+        const { data: sessData } = await supabase.auth.getSession();
+        if (sessData?.session?.access_token) {
+          headers['Authorization'] = `Bearer ${sessData.session.access_token}`;
+        }
+      } catch {}
+
       const res = await fetch('/api/ai/advisor', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           action: 'simulate',
           categoryName: simCategory,

@@ -19,9 +19,10 @@ export const createClient = cache(async () => {
     c.name.startsWith('sb-')
   );
 
+  let reqHeaders: Headers | null = null;
   if (hasSupabaseCookie) {
     try {
-      const reqHeaders = await headers();
+      reqHeaders = await headers();
       const rawToken = reqHeaders.get(INTERNAL_AUTH_HEADER);
       if (rawToken) {
         verifiedUser = verifyInternalAuth(rawToken);
@@ -29,7 +30,15 @@ export const createClient = cache(async () => {
     } catch {
       // headers() might not be available in non-request contexts
     }
+  } else {
+    try {
+      reqHeaders = await headers();
+    } catch {}
   }
+
+  const authHeader = reqHeaders?.get('authorization');
+  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  const accessToken = bearerToken || cookieStore.get('sb-access-token')?.value;
 
   const supabaseUrl = getSupabaseUrl();
   const supabaseAnonKey = getSupabaseAnonKey();
@@ -50,6 +59,13 @@ export const createClient = cache(async () => {
         }
       },
     },
+    global: accessToken
+      ? {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      : undefined,
   });
 
   const originalGetUser = client.auth.getUser.bind(client.auth);
