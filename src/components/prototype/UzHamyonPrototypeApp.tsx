@@ -15,15 +15,12 @@ import { useModalScrollLock } from '@/lib/ui/useModalScrollLock';
 import type { Category } from '@/types/database';
 import {
   Sparkles,
-  ArrowUp,
   Clock,
   Plus,
   RefreshCw,
-  MessageSquare,
   Home,
   Receipt,
   ChartNoAxesCombined,
-  Brain,
   ChevronDown,
   ChevronLeft,
   ChevronRight,

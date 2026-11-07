@@ -8,7 +8,6 @@ import {
   User,
   FileSpreadsheet,
   Layers,
-  Sparkles,
   Wallet,
   ChevronRight,
   ShieldCheck,

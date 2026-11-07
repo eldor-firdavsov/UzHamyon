@@ -1,7 +1,6 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/link';
 import {
   X,
   Sparkles,
@@ -9,7 +8,6 @@ import {
   AlertCircle,
   AlertTriangle,
   Calendar,
-  ArrowRight,
 } from 'lucide-react';
 import type { GoalWithProgress } from '@/lib/goals/schemas';
 
