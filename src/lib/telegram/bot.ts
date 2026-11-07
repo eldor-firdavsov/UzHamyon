@@ -11,7 +11,6 @@ import {
   isUserCancellation,
 } from '../ai/pendingActionStore.ts';
 import { executePendingActionRecord } from '../ai/actionExecutor.ts';
-import { askFinancialAdvisor } from '../ai/advisorService.ts';
 
 function getBotToken(): string {
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
@@ -380,7 +379,7 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
       const returningMsg = `<b>Qaytganingizdan xursandmiz, ${firstName}!</b>\n\nUzHamyon tayyor. Moliyaviy holatingizni davom ettiring.`;
       await sendTelegramMessage(chatId, returningMsg, 'Ilovani ochish', MINIAPP_URL);
     } else {
-      const welcomeMsg = `<b>Assalomu alaykum, ${firstName}!</b>\n\nUzHamyon'ga xush kelibsiz!\n\nEndi daromad va xarajatlaringizni nazorat qilishingiz, pulingiz qayerga sarflanayotganini tushunishingiz va moliyaviy maqsadlaringiz sari harakat qilishingiz mumkin.\n\nUzHamyon sizga:\n• Daromad va xarajatlarni qayd etish\n• Moliyaviy holatingizni tahlil qilish\n• Jamg‘arma maqsadlarini belgilash\n• Qarzlaringizni nazorat qilish\n• AI yordamida moliyaviy qarorlar qabul qilishda yordam beradi\n\nBoshlash uchun quyidagi tugmani bosing.`;
+      const welcomeMsg = `<b>Assalomu alaykum, ${firstName}!</b>\n\nUzHamyon'ga xush kelibsiz!\n\nEndi daromad va xarajatlaringizni nazorat qilishingiz, pulingiz qayerga sarflanayotganini tushunishingiz va moliyaviy maqsadlaringiz sari harakat qilishingiz mumkin.\n\nUzHamyon sizga:\n• Daromad va xarajatlarni qayd etish\n• Moliyaviy holatingizni tahlil qilish\n• Jamg‘arma maqsadlarini belgilash\n• Qarzlaringizni nazorat qilish\n• Telegram chat orqali daromad va xarajatlarni qayd etish\n\nBoshlash uchun quyidagi tugmani bosing.`;
       await sendTelegramMessage(chatId, welcomeMsg, "UzHamyon'ni ochish", MINIAPP_URL);
     }
     return;
@@ -395,14 +394,14 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
 
   // 2.3 Slash command: /help
   if (text === '/help') {
-    const helpMsg = `<b>UzHamyon — shaxsiy moliyaviy yordamchingiz.</b>\n\n<b>Mavjud buyruqlar:</b>\n/start — UzHamyonni boshlash\n/app — Ilovani ochish\n/help — Yordam ma’lumotlari\n/about — UzHamyon haqida\n\nShuningdek, tabiiy tilda xabar yozishingiz mumkin:\n• <i>«Bugun tushlikka 45 000 so'm ishlatdim»</i>\n• <i>«Oylik maoshim 5 000 000 so'm tushdi»</i>\n• <i>«Mashina uchun 50 mln maqsad yarat»</i>\n• <i>«Bu oy qancha pul sarfladim?»</i>`;
+    const helpMsg = `<b>UzHamyon — daromad va xarajatlaringizni qayd etish boti.</b>\n\n<b>Mavjud buyruqlar:</b>\n/start — UzHamyonni boshlash\n/app — Ilovani ochish\n/help — Yordam ma’lumotlari\n/about — UzHamyon haqida\n\n<b>Tranzaksiya yozish uchun xabar yuboring:</b>\n• <i>«Bugun tushlikka 45 000 so'm ishlatdim»</i>\n• <i>«Taksiga 25 000 so'm berdim»</i>\n• <i>«Oylik maoshim 5 000 000 so'm tushdi»</i>\n\nAI ma’lumotlarni aniqlaydi va saqlashdan oldin tasdiqlashingizni so‘raydi.`;
     await sendTelegramMessage(chatId, helpMsg, 'Ilovani ochish', MINIAPP_URL);
     return;
   }
 
   // 2.4 Slash command: /about
   if (text === '/about') {
-    const aboutMsg = `<b>UzHamyon haqida</b>\n\nUzHamyon — O‘zbekiston foydalanuvchilari uchun shaxsiy moliya va budjet boshqaruvi tizimi.\n\nDaromad va xarajatlaringizni kuzatib boring, jamg‘arma maqsadlaringizni belgilang va sun’iy intellekt (UzHamyon AI) tavsiyalaridan foydalaning.\n\nBarcha ma’lumotlaringiz xavfsiz va shifrlangan holatda saqlanadi.`;
+    const aboutMsg = `<b>UzHamyon haqida</b>\n\nUzHamyon — O‘zbekiston foydalanuvchilari uchun shaxsiy moliya va budjet boshqaruvi tizimi.\n\nDaromad va xarajatlaringizni ilovada yoki Telegram chat orqali qayd eting. Telegramga yozgan tranzaksiyangiz AI tomonidan tahlil qilinadi va saqlashdan oldin tasdiqlashingiz so‘raladi.\n\nBarcha moliyaviy yozuvlar tasdiqingizdan keyingina saqlanadi.`;
     await sendTelegramMessage(chatId, aboutMsg, 'Ilovani ochish', MINIAPP_URL);
     return;
   }
@@ -433,7 +432,11 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
   // Extract financial actions using Gemini AI Action Extraction Engine
   const extracted = await extractFinancialActions(text);
 
-  if (extracted.intent === 'action_proposal' && extracted.actions.length > 0) {
+  if (
+    extracted.intent === 'action_proposal' &&
+    extracted.actions.length > 0 &&
+    extracted.actions.every((action) => action.actionType === 'create_transaction')
+  ) {
     const saveRes = await savePendingAction(
       userAuth.userId,
       extracted.actions,
@@ -465,22 +468,15 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
   }
 
   if (extracted.intent === 'clarification') {
-    const q = extracted.clarificationQuestion || 'Iltimos, summani yoki boshqa tafsilotlarni aniqlashtirib yozing.';
+    const q = extracted.clarificationQuestion || 'Tranzaksiyani aniqlash uchun summani va nima uchun to‘lov qilganingizni yozing.';
     await sendTelegramMessage(chatId, q);
     return;
   }
 
-  if (extracted.intent === 'financial_query') {
-    const advisorRes = await askFinancialAdvisor(text, undefined, userAuth.client);
-    const reply = advisorRes.data?.answer || 'Moliyaviy ma’lumotlarni tahlil qilishda xatolik yuz berdi.';
-    await sendTelegramMessage(chatId, reply);
-    return;
-  }
-
-  // Casual chat or general query fallback
-  const advisorRes = await askFinancialAdvisor(text, undefined, userAuth.client);
-  const reply = advisorRes.data?.answer || `Assalomu alaykum, ${firstName}! Sizga qanday yordam bera olaman?`;
-  await sendTelegramMessage(chatId, reply, 'Ilovani ochish', MINIAPP_URL);
+  await sendTelegramMessage(
+    chatId,
+    'Hozircha Telegram orqali faqat daromad va xarajatlarni qayd etish mumkin. Masalan: «Tushlikka 45 000 so‘m ishlatdim» yoki «Oylik maoshim 5 000 000 so‘m tushdi».'
+  );
 }
 
 /**

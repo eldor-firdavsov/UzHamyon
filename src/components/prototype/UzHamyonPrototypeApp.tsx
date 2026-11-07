@@ -2483,6 +2483,32 @@ export default function UzHamyonPrototypeApp({
           </div>
         )}
 
+        {/* ── TAB 4: AI — COMING SOON ── */}
+        {tab === 'ai' && (
+          <div className="uz-ai-page-wrapper min-h-[60vh]">
+            <div className="flex flex-1 flex-col items-center justify-center px-6 py-16 text-center">
+              <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-[#F0F9E9]">
+                <Brain className="h-10 w-10 text-[#163300]" />
+              </div>
+              <h1 className="mb-3 text-2xl font-bold tracking-tight text-[#171B16]">
+                AI yordamchi
+              </h1>
+              <span className="mb-5 inline-flex items-center rounded-full border border-[#D8E8CC] bg-[#F0F9E9] px-4 py-2 text-sm font-semibold text-[#28551B]">
+                Tez kunlarda
+              </span>
+              <p className="max-w-sm text-sm leading-6 text-[#697168]">
+                UzHamyon AI imkoniyatlari ustida ishlayapmiz. Yangilanishlar tez orada taqdim etiladi.
+              </p>
+              <p className="mt-4 max-w-sm text-sm leading-6 text-[#697168]">
+                Hozircha daromad va xarajatlaringizni Telegram bot chatiga oddiy xabar qilib yuborishingiz mumkin.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Old AI chat UI is temporarily disabled; keep its state/handlers for a later relaunch. */}
+        {false && (
+          <>
         {/* ── TAB 4: AI ADVISOR (Mobile-First Full-Page Experience) ── */}
         {tab === 'ai' && (
           <div className="uz-ai-page-wrapper">
@@ -2773,6 +2799,9 @@ export default function UzHamyonPrototypeApp({
               </>
             )}
           </div>
+        )}
+
+          </>
         )}
       </main>
 
