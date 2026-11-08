@@ -101,7 +101,7 @@ export default function ContributeModal({
               }`}
             >
               <ArrowDownRight className="h-4 w-4" />
-              <span>Qo‘shish (Kirim)</span>
+              <span>Maqsadga qo‘shish</span>
             </button>
             <button
               type="button"
@@ -114,9 +114,15 @@ export default function ContributeModal({
               }`}
             >
               <ArrowUpRight className="h-4 w-4" />
-              <span>Yechib olish</span>
+              <span>Balansga qaytarish</span>
             </button>
           </div>
+
+          <p className="text-xs text-[#71717A] leading-relaxed px-1">
+            {action === 'deposit'
+              ? '💡 Qo‘shilgan mablag‘ daromadlardan qolgan erkin balansingizdan ajratiladi va ushbu maqsadda saqlanadi.'
+              : '💡 Yechib olingan mablag‘ umumiy erkin balansingizga qaytariladi.'}
+          </p>
 
           <div>
             <label className="block text-sm font-medium text-[#52525B] mb-1.5">

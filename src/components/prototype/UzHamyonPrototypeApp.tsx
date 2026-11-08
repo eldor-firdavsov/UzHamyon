@@ -739,11 +739,19 @@ export default function UzHamyonPrototypeApp({
       .reduce((sum, t) => sum + t.amount, 0);
   }, [transactions]);
 
-  // How much money user has right now (all income minus all expense)
-  // If user has more xarajat than daromad, this becomes negative, like a real card
+  // Goals savings: total actual amount contributed across all active/completed goals
+  const totalGoalsSaved = useMemo(() => {
+    return (goals || []).reduce((sum, g) => {
+      const saved = (g.contribs || []).reduce((s, c) => s + (Number(c.a) || 0), 0);
+      return sum + Math.max(0, saved);
+    }, 0);
+  }, [goals]);
+
+  // How much free cash user has right now (all income minus all expense minus savings allocated to goals)
+  // If user has more xarajat & goal savings than daromad, this becomes negative, like a real card
   const currentBalance = useMemo(() => {
-    return totalLifetimeIncome - totalLifetimeExpense;
-  }, [totalLifetimeIncome, totalLifetimeExpense]);
+    return totalLifetimeIncome - totalLifetimeExpense - totalGoalsSaved;
+  }, [totalLifetimeIncome, totalLifetimeExpense, totalGoalsSaved]);
 
   // Expenses grouped by category for active month
   const categoryExpenses = useMemo(() => {
@@ -1655,7 +1663,14 @@ export default function UzHamyonPrototypeApp({
 
               <div className="card-content" style={{ position: 'relative', zIndex: 2 }}>
                 <div className="sr-only">Joriy balans Jami balans Kirim Chiqim Sof oqim Moliyaviy holatingiz {currentBalance} soʻm</div>
-                <div style={{ fontSize: '14px', color: '#C9E8B0' }}>Joriy balans</div>
+                <div className="flex items-center justify-between">
+                  <div style={{ fontSize: '14px', color: '#C9E8B0' }}>Joriy erkin balans</div>
+                  {totalGoalsSaved > 0 && (
+                    <div style={{ fontSize: '12px', color: '#9FE870', background: 'rgba(159, 232, 112, 0.12)', padding: '2px 8px', borderRadius: '12px', border: '1px solid rgba(159, 232, 112, 0.25)' }}>
+                      Jamg‘armada: {formatNumber(totalGoalsSaved)} so‘m
+                    </div>
+                  )}
+                </div>
                 <div
                   className="num"
                   style={{
@@ -3259,10 +3274,20 @@ export default function UzHamyonPrototypeApp({
 
             {/* ── SHEET: Add Contribution ── */}
             {activeSheet === 'contrib' && (
-              <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {/* Available free cashflow indicator */}
+                <div style={{ background: '#F7F8F5', border: '1px solid #E8EBE5', borderRadius: '16px', padding: '12px 14px' }}>
+                  <div style={{ fontSize: '12px', color: '#697168', fontWeight: 500 }}>
+                    Daromadlardan qolgan erkin balans:
+                  </div>
+                  <div className="num" style={{ fontSize: '18px', fontWeight: 700, color: currentBalance < 0 ? '#DC2626' : '#163300', marginTop: '2px' }}>
+                    {formatNumber(currentBalance)} so‘m
+                  </div>
+                </div>
+
                 <div className="fxb">
                   <label className="lb" htmlFor="contrib-amount">
-                    Hissa summasi (so&apos;m)
+                    Maqsadga qo‘shiladigan hissa summasi (so&apos;m)
                   </label>
                   <input
                     id="contrib-amount"
@@ -3272,11 +3297,50 @@ export default function UzHamyonPrototypeApp({
                     value={formData.contrib || ''}
                     onChange={(e) => setFormData((prev) => ({ ...prev, contrib: formatNumberWithGaps(e.target.value) }))}
                   />
+
+                  {/* Dynamic remaining balance preview */}
+                  {parseNumber(formData.contrib) > 0 && (
+                    <div style={{ fontSize: '12px', marginTop: '6px', color: (currentBalance - parseNumber(formData.contrib)) < 0 ? '#DC2626' : '#697168' }}>
+                      {(currentBalance - parseNumber(formData.contrib)) < 0 ? (
+                        <span>⚠️ Hissadan so‘ng balans manfiyga tushadi: <b>{formatNumber(currentBalance - parseNumber(formData.contrib))} so‘m</b></span>
+                      ) : (
+                        <span>Hissadan so‘ng qoladigan balans: <b style={{ color: '#163300' }}>{formatNumber(currentBalance - parseNumber(formData.contrib))} so‘m</b></span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Quick percentage helper pills if user has positive balance */}
+                  {currentBalance > 0 && (
+                    <div style={{ display: 'flex', gap: '6px', marginTop: '10px', flexWrap: 'wrap' }}>
+                      {[25, 50, 100].map((pct) => {
+                        const amt = Math.round((currentBalance * pct) / 100);
+                        return (
+                          <button
+                            key={pct}
+                            type="button"
+                            onClick={() => setFormData((prev) => ({ ...prev, contrib: formatNumberWithGaps(String(amt)) }))}
+                            style={{
+                              padding: '5px 12px',
+                              borderRadius: '12px',
+                              border: '1px solid #D8DED3',
+                              background: '#FFFFFF',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              color: '#163300',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {pct === 100 ? 'Barchasi' : `${pct}%`} ({formatNumber(amt)})
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
-                <div className="fxf">
+                <div className="fxf" style={{ marginTop: 'auto', paddingTop: '10px' }}>
                   <button className="p" disabled={isSaveContribDisabled} onClick={handleSaveContribution}>
-                    Qo&apos;shish
+                    Maqsadga qo&apos;shish
                   </button>
                 </div>
               </div>

@@ -7,6 +7,7 @@ export interface FinanceCardProps {
   currentBalance?: number;
   totalIncome?: number;
   totalExpense?: number;
+  totalSavings?: number;
   monthIncome?: number;
   monthExpense?: number;
   monthLabel?: string;
@@ -20,6 +21,7 @@ export default function FinanceCard({
   currentBalance,
   totalIncome,
   totalExpense,
+  totalSavings = 0,
   monthIncome,
   monthExpense,
   monthLabel = 'Joriy oy',
@@ -38,7 +40,7 @@ export default function FinanceCard({
     ? currentBalance
     : balance !== undefined
       ? balance
-      : ((totalIncome ?? 0) - (totalExpense ?? 0));
+      : ((totalIncome ?? 0) - (totalExpense ?? 0) - (totalSavings ?? 0));
   const isNegative = computedBalance < 0;
 
   return (
