@@ -62,8 +62,6 @@ export default function BudgetsManager() {
           setError(null);
           setLoading(false);
           setIsRevalidating(true);
-        } else if (budgets.length === 0) {
-          setLoading(true);
         }
 
         const [catData, budgetData] = await Promise.all([

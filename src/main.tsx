@@ -25,7 +25,7 @@ if (typeof window !== 'undefined') {
           }
           init.headers = headers;
         }
-      } catch (e) {
+      } catch {
         // Continue with original fetch if token extraction fails
       }
     }

@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { BarChart3, Calendar, Info } from 'lucide-react';
 import type { DemoTransaction } from '../demoData';
-import { calculateChartData, type ChartPeriod, type ChartIntervalPoint } from '../dateUtils';
+import { calculateChartData, type ChartPeriod } from '../dateUtils';
 import { formatUzbekCurrency } from '../tokens';
 
 interface FinancialChartBlockProps {

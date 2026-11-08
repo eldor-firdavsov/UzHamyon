@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState, useCallback, useEffect } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 
 export interface SlidingSegmentedOption<T extends string> {
   id: T;
@@ -34,13 +34,17 @@ export function SlidingSegmentedNav<T extends string>({
     return idx >= 0 ? idx : 0;
   }, [options, value]);
 
-  const [activeIndex, setActiveIndex] = useState<number>(resolveIndex);
+  const currentIndex = resolveIndex();
+  const [prevValue, setPrevValue] = useState(value);
+  const [activeIndex, setActiveIndex] = useState<number>(currentIndex);
+
+  if (prevValue !== value) {
+    setPrevValue(value);
+    setActiveIndex(currentIndex);
+  }
+
   const [scrubProgress, setScrubProgress] = useState<number | null>(null);
   const [isScrubbing, setIsScrubbing] = useState(false);
-
-  useEffect(() => {
-    setActiveIndex(resolveIndex());
-  }, [resolveIndex]);
 
   const getContinuousIndexFromX = (clientX: number): number => {
     if (!containerRef.current) return activeIndex;

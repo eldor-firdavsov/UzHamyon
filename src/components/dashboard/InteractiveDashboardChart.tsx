@@ -56,7 +56,6 @@ function daysInMonth(year: number, month: number) {
 export default function InteractiveDashboardChart({
   transactions,
   referenceDate,
-  userFinancialStartDate,
   className = '',
 }: InteractiveDashboardChartProps) {
   const [activePeriod, setActivePeriod] = useState<ChartPeriod>('6m');

@@ -2,14 +2,7 @@
 
 import React from 'react';
 import { 
-  ArrowDownLeft, 
-  ArrowUpRight, 
   ArrowRight, 
-  ShoppingBag, 
-  Coffee, 
-  Car, 
-  Wifi, 
-  Wallet,
   Receipt
 } from 'lucide-react';
 import type { DemoTransaction } from '../demoData';
@@ -30,22 +23,6 @@ export function RecentTransactionsBlock({
   onSelectTransaction,
   selectedMonthLabel,
 }: RecentTransactionsBlockProps) {
-  const getCategoryIcon = (iconName: string, isIncome: boolean) => {
-    switch (iconName) {
-      case 'cart':
-        return <ShoppingBag className="h-4 w-4" />;
-      case 'coffee':
-        return <Coffee className="h-4 w-4" />;
-      case 'car':
-        return <Car className="h-4 w-4" />;
-      case 'wifi':
-        return <Wifi className="h-4 w-4" />;
-      case 'wallet':
-      default:
-        return isIncome ? <ArrowDownLeft className="h-4 w-4 stroke-[2.2]" /> : <ArrowUpRight className="h-4 w-4 stroke-[2.2]" />;
-    }
-  };
-
   return (
     <section 
       aria-label="So‘nggi amallar"

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Receipt, BarChart2, Brain, ArrowLeft, Sparkles } from 'lucide-react';
+import { Receipt, BarChart2, Brain, ArrowLeft } from 'lucide-react';
 import type { PrototypeTab } from './FloatingMobileNav';
 
 interface PlaceholderScreenProps {

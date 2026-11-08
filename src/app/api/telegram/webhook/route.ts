@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { handleTelegramUpdate } from '@/lib/telegram/bot';
 import {
   claimWebhookUpdate,
@@ -7,16 +7,6 @@ import {
 } from '@/lib/telegram/webhookIdempotency';
 
 export const maxDuration = 30;
-
-function isTransientError(err: unknown): boolean {
-  if (!err) return false;
-  const msg = err instanceof Error ? err.message : String(err);
-  return (
-    /timeout|network|econnrefused|fetch failed|503|502|429|socket|database connection|deadlock|temporarily/i.test(
-      msg
-    ) || (err instanceof Error && err.name === 'TimeoutError')
-  );
-}
 
 export async function POST(req: NextRequest) {
   // Optional Telegram webhook secret validation
@@ -62,31 +52,20 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    try {
-      await handleTelegramUpdate(update);
-      await completeWebhookUpdate(validUpdateId);
-      return NextResponse.json({ ok: true });
-    } catch (procErr: unknown) {
-      const errorMsg = procErr instanceof Error ? procErr.message : String(procErr);
-      await failWebhookUpdate(validUpdateId, errorMsg);
-
-      // Distinguish transient vs permanent errors:
-      // Transient errors return 500 so Telegram will retry the update.
-      // Permanent errors return 200 so Telegram does not endlessly loop.
-      if (isTransientError(procErr)) {
-        console.warn(`[Webhook] Transient failure on update ${updateId}, returning 500 for retry:`, errorMsg);
-        return NextResponse.json(
-          { ok: false, error: errorMsg, retryable: true },
-          { status: 500 }
-        );
+    // Respond to Telegram immediately with 200 OK while processing update in background via Next.js after().
+    // This completely prevents 504 Gateway Timeouts from Vercel function limits and stops Telegram duplicate delivery loops.
+    after(async () => {
+      try {
+        await handleTelegramUpdate(update);
+        await completeWebhookUpdate(validUpdateId);
+      } catch (procErr: unknown) {
+        const errorMsg = procErr instanceof Error ? procErr.message : String(procErr);
+        await failWebhookUpdate(validUpdateId, errorMsg);
+        console.error(`[Webhook background] Error processing update ${validUpdateId}:`, errorMsg);
       }
+    });
 
-      console.error(`[Webhook] Permanent failure on update ${updateId}:`, errorMsg);
-      return NextResponse.json(
-        { ok: false, error: errorMsg, retryable: false },
-        { status: 200 }
-      );
-    }
+    return NextResponse.json({ ok: true });
   } catch (err: unknown) {
     console.error('Error in /api/telegram/webhook:', err);
     if (updateId) {

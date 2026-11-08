@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Smartphone, Monitor, ShieldCheck } from 'lucide-react';
+import { Smartphone, ShieldCheck } from 'lucide-react';
 
 export type ViewportPreset = '320' | '375' | '390' | '430' | 'full';
 

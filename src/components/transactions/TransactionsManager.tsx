@@ -9,8 +9,6 @@ import {
   Edit2,
   Trash2,
   Calendar,
-  ArrowDownLeft,
-  ArrowUpRight,
   Plus,
   X,
 } from 'lucide-react';

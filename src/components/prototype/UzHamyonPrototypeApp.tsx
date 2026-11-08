@@ -82,17 +82,6 @@ export interface Goal {
   contribs: Contribution[];
 }
 
-export interface ChatMessage {
-  r: 'u' | 'a';
-  t: string;
-}
-
-export interface Conversation {
-  id: string;
-  title: string;
-  msgs: ChatMessage[];
-}
-
 export interface UzHamyonPrototypeAppProps {
   initialTab?: TabType;
   initialSubTab?: SubTabType;
@@ -187,10 +176,6 @@ const DEMO_GOALS: Goal[] = [
     date: '2027-06-01',
     contribs: [{ a: 1800000, d: '2026-10-25' }],
   },
-];
-
-const INITIAL_CONVERSATIONS: Conversation[] = [
-  { id: 'c1', title: 'Yangi suhbat', msgs: [] },
 ];
 
 function formatNumber(n: number): string {
@@ -413,16 +398,6 @@ export default function UzHamyonPrototypeApp({
       };
     });
   }, [transactions]);
-
-  // ── AI State ──
-  const [conversations, setConversations] = useState<Conversation[]>(INITIAL_CONVERSATIONS);
-  const [currentConvId, setCurrentConvId] = useState<string>('c1');
-  const [aiView, setAiView] = useState<'chat' | 'hist'>('chat');
-  const [aiInput, setAiInput] = useState<string>('');
-  const [aiLoading, setAiLoading] = useState<boolean>(false);
-  const [aiError, setAiError] = useState<boolean>(false);
-  const [aiSendCount, setAiSendCount] = useState<number>(0);
-  const [aiLastQuery, setAiLastQuery] = useState<string>('');
 
   // ── Modal Sheet & Form State ──
   const [activeSheet, setActiveSheet] = useState<SheetType>(initialSheet);
@@ -924,11 +899,6 @@ export default function UzHamyonPrototypeApp({
     return groups;
   }, [sortedTransactions, searchQuery, activityFilter, month]);
 
-  // ── AI Message Logic ──
-  const activeConversation = useMemo(() => {
-    return conversations.find((c) => c.id === currentConvId) || conversations[0];
-  }, [conversations, currentConvId]);
-
   const handleLogout = async () => {
     try {
       const { createClient } = await import('@/lib/supabase/client');
@@ -937,93 +907,6 @@ export default function UzHamyonPrototypeApp({
       window.location.href = '/login';
     } catch {
       window.location.href = '/login';
-    }
-  };
-
-  const handleSendAIMessage = async (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed || aiLoading) return;
-
-    const newSendCount = aiSendCount + 1;
-    const targetConvId = activeConversation.id;
-
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === targetConvId
-          ? {
-              ...c,
-              title: c.msgs.length ? c.title : trimmed.slice(0, 28),
-              msgs: [...c.msgs, { r: 'u', t: trimmed }],
-            }
-          : c
-      )
-    );
-
-    setAiInput('');
-    setAiLoading(true);
-    setAiError(false);
-    setAiSendCount(newSendCount);
-    setAiLastQuery(trimmed);
-
-    try {
-      const res = await fetch('/api/ai/advisor', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: trimmed, message: trimmed }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error || 'AI request failed');
-      const reply = data?.answer || data?.reply || data?.response?.answer;
-      if (!reply) throw new Error('Empty AI response');
-      setAiLoading(false);
-      setAiError(false);
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === targetConvId
-            ? {
-                ...c,
-                msgs: [...c.msgs, { r: 'a', t: reply }],
-              }
-            : c
-        )
-      );
-    } catch {
-      setAiLoading(false);
-      setAiError(true);
-    }
-  };
-
-  const handleRetryAI = async () => {
-    if (!aiLastQuery) return;
-    setAiError(false);
-    setAiLoading(true);
-    setAiSendCount((prev) => prev + 1);
-
-    try {
-      const res = await fetch('/api/ai/advisor', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: aiLastQuery, message: aiLastQuery }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error || 'AI request failed');
-      const reply = data?.answer || data?.reply || data?.response?.answer;
-      if (!reply) throw new Error('Empty AI response');
-      setAiLoading(false);
-      setAiError(false);
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === activeConversation.id
-            ? {
-                ...c,
-                msgs: [...c.msgs, { r: 'a', t: reply }],
-              }
-            : c
-        )
-      );
-    } catch {
-      setAiLoading(false);
-      setAiError(true);
     }
   };
 
