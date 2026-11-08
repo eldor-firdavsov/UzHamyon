@@ -49,16 +49,21 @@ export async function callGeminiApi(
   const primaryModel = preferredModel || getConfiguredGeminiModel();
   const fallbackModel = getConfiguredGeminiFallbackModel();
 
-  // Deduplicate model candidates starting with primary model then configured fallback
+  // Deduplicate model candidates. When preferredModel is specified, try it first.
+  // Otherwise prioritize ultra-fast low-latency models (gemini-flash-lite-latest / gemini-3.5-flash-lite)
+  // to avoid hitting free-tier 20 req/day quota limits on gemini-3.8-flash.
   const candidateModels = Array.from(
-    new Set([
-      primaryModel,
-      fallbackModel,
-      'gemini-flash-latest',
-      'gemini-flash-lite-latest',
-      'gemini-3.5-flash-lite',
-      'gemini-3.8-flash',
-    ])
+    new Set(
+      preferredModel
+        ? [preferredModel, 'gemini-flash-lite-latest', 'gemini-3.5-flash-lite', primaryModel, fallbackModel]
+        : [
+            'gemini-flash-lite-latest',
+            'gemini-3.5-flash-lite',
+            'gemini-flash-latest',
+            primaryModel,
+            fallbackModel,
+          ]
+    )
   );
 
   let lastError: Error | null = null;

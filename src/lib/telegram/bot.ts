@@ -223,6 +223,25 @@ export async function editTelegramMessageText(chatId: number, messageId: number,
 }
 
 /**
+ * Broadcasts a chat action (e.g. 'typing') to inform the user the bot is actively processing.
+ */
+export async function sendTelegramChatAction(chatId: number, action: string = 'typing'): Promise<boolean> {
+  const url = `https://api.telegram.org/bot${getBotToken()}/sendChatAction`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, action }),
+    });
+    const data = await res.json();
+    return Boolean(data?.ok);
+  } catch (err) {
+    console.warn('[Telegram Bot] Failed to send chat action:', err);
+    return false;
+  }
+}
+
+/**
  * Resolves or establishes an authenticated Supabase client for a Telegram user
  */
 export async function getTelegramUserSupabaseClient(tgUser: {
@@ -313,6 +332,19 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
 
     if (data.startsWith('act_confirm:')) {
       const actionId = data.replace('act_confirm:', '');
+
+      // 1. Optimistic instant response: show confirmed receipt immediately without waiting for DB writes
+      const originalText = message.text || '';
+      const details = originalText.replace(/^Quyidagi[^\n]*\n?/i, '').trim();
+      const optimisticMessage = `✅ <b>Tranzaksiya muvaffaqiyatli saqlandi!</b>\n\n${details ? `${details}\n\n` : ''}<i>UzHamyon hisobingizga biriktirildi.</i>`;
+
+      // Non-blocking parallel immediate Telegram feedback
+      await Promise.all([
+        answerTelegramCallbackQuery(cb.id, '✅ Tranzaksiya tasdiqlandi!'),
+        editTelegramMessageText(message.chat.id, message.message_id, optimisticMessage),
+      ]);
+
+      // 2. Concurrently execute the database action in Supabase
       const userAuth = await getTelegramUserSupabaseClient(from);
 
       if (!userAuth) {
@@ -326,11 +358,12 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
 
       const pending = await getPendingAction(actionId, userAuth.userId, from.id, userAuth.client);
       if (!pending.record || pending.error) {
+        if (pending.error === 'already_processed') {
+          return;
+        }
         const errorMsg =
           pending.error === 'expired'
             ? '⚠️ Amal muddati tugagan (15 daqiqa). Qayta so‘rov yuboring.'
-            : pending.error === 'already_processed'
-            ? '⚠️ Bu amal allaqachon bajarilgan yoki bekor qilingan.'
             : pending.error === 'unauthorized'
             ? '⛔ Ruxsat berilmagan: bu amal boshqa foydalanuvchiga tegishli.'
             : '⚠️ Tasdiqlanuvchi amal topilmadi.';
@@ -339,21 +372,33 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
       }
 
       const execRes = await executePendingActionRecord(pending.record, userAuth.client);
-      await editTelegramMessageText(message.chat.id, message.message_id, execRes.message);
+      if (execRes.success && execRes.message) {
+        await editTelegramMessageText(message.chat.id, message.message_id, execRes.message);
+      } else if (!execRes.success) {
+        await editTelegramMessageText(
+          message.chat.id,
+          message.message_id,
+          `⚠️ Xatolik yuz berdi: ${execRes.message || 'Saqlab bo‘lmadi'}`
+        );
+      }
       return;
     }
 
     if (data.startsWith('act_cancel:')) {
       const actionId = data.replace('act_cancel:', '');
+      await Promise.all([
+        answerTelegramCallbackQuery(cb.id, '❌ Amal bekor qilindi'),
+        editTelegramMessageText(
+          message.chat.id,
+          message.message_id,
+          '❌ Amal bekor qilindi. Hech qanday moliyaviy yozuv kiritilmadi.'
+        ),
+      ]);
+
       const userAuth = await getTelegramUserSupabaseClient(from);
       if (userAuth) {
         await cancelPendingAction(actionId, userAuth.userId, from.id, userAuth.client);
       }
-      await editTelegramMessageText(
-        message.chat.id,
-        message.message_id,
-        '❌ Amal bekor qilindi. Hech qanday moliyaviy yozuv kiritilmadi.'
-      );
       return;
     }
 
@@ -368,6 +413,9 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
   const from = message.from;
   const text = message.text.trim();
   const firstName = from.first_name || 'aziz foydalanuvchi';
+
+  // Immediately broadcast 'typing' chat action so user sees loading feedback right away
+  sendTelegramChatAction(chatId, 'typing').catch(() => {});
 
   // Ensure Chat Menu Button is always active on the left side of the chat
   setTelegramChatMenuButton(chatId).catch(() => {});
@@ -408,30 +456,40 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
   }
 
   // 2.5 Natural Language Financial Message Processing
-  const userAuth = await getTelegramUserSupabaseClient(from);
+  const isSimpleConfirmation = isUserConfirmation(text);
+  const isSimpleCancellation = isUserCancellation(text);
+
+  // If user sent a short affirmative/negative reply ("ha", "tasdiqla", "bekor"), handle existing action first
+  if (isSimpleConfirmation || isSimpleCancellation) {
+    const userAuth = await getTelegramUserSupabaseClient(from);
+    if (userAuth) {
+      const latestAction = await getLatestActivePendingAction(userAuth.userId, from.id, userAuth.client);
+      if (latestAction && latestAction.status === 'pending') {
+        if (isSimpleConfirmation) {
+          const execRes = await executePendingActionRecord(latestAction, userAuth.client);
+          await sendTelegramMessage(chatId, execRes.message);
+          return;
+        }
+        if (isSimpleCancellation) {
+          await cancelPendingAction(latestAction.actionId, userAuth.userId, from.id, userAuth.client);
+          await sendTelegramMessage(chatId, '❌ Amal bekor qilindi. Hech qanday moliyaviy yozuv kiritilmadi.');
+          return;
+        }
+      }
+    }
+  }
+
+  // Ultra-fast parallel execution: resolve Supabase user client and extract AI actions concurrently
+  const [userAuth, extracted] = await Promise.all([
+    getTelegramUserSupabaseClient(from),
+    extractFinancialActions(text),
+  ]);
+
   if (!userAuth) {
     const defaultMsg = `Assalomu alaykum, ${firstName}!\n\nUzHamyon ilovasi orqali hisobingizni ochish uchun quyidagi tugmani bosing:`;
     await sendTelegramMessage(chatId, defaultMsg, "UzHamyon'ni ochish", MINIAPP_URL);
     return;
   }
-
-  // Check if user is confirming or cancelling an existing pending action
-  const latestAction = await getLatestActivePendingAction(userAuth.userId, from.id, userAuth.client);
-  if (latestAction && latestAction.status === 'pending') {
-    if (isUserConfirmation(text)) {
-      const execRes = await executePendingActionRecord(latestAction, userAuth.client);
-      await sendTelegramMessage(chatId, execRes.message);
-      return;
-    }
-    if (isUserCancellation(text)) {
-      await cancelPendingAction(latestAction.actionId, userAuth.userId, from.id, userAuth.client);
-      await sendTelegramMessage(chatId, '❌ Amal bekor qilindi. Hech qanday moliyaviy yozuv kiritilmadi.');
-      return;
-    }
-  }
-
-  // Extract financial actions using Gemini AI Action Extraction Engine
-  const extracted = await extractFinancialActions(text);
 
   if (extracted.intent === 'action_proposal' && extracted.actions.length > 0) {
     const saveRes = await savePendingAction(
