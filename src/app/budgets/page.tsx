@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import UzHamyonPrototypeApp from '@/components/prototype/UzHamyonPrototypeApp';
+import { getDashboardHydrationData } from '@/lib/data/hydration';
 
 export const metadata = {
   title: 'Budjetlar — UzHamyon',
@@ -30,12 +31,21 @@ export default async function BudgetsPage() {
   const cleanEmailName = emailPrefix.replace(/[0-9_.-]/g, ' ').trim();
   const displayName = profileName || metaName || (cleanEmailName ? cleanEmailName.charAt(0).toUpperCase() + cleanEmailName.slice(1).toLowerCase() : 'Foydalanuvchi');
 
+  // Server-side hydration data with resilient admin fallback for cold-start Telegram WebView
+  const { initialTransactions, initialBudgets, initialGoals } = await getDashboardHydrationData(
+    supabase,
+    user.id
+  );
+
   return (
     <UzHamyonPrototypeApp
       initialTab="tahlil"
       initialSubTab="an"
       initialUserName={displayName}
       userEmail={user.email}
+      initialTransactions={initialTransactions}
+      initialBudgets={initialBudgets}
+      initialGoals={initialGoals}
     />
   );
 }

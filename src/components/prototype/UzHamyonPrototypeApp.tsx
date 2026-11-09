@@ -285,16 +285,20 @@ function toUzbekTxError(raw?: string, action: 'save' | 'delete' = 'save'): strin
     : 'Tranzaksiyani saqlashda xatolik yuz berdi. Iltimos, qayta urining.';
 }
 
-async function fetchAllTransactions(): Promise<ApiTransactionRow[]> {
+async function fetchAllTransactions(token?: string): Promise<ApiTransactionRow[]> {
   const rows: ApiTransactionRow[] = [];
   const pageSize = 100;
   let page = 1;
   let totalPages = 1;
 
   do {
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
     const res = await fetch(
       `/api/transactions?pageSize=${pageSize}&page=${page}&sortBy=date&sortDirection=desc`,
-      { cache: 'no-store' }
+      { cache: 'no-store', headers }
     );
     const payload = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -506,36 +510,72 @@ export default function UzHamyonPrototypeApp({
     }
   }, []);
 
-  // Load real backend data on mount
+  // Helper to retrieve current client auth token for API calls
+  const getAuthToken = useCallback(async (): Promise<string | undefined> => {
+    try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      return session?.access_token || undefined;
+    } catch {
+      return undefined;
+    }
+  }, []);
+
+  // Load real backend data on mount & whenever auth synchronizes
   useEffect(() => {
     let isMounted = true;
-    async function loadRealData() {
+    let authSubscription: { unsubscribe: () => void } | null = null;
+
+    async function loadRealData(overrideToken?: string) {
       try {
         const { createClient } = await import('@/lib/supabase/client');
         const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
 
-        if (isMounted) {
-          setIsAuthenticated(Boolean(user));
+        let token = overrideToken;
+        let currentUser: any = null;
+
+        if (!token) {
+          const { data: sessionData } = await supabase.auth.getSession();
+          token = sessionData?.session?.access_token;
+          currentUser = sessionData?.session?.user;
         }
 
-        if (user && isMounted) {
-          // 1. User profile name
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('first_name, last_name')
-            .eq('id', user.id)
-            .maybeSingle();
+        if (!currentUser) {
+          const { data: { user } } = await supabase.auth.getUser();
+          currentUser = user;
+        }
 
-          if (profile?.first_name && isMounted) {
-            setUserName(`${profile.first_name}${profile.last_name ? ` ${profile.last_name}` : ''}`);
-          } else if (user.user_metadata?.first_name && isMounted) {
-            setUserName(`${user.user_metadata.first_name} ${user.user_metadata.last_name || ''}`.trim());
+        if (isMounted) {
+          setIsAuthenticated(Boolean(currentUser));
+        }
+
+        if (currentUser && isMounted) {
+          const authHeaders: Record<string, string> = {};
+          if (token) {
+            authHeaders['Authorization'] = `Bearer ${token}`;
+          }
+
+          // 1. User profile name
+          try {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('first_name, last_name')
+              .eq('id', currentUser.id)
+              .maybeSingle();
+
+            if (profile?.first_name && isMounted) {
+              setUserName(`${profile.first_name}${profile.last_name ? ` ${profile.last_name}` : ''}`);
+            } else if (currentUser.user_metadata?.first_name && isMounted) {
+              setUserName(`${currentUser.user_metadata.first_name} ${currentUser.user_metadata.last_name || ''}`.trim());
+            }
+          } catch (profErr) {
+            console.error('Failed to load profile in UzHamyon prototype app:', profErr);
           }
 
           // 2. Categories — required to resolve the user's category_id on save
           try {
-            const catRes = await fetch('/api/categories', { cache: 'no-store' });
+            const catRes = await fetch('/api/categories', { cache: 'no-store', headers: authHeaders });
             if (catRes.ok) {
               const catData = await catRes.json();
               if (Array.isArray(catData.categories) && isMounted) {
@@ -548,51 +588,63 @@ export default function UzHamyonPrototypeApp({
 
           // 3. Real transactions — paged newest-first from the server
           try {
-            const rows = await fetchAllTransactions();
-            if (isMounted && (rows.length > 0 || !allowDemoFallback)) {
-              setTransactions(rows.map(mapApiTransaction));
+            const rows = await fetchAllTransactions(token);
+            if (isMounted) {
+              if (rows.length > 0) {
+                setTransactions(rows.map(mapApiTransaction));
+              } else {
+                setTransactions((prev) => (prev.length > 0 ? prev : []));
+              }
             }
           } catch (txErr) {
             console.error('Failed to load transactions in UzHamyon prototype app:', txErr);
           }
 
-          // 3. Real budgets
-          const bRes = await fetch('/api/budgets');
-          if (bRes.ok && isMounted) {
-            const data = await bRes.json();
-            if (data.budgets && Array.isArray(data.budgets)) {
-              if (data.budgets.length > 0) {
-                setBudgets(data.budgets.map(mapApiBudget));
-              } else if (!allowDemoFallback) {
-                setBudgets([]);
+          // 4. Real budgets
+          try {
+            const bRes = await fetch('/api/budgets', { headers: authHeaders });
+            if (bRes.ok && isMounted) {
+              const data = await bRes.json();
+              if (data.budgets && Array.isArray(data.budgets)) {
+                if (data.budgets.length > 0) {
+                  setBudgets(data.budgets.map(mapApiBudget));
+                } else {
+                  setBudgets((prev) => (prev.length > 0 ? prev : []));
+                }
               }
             }
+          } catch (bErr) {
+            console.error('Failed to load budgets in UzHamyon prototype app:', bErr);
           }
 
-          // 4. Real goals
-          const gRes = await fetch('/api/goals');
-          if (gRes.ok && isMounted) {
-            const data = await gRes.json();
-            if (data.goals && Array.isArray(data.goals)) {
-              if (data.goals.length > 0) {
-                const mappedG: Goal[] = data.goals.map((g: {
-                  id: string;
-                  name: string;
-                  target_amount?: number;
-                  target_date?: string;
-                  current_amount?: number;
-                }) => ({
-                  id: g.id,
-                  name: g.name,
-                  target: Number(g.target_amount) || 0,
-                  date: g.target_date || '',
-                  contribs: [{ a: Number(g.current_amount) || 0, d: TODAY_DATE }],
-                }));
-                setGoals(mappedG);
-              } else if (!allowDemoFallback) {
-                setGoals([]);
+          // 5. Real goals
+          try {
+            const gRes = await fetch('/api/goals', { headers: authHeaders });
+            if (gRes.ok && isMounted) {
+              const data = await gRes.json();
+              if (data.goals && Array.isArray(data.goals)) {
+                if (data.goals.length > 0) {
+                  const mappedG: Goal[] = data.goals.map((g: {
+                    id: string;
+                    name: string;
+                    target_amount?: number;
+                    target_date?: string;
+                    current_amount?: number;
+                  }) => ({
+                    id: g.id,
+                    name: g.name,
+                    target: Number(g.target_amount) || 0,
+                    date: g.target_date || '',
+                    contribs: [{ a: Number(g.current_amount) || 0, d: TODAY_DATE }],
+                  }));
+                  setGoals(mappedG);
+                } else {
+                  setGoals((prev) => (prev.length > 0 ? prev : []));
+                }
               }
             }
+          } catch (gErr) {
+            console.error('Failed to load goals in UzHamyon prototype app:', gErr);
           }
         }
       } catch (err) {
@@ -602,11 +654,42 @@ export default function UzHamyonPrototypeApp({
       }
     }
 
+    // Initial load
     loadRealData();
+
+    // Listen to Supabase auth state changes
+    (async () => {
+      try {
+        const { createClient } = await import('@/lib/supabase/client');
+        const supabase = createClient();
+        const { data: sub } = supabase.auth.onAuthStateChange((_event: string, session: any) => {
+          if (session?.access_token && isMounted) {
+            loadRealData(session.access_token);
+          }
+        });
+        authSubscription = sub?.subscription || null;
+      } catch {}
+    })();
+
+    // Listen to Telegram Mini App auth sync event
+    const handleAuthSynced = (e: Event) => {
+      if (!isMounted) return;
+      const customEvent = e as CustomEvent<{ access_token?: string }>;
+      loadRealData(customEvent.detail?.access_token);
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('uzhamyon:auth-synced', handleAuthSynced);
+    }
+
     return () => {
       isMounted = false;
+      if (authSubscription) authSubscription.unsubscribe();
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('uzhamyon:auth-synced', handleAuthSynced);
+      }
     };
-  }, [allowDemoFallback]);
+  }, []);
 
   // Toast notification helper
   const triggerToast = useCallback((msg: string) => {
@@ -620,8 +703,17 @@ export default function UzHamyonPrototypeApp({
   // Re-reads transactions from the server so the UI reflects committed rows
   // (including their real IDs, categories and database ordering).
   const refreshTransactionsFromServer = useCallback(async () => {
-    const rows = await fetchAllTransactions();
-    setTransactions(rows.map(mapApiTransaction));
+    let token: string | undefined;
+    try {
+      const { createClient } = await import('@/lib/supabase/client');
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      token = session?.access_token;
+    } catch {}
+    const rows = await fetchAllTransactions(token);
+    if (rows.length > 0) {
+      setTransactions(rows.map(mapApiTransaction));
+    }
   }, []);
 
   // ── Month Selection & Navigation (Strictly Based on Actual Transactions) ──
@@ -1021,11 +1113,15 @@ export default function UzHamyonPrototypeApp({
         payload.category_id = matched.id;
       }
 
+      const token = await getAuthToken();
+      const authHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) authHeaders['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch(
         editId ? `/api/transactions/${editId}` : '/api/transactions',
         {
           method: editId ? 'PUT' : 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders,
           body: JSON.stringify(payload),
         }
       );
@@ -1140,9 +1236,13 @@ export default function UzHamyonPrototypeApp({
             category_id: catObj.id,
           };
 
+      const token = await getAuthToken();
+      const authHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) authHeaders['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch(url, {
         method: editId ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => null);
@@ -1187,6 +1287,10 @@ export default function UzHamyonPrototypeApp({
     const date = formData.date;
     if (!name || target <= 0) return;
 
+    const token = await getAuthToken();
+    const authHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) authHeaders['Authorization'] = `Bearer ${token}`;
+
     if (editId) {
       setGoals((prev) =>
         prev.map((g) => (g.id === editId ? { ...g, name, target, date } : g))
@@ -1194,7 +1298,7 @@ export default function UzHamyonPrototypeApp({
       triggerToast('Maqsad yangilandi');
       fetch(`/api/goals/${editId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({ name, target_amount: target, target_date: date || null }),
       }).catch(console.error);
     } else {
@@ -1204,7 +1308,7 @@ export default function UzHamyonPrototypeApp({
       triggerToast('Maqsad qo‘shildi');
       fetch('/api/goals', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({ name, target_amount: target, target_date: date || null }),
       })
         .then((res) => res.json())
@@ -1246,9 +1350,13 @@ export default function UzHamyonPrototypeApp({
     setActiveSheet('detail');
     setFormData({});
 
+    const token = await getAuthToken();
+    const authHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) authHeaders['Authorization'] = `Bearer ${token}`;
+
     fetch(`/api/goals/${activeGoalId}/contributions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders,
       body: JSON.stringify({ amount: contribAmt }),
     }).catch(console.error);
   };
@@ -1256,6 +1364,10 @@ export default function UzHamyonPrototypeApp({
   const handleConfirmDelete = async () => {
     if (!confirmConfig) return;
     const { k, id } = confirmConfig;
+    const token = await getAuthToken();
+    const authHeaders: Record<string, string> = {};
+    if (token) authHeaders['Authorization'] = `Bearer ${token}`;
+
     if (k === 'tx') {
       if (!isAuthenticated) {
         setTransactions((prev) => prev.filter((t) => t.id !== id));
@@ -1264,7 +1376,7 @@ export default function UzHamyonPrototypeApp({
         return;
       }
       try {
-        const res = await fetch(`/api/transactions/${id}`, { method: 'DELETE' });
+        const res = await fetch(`/api/transactions/${id}`, { method: 'DELETE', headers: authHeaders });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || data?.error) {
           throw new Error(
@@ -1288,7 +1400,7 @@ export default function UzHamyonPrototypeApp({
         triggerToast("Byudjet o'chirildi");
       } else {
         try {
-          const res = await fetch(`/api/budgets/${id}`, { method: 'DELETE' });
+          const res = await fetch(`/api/budgets/${id}`, { method: 'DELETE', headers: authHeaders });
           if (!res.ok) {
             const data = await res.json().catch(() => null);
             throw new Error(data?.error || 'Budget delete failed');
@@ -1304,7 +1416,7 @@ export default function UzHamyonPrototypeApp({
     } else if (k === 'goal') {
       setGoals((prev) => prev.filter((g) => g.id !== id));
       triggerToast("Maqsad o'chirildi");
-      fetch(`/api/goals/${id}`, { method: 'DELETE' }).catch(console.error);
+      fetch(`/api/goals/${id}`, { method: 'DELETE', headers: authHeaders }).catch(console.error);
     }
     setActiveSheet(null);
     setConfirmConfig(null);

@@ -117,6 +117,15 @@ export default function TelegramMiniAppInit() {
           refresh_token: data.session.refresh_token,
         });
 
+        // Broadcast auth sync so mounted components refresh immediately
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('uzhamyon:auth-synced', {
+              detail: { access_token: data.session.access_token, user: data.user },
+            })
+          );
+        }
+
         // Determine destination based on onboarding status
         if (!data.onboarding_completed) {
           if (!pathname.startsWith('/onboarding')) {
@@ -142,6 +151,14 @@ export default function TelegramMiniAppInit() {
       const session = res?.data?.session;
 
       if (session && session.user) {
+        // Broadcast auth sync so mounted components refresh immediately
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('uzhamyon:auth-synced', {
+              detail: { access_token: session.access_token, user: session.user },
+            })
+          );
+        }
         // Session already valid: fast-path directly to dashboard or onboarding without blocking auth spinner
         if (pathname === '/login' || pathname === '/register' || pathname === '/') {
           window.location.replace('/dashboard');

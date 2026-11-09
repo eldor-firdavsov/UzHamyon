@@ -9,6 +9,34 @@ import {
 
 import { getSupabaseUrl, getSupabaseAnonKey } from './config';
 
+function extractAccessTokenFromCookies(cookieStore: { getAll: () => Array<{ name: string; value: string }> }): string | null {
+  const direct = cookieStore.getAll().find((c) => c.name === 'sb-access-token')?.value;
+  if (direct) return direct;
+
+  const all = cookieStore.getAll();
+  const authCookies = all
+    .filter((c) => c.name.startsWith('sb-') && c.name.includes('-auth-token'))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  if (authCookies.length === 0) return null;
+
+  try {
+    let combined = authCookies.map((c) => c.value).join('');
+    if (combined.startsWith('base64-')) {
+      combined = Buffer.from(combined.slice(7), 'base64').toString('utf8');
+    }
+    const parsed = JSON.parse(combined);
+    if (Array.isArray(parsed) && typeof parsed[0] === 'string') {
+      return parsed[0];
+    }
+    if (parsed && typeof parsed.access_token === 'string') {
+      return parsed.access_token;
+    }
+  } catch {}
+
+  return null;
+}
+
 export const createClient = cache(async () => {
   const cookieStore = await cookies();
   const allCookies = cookieStore.getAll();
@@ -38,7 +66,7 @@ export const createClient = cache(async () => {
 
   const authHeader = reqHeaders?.get('authorization');
   const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  const accessToken = bearerToken || cookieStore.get('sb-access-token')?.value;
+  const accessToken = bearerToken || extractAccessTokenFromCookies(cookieStore);
 
   const supabaseUrl = getSupabaseUrl();
   const supabaseAnonKey = getSupabaseAnonKey();
