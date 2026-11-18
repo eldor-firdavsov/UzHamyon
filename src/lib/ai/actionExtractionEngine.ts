@@ -6,7 +6,16 @@
  */
 
 import { generateGeminiJson } from './geminiClient.ts';
-import { getNowLocalDateString, getNowLocalTimeString, isValidCalendarDate } from '../transactions/dateTime.ts';
+import { isValidCalendarDate, isValidTimeString } from '../transactions/dateTime.ts';
+import { nowTashkent, yesterdayTashkent } from '../time/tashkent.ts';
+import { defaultCategoryNames, pickAllowedName } from '../categories/catalog.ts';
+import { AiBudget, isAiBudgetExceeded } from './aiBudget.ts';
+import {
+  MAX_ACTIONS_PER_MESSAGE,
+  isAmountWithinLimit,
+  TOO_MANY_ACTIONS_MESSAGE,
+  AMOUNT_TOO_LARGE_MESSAGE,
+} from './limits.ts';
 
 export type FinancialIntentType =
   | 'action_proposal'
@@ -20,9 +29,16 @@ export interface ExtractedActionItem {
   amount: number;
   currency: string;
   description: string;
+  /** Category name as chosen by the AI (one of the allowed names), later the DB row name. */
   categoryName?: string;
+  /** Resolved DB category id (set before the proposal is saved). */
+  categoryId?: string;
+  /** Uzbek name shown to the user. */
+  categoryDisplayName?: string;
   date?: string;
   time?: string;
+  /** transactions.source for rows created from this action (telegram_ai / telegram_voice). */
+  source?: string;
   // Goal parameters
   goalName?: string;
   targetAmount?: number;
@@ -35,6 +51,22 @@ export interface ExtractionResult {
   clarificationQuestion?: string;
   summaryUzbek: string;
   rawExplanation?: string;
+  /**
+   * Set when the AI could not be used at all. Callers must NOT treat this as a real
+   * "financial_query": the user's message was not understood.
+   */
+  error?: 'ai_unavailable' | 'budget_exceeded';
+}
+
+export interface ExtractionOptions {
+  /** Grounded user context appended to the prompt (web advisor). */
+  userFinancialContextText?: string;
+  /** Allowed category names per type (user's own + system, Uzbek names). */
+  categories?: { expense: string[]; income: string[] };
+  /** Shared AI time budget for this update. */
+  budget?: AiBudget;
+  /** Clock override for tests. */
+  now?: Date;
 }
 
 interface RawGeminiOutput {
@@ -66,7 +98,12 @@ function formatUzbekMoney(amount: number, curr = 'UZS'): string {
 /**
  * Builds the system instruction for Gemini action extraction
  */
-function buildExtractionSystemPrompt(todayDate: string, currentTime: string): string {
+function buildExtractionSystemPrompt(
+  todayDate: string,
+  currentTime: string,
+  yesterdayDate: string,
+  categories: { expense: string[]; income: string[] }
+): string {
   return `Siz UzHamyon moliyaviy platformasi uchun foydalanuvchi xabarlarini tahlil qiluvchi va strukturaviy amallarni ajratuvchi AI yordamchisiz.
 Bugungi sana: ${todayDate}. Hozirgi vaqt: ${currentTime}. Asosiy valyuta: UZS (so'm).
 
@@ -80,7 +117,7 @@ Vazifangiz: Foydalanuvchi xabarini diqqat bilan o'qib, qat'iy JSON formatida quy
       "amount": number,
       "currency": "UZS" | "USD",
       "description": string,
-      "categoryName": string,
+      "categoryName": string | null,
       "date": "YYYY-MM-DD",
       "time": "HH:mm",
       "goalName": string,
@@ -97,7 +134,10 @@ QOIDALAR:
    - Foydalanuvchi xarajat qilganini, daromad olganini, maqsad yaratishni, maqsadini o'zgartirishni yoki jamg'armaga pul qo'shganini aytganda.
    - Bitta xabarda bir nechta tranzaksiya bo'lsa (masalan: "Tushlik 45000 va taksi 15000"), "actions" massivida har biri uchun alohida element yarating!
    - 1 mln = 1 000 000, 50 ming / 50k = 50 000, 2.5 mln = 2 500 000.
-   - "kecha" desa: kechagi sana (${new Date(Date.now() - 86400000).toISOString().split('T')[0]}), "bugun" desa: ${todayDate}.
+   - "kecha" desa: kechagi sana (${yesterdayDate}), "bugun" desa: ${todayDate}. Vaqt zonasi: Asia/Tashkent.
+   - "categoryName" FAQAT quyidagi ro'yxatdagi nomlardan biri bo'lsin (aynan shu yozilishda). Mos keladigani bo'lmasa: null.
+     Xarajat kategoriyalari: ${categories.expense.length ? categories.expense.join(', ') : '(yo‘q)'}
+     Daromad kategoriyalari: ${categories.income.length ? categories.income.join(', ') : '(yo‘q)'}
 
 2. "create_goal" vs "update_goal" vs "contribute_goal":
    - "Yangi maqsad: Noutbuk uchun 10 mln" -> actionType: "create_goal", goalName: "Noutbuk", targetAmount: 10000000.
@@ -141,8 +181,17 @@ export function sanitizeUserInputForAi(text: string): string {
  */
 export async function extractFinancialActions(
   userText: string,
-  userFinancialContextText?: string
+  contextOrOptions?: string | ExtractionOptions
 ): Promise<ExtractionResult> {
+  const options: ExtractionOptions =
+    typeof contextOrOptions === 'string'
+      ? { userFinancialContextText: contextOrOptions }
+      : contextOrOptions || {};
+  const { userFinancialContextText, budget } = options;
+  const allowedCategories = {
+    expense: options.categories?.expense?.length ? options.categories.expense : defaultCategoryNames('expense'),
+    income: options.categories?.income?.length ? options.categories.income : defaultCategoryNames('income'),
+  };
   const trimmed = userText.trim();
   if (!trimmed) {
     return {
@@ -153,9 +202,14 @@ export async function extractFinancialActions(
   }
 
   const sanitizedText = sanitizeUserInputForAi(trimmed);
-  const todayDate = getNowLocalDateString();
-  const currentTime = getNowLocalTimeString();
-  const systemPrompt = buildExtractionSystemPrompt(todayDate, currentTime);
+  const nowAt = options.now ?? new Date();
+  const { date: todayDate, time: currentTime } = nowTashkent(nowAt);
+  const systemPrompt = buildExtractionSystemPrompt(
+    todayDate,
+    currentTime,
+    yesterdayTashkent(nowAt),
+    allowedCategories
+  );
 
   let fullPrompt = `FOYDALANUVCHI XABARI: "${sanitizedText}"`;
   if (userFinancialContextText) {
@@ -163,7 +217,13 @@ export async function extractFinancialActions(
   }
 
   try {
-    const geminiRes = await generateGeminiJson<RawGeminiOutput>(fullPrompt, systemPrompt);
+    const geminiRes = await generateGeminiJson<RawGeminiOutput>(
+      fullPrompt,
+      systemPrompt,
+      undefined,
+      budget ? budget.perCallMs : 30000,
+      { budget }
+    );
     const parsed = geminiRes.data;
 
     let intent: FinancialIntentType = 'casual_chat';
@@ -174,12 +234,31 @@ export async function extractFinancialActions(
     // Validate and sanitize actions
     const sanitizedActions: ExtractedActionItem[] = [];
 
+    if (Array.isArray(parsed.actions) && parsed.actions.length > MAX_ACTIONS_PER_MESSAGE) {
+      return {
+        intent: 'clarification',
+        actions: [],
+        clarificationQuestion: TOO_MANY_ACTIONS_MESSAGE,
+        summaryUzbek: TOO_MANY_ACTIONS_MESSAGE,
+      };
+    }
+
+    let amountTooLarge = false;
+
     if (Array.isArray(parsed.actions) && parsed.actions.length > 0) {
       for (const act of parsed.actions) {
         const rawAmount = Number(act.amount) || Number(act.targetAmount) || 0;
         const currency = act.currency === 'USD' ? 'USD' : 'UZS';
         const date = act.date && isValidCalendarDate(act.date) ? act.date : todayDate;
-        const time = act.time || currentTime;
+        const time = act.time && isValidTimeString(act.time) ? act.time.slice(0, 5) : currentTime;
+
+        const checkedAmount = act.actionType === 'create_goal' || act.actionType === 'update_goal'
+          ? Number(act.targetAmount) || rawAmount
+          : rawAmount;
+        if (checkedAmount > 0 && !isAmountWithinLimit(checkedAmount, currency)) {
+          amountTooLarge = true;
+          continue;
+        }
 
         if (act.actionType === 'create_goal') {
           const targetAmount = Number(act.targetAmount) || rawAmount;
@@ -233,13 +312,23 @@ export async function extractFinancialActions(
               amount: rawAmount,
               currency,
               description: (act.description || (txType === 'income' ? 'Daromad' : 'Xarajat')).trim(),
-              categoryName: act.categoryName || undefined,
+              categoryName: pickAllowedName(act.categoryName, allowedCategories[txType]),
               date,
               time,
             });
           }
         }
       }
+    }
+
+    // Never save part of a message when one amount is out of range: ask to fix it.
+    if (amountTooLarge) {
+      return {
+        intent: 'clarification',
+        actions: [],
+        clarificationQuestion: AMOUNT_TOO_LARGE_MESSAGE,
+        summaryUzbek: AMOUNT_TOO_LARGE_MESSAGE,
+      };
     }
 
     // If actions were extracted, guarantee intent is action_proposal
@@ -280,12 +369,18 @@ export async function extractFinancialActions(
       summaryUzbek: summaryUzbek || 'Iltimos, ma’lumotingizni tasdiqlang.',
     };
   } catch (err: unknown) {
-    console.error('[ActionExtractionEngine] Extraction error:', err);
-    // In case of provider error, fall back to safe clarification / query
+    const budgetExceeded = isAiBudgetExceeded(err);
+    console.error(
+      '[ActionExtractionEngine] Extraction error:',
+      budgetExceeded ? 'AI time budget exhausted' : err instanceof Error ? err.message : err
+    );
+    // Keep intent 'financial_query' for backwards compatibility (web advisor), but mark the
+    // error so the Telegram bot can ask the user to try again instead of guessing.
     return {
       intent: 'financial_query',
       actions: [],
       summaryUzbek: 'Xabaringiz qabul qilindi.',
+      error: budgetExceeded ? 'budget_exceeded' : 'ai_unavailable',
     };
   }
 }

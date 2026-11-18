@@ -6,6 +6,7 @@
  */
 
 import { callGeminiApi } from './geminiClient.ts';
+import { AiBudget, isAiBudgetExceeded } from './aiBudget.ts';
 
 function getApiKey(): string {
   return (
@@ -31,8 +32,10 @@ export interface AIResponse {
 export async function generateAIContent(
   prompt: string,
   systemInstruction?: string,
-  timeoutMs: number = 25000
+  timeoutMs: number = 25000,
+  options: { budget?: AiBudget } = {}
 ): Promise<AIResponse> {
+  const { budget } = options;
   // 1. Try Google Gemini API directly if GEMINI_API_KEY is configured
   const geminiKey = process.env.GEMINI_API_KEY?.trim();
   if (geminiKey) {
@@ -56,7 +59,7 @@ export async function generateAIContent(
         };
       }
 
-      const geminiRes = await callGeminiApi(body, undefined, timeoutMs);
+      const geminiRes = await callGeminiApi(body, undefined, timeoutMs, { budget });
       if (geminiRes.text) {
         return {
           text: geminiRes.text,
@@ -65,6 +68,14 @@ export async function generateAIContent(
         };
       }
     } catch (geminiErr) {
+      if (isAiBudgetExceeded(geminiErr)) {
+        // Out of time: let the caller answer from verified facts instead of waiting longer.
+        return {
+          text: 'Moliyaviy tahlil xizmati hozirda deterministik qoidalar rejimida ishlamoqda.',
+          isFallback: true,
+          model: 'deterministic_fallback',
+        };
+      }
       console.warn('[aiClient] Direct Gemini API failed, falling back to OpenRouter:', geminiErr);
     }
   }
@@ -107,6 +118,13 @@ export async function generateAIContent(
 
     // Attempt up to 2 times per model
     for (let attempt = 1; attempt <= 2; attempt++) {
+      if (budget && !budget.canStart()) {
+        return {
+          text: 'Moliyaviy tahlil xizmati hozirda deterministik qoidalar rejimida ishlamoqda.',
+          isFallback: true,
+          model: 'deterministic_fallback',
+        };
+      }
       try {
         const response = await fetch(endpoint, {
           method: 'POST',
@@ -117,7 +135,7 @@ export async function generateAIContent(
             'X-Title': 'UzHamyon AI Advisor',
           },
           body: JSON.stringify(payload),
-          signal: AbortSignal.timeout(timeoutMs),
+          signal: AbortSignal.timeout(budget ? budget.timeoutFor(timeoutMs) : timeoutMs),
         });
 
         if (response.ok) {

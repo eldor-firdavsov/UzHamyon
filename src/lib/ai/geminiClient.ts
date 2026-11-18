@@ -9,6 +9,8 @@
  * - Structured JSON output mode with strict server validation
  */
 
+import { AiBudget, AiBudgetExceededError, MIN_USEFUL_REMAINING_MS } from './aiBudget.ts';
+
 function getGeminiApiKey(): string {
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) {
@@ -35,7 +37,43 @@ export interface GeminiResponse {
   };
 }
 
-const disabledModels = new Set<string>();
+/**
+ * Models temporarily skipped after an error, with an expiry time.
+ * 429 (quota) recovers when the quota resets, so it is only skipped for a while;
+ * 404 (retired / unknown model) is skipped longer.
+ */
+export const MODEL_DISABLE_TTL_MS = {
+  rateLimited: 10 * 60 * 1000,
+  notFound: 60 * 60 * 1000,
+};
+const disabledModels = new Map<string, number>();
+
+function isModelDisabled(model: string, now: number = Date.now()): boolean {
+  const until = disabledModels.get(model);
+  if (until === undefined) return false;
+  if (until <= now) {
+    disabledModels.delete(model);
+    return false;
+  }
+  return true;
+}
+
+function disableModel(model: string, ttlMs: number, now: number = Date.now()): void {
+  disabledModels.set(model, now + ttlMs);
+}
+
+/** Test helpers. */
+export function _getModelDisabledUntil(model: string): number | undefined {
+  return disabledModels.get(model);
+}
+export function _resetDisabledModels(): void {
+  disabledModels.clear();
+}
+
+export interface GeminiCallOptions {
+  /** Shared time budget for the whole Telegram update. */
+  budget?: AiBudget;
+}
 
 /**
  * Executes a call to Google Gemini API with automatic model fallback & retries
@@ -43,8 +81,10 @@ const disabledModels = new Set<string>();
 export async function callGeminiApi(
   body: Record<string, unknown>,
   preferredModel?: string,
-  timeoutMs: number = 12000
+  timeoutMs: number = 12000,
+  options: GeminiCallOptions = {}
 ): Promise<{ text: string; model: string; rawData: unknown }> {
+  const { budget } = options;
   const apiKey = getGeminiApiKey();
   const primaryModel = preferredModel || getConfiguredGeminiModel();
   const fallbackModel = getConfiguredGeminiFallbackModel();
@@ -69,12 +109,16 @@ export async function callGeminiApi(
   let lastError: Error | null = null;
 
   for (const model of candidateModels) {
-    if (disabledModels.has(model)) continue;
+    if (isModelDisabled(model)) continue;
 
     // Standard Google Generative Language API endpoint with X-goog-api-key header
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
     for (let attempt = 1; attempt <= 2; attempt++) {
+      if (budget && !budget.canStart()) {
+        throw new AiBudgetExceededError();
+      }
+      const attemptTimeout = budget ? budget.timeoutFor(timeoutMs) : timeoutMs;
       try {
         const response = await fetch(endpoint, {
           method: 'POST',
@@ -83,7 +127,7 @@ export async function callGeminiApi(
             'X-goog-api-key': apiKey,
           },
           body: JSON.stringify(body),
-          signal: AbortSignal.timeout(timeoutMs),
+          signal: AbortSignal.timeout(attemptTimeout),
         });
 
         if (response.ok) {
@@ -111,14 +155,14 @@ export async function callGeminiApi(
 
         // If model not found / retired (404), mark disabled and skip immediately
         if (status === 404) {
-          disabledModels.add(model);
+          disableModel(model, MODEL_DISABLE_TTL_MS.notFound);
           lastError = new Error(`Model ${model} mavjud emas (404): ${errorMsg}`);
           break;
         }
 
         // If rate limit / quota exceeded (429), disable this specific model and try fallback model
         if (status === 429) {
-          disabledModels.add(model);
+          disableModel(model, MODEL_DISABLE_TTL_MS.rateLimited);
           lastError = new Error(`Model ${model} kvotasi tugadi (429): ${errorMsg}`);
           break;
         }
@@ -126,7 +170,7 @@ export async function callGeminiApi(
         // If server busy (503), retry once or skip to next model
         if (status === 503 || status >= 500) {
           lastError = new Error(`Gemini xizmati vaqtincha band (${status}): ${errorMsg}`);
-          if (attempt === 1) {
+          if (attempt === 1 && (!budget || budget.canStart(MIN_USEFUL_REMAINING_MS + 500))) {
             await new Promise((resolve) => setTimeout(resolve, 500));
             continue;
           }
@@ -138,12 +182,13 @@ export async function callGeminiApi(
         break;
       } catch (err: unknown) {
         if (err instanceof Error && err.name === 'TimeoutError') {
-          lastError = new Error(`Gemini API so‘rovi vaqti tugadi (${timeoutMs}ms)`);
-        } else {
-          lastError = err instanceof Error ? err : new Error(String(err));
+          // A timeout already used the whole per-call slice: do not retry the same model.
+          lastError = new Error(`Gemini API so‘rovi vaqti tugadi (${attemptTimeout}ms)`);
+          break;
         }
+        lastError = err instanceof Error ? err : new Error(String(err));
 
-        if (attempt === 1) {
+        if (attempt === 1 && (!budget || budget.canStart(MIN_USEFUL_REMAINING_MS + 500))) {
           await new Promise((resolve) => setTimeout(resolve, 500));
         }
       }
@@ -152,15 +197,18 @@ export async function callGeminiApi(
 
   // Final fallback to OpenRouter Gemini routing if Google direct is temporarily 503
   const orKey = process.env.OPENROUTER_API_KEY || process.env.AI_API_KEY;
-  if (orKey) {
+  if (orKey && (!budget || budget.canStart())) {
     try {
-      const orRes = await callOpenRouterGemini(body, orKey, timeoutMs);
+      const orRes = await callOpenRouterGemini(body, orKey, budget ? budget.timeoutFor(timeoutMs) : timeoutMs);
       if (orRes) return orRes;
     } catch {
       // Ignore fallback error and throw lastError
     }
   }
 
+  if (budget && !budget.canStart()) {
+    throw new AiBudgetExceededError();
+  }
   throw lastError || new Error('Barcha Gemini modellari javob bermadi');
 }
 
@@ -228,7 +276,8 @@ export async function generateGeminiContent(
   prompt: string,
   systemInstruction?: string,
   preferredModel?: string,
-  timeoutMs: number = 30000
+  timeoutMs: number = 30000,
+  options: GeminiCallOptions = {}
 ): Promise<GeminiResponse> {
   const body: Record<string, unknown> = {
     contents: [
@@ -245,7 +294,7 @@ export async function generateGeminiContent(
     };
   }
 
-  const result = await callGeminiApi(body, preferredModel, timeoutMs);
+  const result = await callGeminiApi(body, preferredModel, timeoutMs, options);
   return {
     text: result.text,
     model: result.model,
@@ -259,7 +308,8 @@ export async function generateGeminiJson<T = unknown>(
   prompt: string,
   systemInstruction?: string,
   preferredModel?: string,
-  timeoutMs: number = 30000
+  timeoutMs: number = 30000,
+  options: GeminiCallOptions = {}
 ): Promise<{ data: T; rawText: string; model: string }> {
   const body: Record<string, unknown> = {
     contents: [
@@ -280,7 +330,7 @@ export async function generateGeminiJson<T = unknown>(
     };
   }
 
-  const result = await callGeminiApi(body, preferredModel, timeoutMs);
+  const result = await callGeminiApi(body, preferredModel, timeoutMs, options);
 
   let cleanJson = result.text.trim();
   // Strip markdown code fences if model enclosed JSON in ```json ... ```
