@@ -351,9 +351,11 @@ export async function claimPendingAction(
         console.warn(`[pendingActionStore] Recovering expired execution lock for action ${actionId}`);
       }
 
-      // 2. Atomic conditional claim in PostgreSQL
+      // 2. Atomic conditional claim in PostgreSQL.
+      // The WHERE clause repeats the status checks, so of two concurrent confirms only one
+      // UPDATE can match the row; the other gets zero rows back and stops.
       const executionToken = `tok_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      const { data: updated, error: updateErr } = await db
+      const { data: updatedRows, error: updateErr } = await db
         .from('pending_ai_actions')
         .update({
           status: 'executing',
@@ -365,11 +367,12 @@ export async function claimPendingAction(
         })
         .eq('action_id', actionId)
         .eq('user_id', userId)
-        .select()
-        .maybeSingle();
+        .gt('expires_at', nowIso)
+        .or(buildClaimableStatusFilter(nowIso))
+        .select();
 
-      if (!updateErr && updated) {
-        return { success: true, record: mapDbRowToRecord(updated) };
+      if (!updateErr && Array.isArray(updatedRows) && updatedRows.length === 1) {
+        return { success: true, record: mapDbRowToRecord(updatedRows[0]) };
       }
 
       return { success: false, reason: 'Ushbu amal allaqachon bajarilmoqda yoki yakunlangan' };
@@ -382,6 +385,15 @@ export async function claimPendingAction(
   }
 
   return claimMemoryPendingAction(actionId, userId, telegramUserId);
+}
+
+/**
+ * PostgREST filter for rows that may be claimed for execution:
+ * pending or failed, or executing with an expired lock (crash recovery).
+ */
+export function buildClaimableStatusFilter(nowIso: string): string {
+  // The timestamp is double-quoted because it contains '.' and ':' (PostgREST reserved characters).
+  return `status.in.(pending,failed),and(status.eq.executing,locked_until.lt."${nowIso}")`;
 }
 
 function claimMemoryPendingAction(

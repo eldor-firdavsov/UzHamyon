@@ -12,7 +12,9 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { createTransaction } from '../transactions/service.ts';
 import { createGoal, updateGoal, contributeToGoal } from '../goals/service.ts';
-import { matchPredictedToDbCategory } from '../categories/predictCategory.ts';
+import { matchCategoryRow } from '../categories/catalog.ts';
+import { todayTashkent } from '../time/tashkent.ts';
+import { isAmountWithinLimit, AMOUNT_TOO_LARGE_MESSAGE } from './limits.ts';
 import {
   claimPendingAction,
   markPendingActionCompleted,
@@ -44,25 +46,40 @@ function formatUzbekMoney(amount: number, curr = 'UZS'): string {
 async function resolveCategoryId(
   categoryName: string | undefined,
   type: 'income' | 'expense',
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  categoryId?: string
 ): Promise<string | undefined> {
-  if (!categoryName) return undefined;
+  if (!categoryName && !categoryId) return undefined;
 
   try {
     const { data: categories } = await supabase
       .from('categories')
-      .select('id, name')
+      .select('id, name, type')
       .eq('type', type);
 
     if (categories && categories.length > 0) {
-      const matched = matchPredictedToDbCategory(categoryName, categories);
-      return matched?.id;
+      // Prefer the id resolved when the proposal was made (must still be visible and of this type).
+      if (categoryId) {
+        const byId = categories.find((c) => c.id === categoryId);
+        if (byId) return byId.id;
+      }
+      // Exact name / Uzbek→system mapping only; unknown → no category.
+      return matchCategoryRow(categoryName, categories, type)?.id;
     }
   } catch (err) {
     console.warn('[ActionExecutor] Failed to resolve category ID:', err);
   }
 
   return undefined;
+}
+
+interface GoalSnapshot {
+  id: string;
+  name: string;
+  current_amount: number;
+  target_amount: number;
+  target_date?: string | null;
+  status?: string;
 }
 
 /**
@@ -72,11 +89,11 @@ async function resolveUserGoal(
   goalName: string | undefined,
   userId: string,
   supabase: SupabaseClient
-): Promise<{ id: string; name: string; current_amount: number; target_amount: number } | null> {
+): Promise<GoalSnapshot | null> {
   try {
     const { data: goals } = await supabase
       .from('financial_goals')
-      .select('id, name, current_amount, target_amount, status')
+      .select('id, name, current_amount, target_amount, target_date, status')
       .eq('user_id', userId);
 
     if (!goals || goals.length === 0) return null;
@@ -131,9 +148,10 @@ export async function executePendingActionRecord(
     if (!rpcError && rpcData) {
       if (rpcData.success) {
         if (rpcData.already_executed) {
+          // Double tap / retry after success: report the stored result, not an error.
           return {
-            success: false,
-            message: 'Ushbu amal allaqachon bajarilgan',
+            success: true,
+            message: rpcData.message || '✅ Bu amal allaqachon saqlangan.',
           };
         }
         return {
@@ -153,6 +171,12 @@ export async function executePendingActionRecord(
   // 3. Application-level execution with atomic claim
   const claim = await claimPendingAction(record.actionId, record.userId, record.telegramUserId, supabase);
   if (!claim.success || !claim.record) {
+    if (claim.record?.status === 'executed') {
+      return {
+        success: true,
+        message: claim.record.resultMessage || '✅ Bu amal allaqachon saqlangan.',
+      };
+    }
     return {
       success: false,
       message: claim.reason || 'Ushbu amalni bajarish imkonsiz (allaqachon bajarilgan yoki muddati o‘tgan).',
@@ -165,12 +189,25 @@ export async function executePendingActionRecord(
   const successDescriptions: string[] = [];
   const createdTransactionIds: string[] = [];
   const createdGoalIds: string[] = [];
+  // Previous values of goals changed by update_goal / contribute_goal, restored on rollback.
+  const goalSnapshots = new Map<string, GoalSnapshot>();
+  const defaultSource = record.telegramUserId ? 'telegram_ai' : 'manual';
+
+  // Defense in depth: amounts were validated at extraction time, check again before writing.
+  const overLimit = record.actions.find(
+    (a) => !isAmountWithinLimit(Number(a.targetAmount || a.amount), a.currency || 'UZS')
+  );
+  if (overLimit) {
+    const failureMessage = `❌ ${AMOUNT_TOO_LARGE_MESSAGE}`;
+    await markPendingActionFailed(record.actionId, failureMessage, executionToken, supabase);
+    return { success: false, message: failureMessage };
+  }
 
   for (const item of record.actions) {
     try {
       if (item.actionType === 'create_transaction') {
         const txType = item.transactionType || 'expense';
-        const categoryId = await resolveCategoryId(item.categoryName, txType, supabase);
+        const categoryId = await resolveCategoryId(item.categoryName, txType, supabase, item.categoryId);
 
         const txRes = await createTransaction(
           {
@@ -178,8 +215,10 @@ export async function executePendingActionRecord(
             currency: item.currency || 'UZS',
             type: txType,
             description: item.description,
-            transaction_date: item.date || new Date().toISOString().split('T')[0],
+            transaction_date: item.date || todayTashkent(),
+            transaction_time: item.time || undefined,
             category_id: categoryId,
+            source: item.source || defaultSource,
           },
           supabase
         );
@@ -245,6 +284,7 @@ export async function executePendingActionRecord(
           break; // Stop batch
         }
 
+        if (!goalSnapshots.has(goal.id)) goalSnapshots.set(goal.id, { ...goal });
         const updateRes = await updateGoal(
           goal.id,
           {
@@ -280,6 +320,7 @@ export async function executePendingActionRecord(
           break; // Stop batch
         }
 
+        if (!goalSnapshots.has(goal.id)) goalSnapshots.set(goal.id, { ...goal });
         const contribRes = await contributeToGoal(
           goal.id,
           { amount: item.amount },
@@ -339,6 +380,27 @@ export async function executePendingActionRecord(
       await supabase.from('financial_goals').delete().eq('id', goalId);
     } catch (rbErr) {
       console.error('[ActionExecutor] Failed to rollback goal:', goalId, rbErr);
+    }
+  }
+  // Restore goals changed by update_goal / contribute_goal to their previous values.
+  for (const snap of goalSnapshots.values()) {
+    if (createdGoalIds.includes(snap.id)) continue;
+    try {
+      const { error: restoreErr } = await supabase
+        .from('financial_goals')
+        .update({
+          current_amount: snap.current_amount,
+          target_amount: snap.target_amount,
+          target_date: snap.target_date ?? null,
+          ...(snap.status ? { status: snap.status } : {}),
+        })
+        .eq('id', snap.id)
+        .eq('user_id', record.userId);
+      if (restoreErr) {
+        console.error('[ActionExecutor] Failed to restore goal:', snap.id, restoreErr.message);
+      }
+    } catch (rbErr) {
+      console.error('[ActionExecutor] Failed to restore goal:', snap.id, rbErr);
     }
   }
 
