@@ -12,6 +12,8 @@ import {
 } from '../ai/pendingActionStore.ts';
 import { executePendingActionRecord } from '../ai/actionExecutor.ts';
 import { askFinancialAdvisor } from '../ai/advisorService.ts';
+import type { PendingActionRecord } from '../ai/pendingActionStore.ts';
+import { escapeHtml } from './html.ts';
 
 function getBotToken(): string {
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
@@ -200,14 +202,23 @@ export async function answerTelegramCallbackQuery(callbackQueryId: string, text?
 /**
  * Edits the text of an existing Telegram message
  */
-export async function editTelegramMessageText(chatId: number, messageId: number, text: string) {
+export async function editTelegramMessageText(
+  chatId: number,
+  messageId: number,
+  text: string,
+  inlineKeyboard?: Array<Array<{ text: string; callback_data?: string; web_app?: { url: string } }>>
+) {
   const url = `https://api.telegram.org/bot${getBotToken()}/editMessageText`;
-  const payload = {
+  // Without reply_markup Telegram removes the inline keyboard from the edited message.
+  const payload: Record<string, unknown> = {
     chat_id: chatId,
     message_id: messageId,
     text,
     parse_mode: 'HTML',
   };
+  if (inlineKeyboard) {
+    payload.reply_markup = { inline_keyboard: inlineKeyboard };
+  }
 
   try {
     const res = await fetch(url, {
@@ -314,6 +325,41 @@ export async function isReturningTelegramUser(telegramId: number): Promise<boole
   }
 }
 
+function buildConfirmKeyboard(actionId: string) {
+  return [
+    [
+      { text: '✅ Tasdiqlash', callback_data: `act_confirm:${actionId}` },
+      { text: '❌ Bekor qilish', callback_data: `act_cancel:${actionId}` },
+    ],
+  ];
+}
+
+const CANCELLED_TEXT = '❌ Amal bekor qilindi. Hech qanday moliyaviy yozuv kiritilmadi.';
+
+/**
+ * Human-readable (HTML-safe) text for a proposal that can no longer be confirmed or cancelled.
+ * Always reflects the REAL status stored in the database.
+ */
+export function describeResolvedPendingAction(record: PendingActionRecord, now: number = Date.now()): string {
+  switch (record.status) {
+    case 'executed':
+      return record.resultMessage
+        ? escapeHtml(record.resultMessage)
+        : '✅ Bu amal allaqachon saqlangan.';
+    case 'cancelled':
+      return '❌ Bu amal bekor qilingan. Hech qanday moliyaviy yozuv kiritilmadi.';
+    case 'executing':
+      return '⏳ Bu amal hozir saqlanmoqda. Birozdan so‘ng ilovada tekshirib ko‘ring.';
+    case 'failed':
+      if (now <= record.expiresAt) {
+        return '⚠️ Bu amalni saqlab bo‘lmagan edi. Iltimos, qayta urinib ko‘ring.';
+      }
+      return '⌛ Bu taklifning muddati tugagan (15 daqiqa). Iltimos, xabaringizni qayta yuboring.';
+    default:
+      return '⌛ Bu taklifning muddati tugagan (15 daqiqa). Iltimos, xabaringizni qayta yuboring.';
+  }
+}
+
 /**
  * Processes an incoming Telegram update (messages and inline button callback queries).
  */
@@ -332,53 +378,57 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
 
     if (data.startsWith('act_confirm:')) {
       const actionId = data.replace('act_confirm:', '');
+      const chatId = message.chat.id;
+      const messageId = message.message_id;
 
-      // 1. Optimistic instant response: show confirmed receipt immediately without waiting for DB writes
+      // 1. Honest progress state (no optimistic "saved"). Removing the buttons here also
+      //    prevents double taps while the action is being executed.
       const originalText = message.text || '';
-      const details = originalText.replace(/^Quyidagi[^\n]*\n?/i, '').trim();
-      const optimisticMessage = `✅ <b>Tranzaksiya muvaffaqiyatli saqlandi!</b>\n\n${details ? `${details}\n\n` : ''}<i>UzHamyon hisobingizga biriktirildi.</i>`;
+      await editTelegramMessageText(
+        chatId,
+        messageId,
+        `${originalText ? `${escapeHtml(originalText)}\n\n` : ''}⏳ <i>Saqlanmoqda...</i>`
+      );
 
-      // Non-blocking parallel immediate Telegram feedback
-      await Promise.all([
-        answerTelegramCallbackQuery(cb.id, '✅ Tranzaksiya tasdiqlandi!'),
-        editTelegramMessageText(message.chat.id, message.message_id, optimisticMessage),
-      ]);
-
-      // 2. Concurrently execute the database action in Supabase
       const userAuth = await getTelegramUserSupabaseClient(from);
-
       if (!userAuth) {
-        await editTelegramMessageText(
-          message.chat.id,
-          message.message_id,
-          '⚠️ Foydalanuvchi hisobi topilmadi. Avval ilovani oching.'
-        );
+        await editTelegramMessageText(chatId, messageId, '⚠️ Foydalanuvchi hisobi topilmadi. Avval ilovani oching.');
         return;
       }
 
       const pending = await getPendingAction(actionId, userAuth.userId, from.id, userAuth.client);
+
+      // 2. Already executed / cancelled / expired: show the REAL stored status.
+      if (pending.record && (pending.error === 'already_processed' || pending.error === 'expired')) {
+        await editTelegramMessageText(chatId, messageId, describeResolvedPendingAction(pending.record));
+        return;
+      }
       if (!pending.record || pending.error) {
-        if (pending.error === 'already_processed') {
-          return;
-        }
         const errorMsg =
-          pending.error === 'expired'
-            ? '⚠️ Amal muddati tugagan (15 daqiqa). Qayta so‘rov yuboring.'
-            : pending.error === 'unauthorized'
+          pending.error === 'unauthorized'
             ? '⛔ Ruxsat berilmagan: bu amal boshqa foydalanuvchiga tegishli.'
             : '⚠️ Tasdiqlanuvchi amal topilmadi.';
-        await editTelegramMessageText(message.chat.id, message.message_id, errorMsg);
+        await editTelegramMessageText(chatId, messageId, errorMsg);
         return;
       }
 
+      // 3. Execute and show the real result.
       const execRes = await executePendingActionRecord(pending.record, userAuth.client);
-      if (execRes.success && execRes.message) {
-        await editTelegramMessageText(message.chat.id, message.message_id, execRes.message);
-      } else if (!execRes.success) {
+      if (execRes.success) {
+        await editTelegramMessageText(chatId, messageId, escapeHtml(execRes.message || '✅ Saqlandi.'));
+      } else {
+        // A parallel tap may have executed it already: show the real stored status then.
+        const after = await getPendingAction(actionId, userAuth.userId, from.id, userAuth.client);
+        if (after.record && after.record.status === 'executed') {
+          await editTelegramMessageText(chatId, messageId, describeResolvedPendingAction(after.record));
+          return;
+        }
+        // Otherwise keep the buttons so the user can retry a failed action.
         await editTelegramMessageText(
-          message.chat.id,
-          message.message_id,
-          `⚠️ Xatolik yuz berdi: ${execRes.message || 'Saqlab bo‘lmadi'}`
+          chatId,
+          messageId,
+          `${originalText ? `${escapeHtml(originalText)}\n\n` : ''}⚠️ Xatolik yuz berdi: ${escapeHtml(execRes.message || 'Saqlab bo‘lmadi')}`,
+          buildConfirmKeyboard(actionId)
         );
       }
       return;
@@ -386,18 +436,29 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
 
     if (data.startsWith('act_cancel:')) {
       const actionId = data.replace('act_cancel:', '');
-      await Promise.all([
-        answerTelegramCallbackQuery(cb.id, '❌ Amal bekor qilindi'),
-        editTelegramMessageText(
-          message.chat.id,
-          message.message_id,
-          '❌ Amal bekor qilindi. Hech qanday moliyaviy yozuv kiritilmadi.'
-        ),
-      ]);
+      const chatId = message.chat.id;
+      const messageId = message.message_id;
 
       const userAuth = await getTelegramUserSupabaseClient(from);
-      if (userAuth) {
-        await cancelPendingAction(actionId, userAuth.userId, from.id, userAuth.client);
+      if (!userAuth) {
+        await editTelegramMessageText(chatId, messageId, '⚠️ Foydalanuvchi hisobi topilmadi. Avval ilovani oching.');
+        return;
+      }
+
+      // Cancel first, then show the real outcome (an executed action cannot be cancelled).
+      const cancelRes = await cancelPendingAction(actionId, userAuth.userId, from.id, userAuth.client);
+      if (cancelRes.success) {
+        await editTelegramMessageText(chatId, messageId, CANCELLED_TEXT);
+        return;
+      }
+
+      const pending = await getPendingAction(actionId, userAuth.userId, from.id, userAuth.client);
+      if (pending.record && pending.error !== 'unauthorized') {
+        await editTelegramMessageText(chatId, messageId, describeResolvedPendingAction(pending.record));
+      } else if (pending.error === 'unauthorized') {
+        await editTelegramMessageText(chatId, messageId, '⛔ Ruxsat berilmagan: bu amal boshqa foydalanuvchiga tegishli.');
+      } else {
+        await editTelegramMessageText(chatId, messageId, '⚠️ Bekor qilinadigan amal topilmadi.');
       }
       return;
     }
@@ -412,7 +473,7 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
   const chatId = message.chat.id;
   const from = message.from;
   const text = message.text.trim();
-  const firstName = from.first_name || 'aziz foydalanuvchi';
+  const firstName = escapeHtml(from.first_name || 'aziz foydalanuvchi');
 
   // Immediately broadcast 'typing' chat action so user sees loading feedback right away
   sendTelegramChatAction(chatId, 'typing').catch(() => {});
@@ -467,12 +528,15 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
       if (latestAction && latestAction.status === 'pending') {
         if (isSimpleConfirmation) {
           const execRes = await executePendingActionRecord(latestAction, userAuth.client);
-          await sendTelegramMessage(chatId, execRes.message);
+          await sendTelegramMessage(chatId, escapeHtml(execRes.message));
           return;
         }
         if (isSimpleCancellation) {
-          await cancelPendingAction(latestAction.actionId, userAuth.userId, from.id, userAuth.client);
-          await sendTelegramMessage(chatId, '❌ Amal bekor qilindi. Hech qanday moliyaviy yozuv kiritilmadi.');
+          const cancelRes = await cancelPendingAction(latestAction.actionId, userAuth.userId, from.id, userAuth.client);
+          await sendTelegramMessage(
+            chatId,
+            cancelRes.success ? CANCELLED_TEXT : `⚠️ ${escapeHtml(cancelRes.reason || 'Amalni bekor qilib bo‘lmadi.')}`
+          );
           return;
         }
       }
@@ -504,40 +568,46 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
     );
 
     if (saveRes.error || !saveRes.record) {
+      if (saveRes.error) {
+        console.error('[Telegram Bot] Failed to save pending action:', saveRes.error);
+      }
       const errMsg = saveRes.migrationMissing
         ? '⚠️ Tizimda yangilanishlar bajarilmoqda. Iltimos, keyinroq qayta urinib ko‘ring.'
-        : `⚠️ Amalni saqlab bo‘lmadi: ${saveRes.error || 'Noma’lum xato'}`;
+        : '⚠️ Amalni saqlab bo‘lmadi. Iltimos, birozdan so‘ng qayta urinib ko‘ring.';
       await sendTelegramMessage(chatId, errMsg);
       return;
     }
 
     const pending = saveRes.record;
 
-    await sendTelegramInlineButtons(chatId, extracted.summaryUzbek, [
-      [
-        { text: '✅ Tasdiqlash', callback_data: `act_confirm:${pending.actionId}` },
-        { text: '❌ Bekor qilish', callback_data: `act_cancel:${pending.actionId}` },
-      ],
-    ]);
+    await sendTelegramInlineButtons(
+      chatId,
+      escapeHtml(extracted.summaryUzbek),
+      buildConfirmKeyboard(pending.actionId)
+    );
     return;
   }
 
   if (extracted.intent === 'clarification') {
     const q = extracted.clarificationQuestion || 'Iltimos, summani yoki boshqa tafsilotlarni aniqlashtirib yozing.';
-    await sendTelegramMessage(chatId, q);
+    await sendTelegramMessage(chatId, escapeHtml(q));
     return;
   }
 
   if (extracted.intent === 'financial_query') {
     const advisorRes = await askFinancialAdvisor(text, undefined, userAuth.client);
-    const reply = advisorRes.data?.answer || 'Moliyaviy ma’lumotlarni tahlil qilishda xatolik yuz berdi.';
+    const reply = advisorRes.data?.answer
+      ? escapeHtml(advisorRes.data.answer)
+      : 'Moliyaviy ma’lumotlarni tahlil qilishda xatolik yuz berdi.';
     await sendTelegramMessage(chatId, reply);
     return;
   }
 
   // Casual chat or general query fallback
   const advisorRes = await askFinancialAdvisor(text, undefined, userAuth.client);
-  const reply = advisorRes.data?.answer || `Assalomu alaykum, ${firstName}! Sizga qanday yordam bera olaman?`;
+  const reply = advisorRes.data?.answer
+    ? escapeHtml(advisorRes.data.answer)
+    : `Assalomu alaykum, ${firstName}! Sizga qanday yordam bera olaman?`;
   await sendTelegramMessage(chatId, reply, 'Ilovani ochish', MINIAPP_URL);
 }
 

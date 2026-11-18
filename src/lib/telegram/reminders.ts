@@ -1,6 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { getSupabaseUrl, getSupabaseServiceRoleKey } from '../supabase/config.ts';
 import { sendTelegramMessage, setTelegramChatMenuButton, MINIAPP_URL } from './bot.ts';
+import { escapeHtml } from './html.ts';
 
 export interface TelegramRecipient {
   userId: string;
@@ -94,7 +95,7 @@ export async function getRegisteredTelegramUsers(client?: SupabaseClient): Promi
  * Builds a friendly, motivating transaction reminder message in Uzbek
  */
 export function buildTransactionReminderMessage(firstName: string): string {
-  return `Salom, <b>${firstName}</b>! 👋\n\nBugungi o‘tkazmalarni ilovaga kiritishni unutmang yoki shunchaki bugungi o‘tkazmalaringizni shu chatga yozib qo‘ying! ✍️`;
+  return `Salom, <b>${escapeHtml(firstName)}</b>! 👋\n\nBugungi o‘tkazmalarni ilovaga kiritishni unutmang yoki shunchaki bugungi o‘tkazmalaringizni shu chatga yozib qo‘ying! ✍️`;
 }
 
 /**

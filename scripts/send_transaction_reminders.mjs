@@ -9,6 +9,14 @@
 
 import { createClient } from '@supabase/supabase-js';
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const botToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -128,7 +136,7 @@ async function main() {
       },
     }).catch(() => {});
 
-    const reminderText = `Salom, <b>${user.firstName}</b>! 👋\n\nBugungi o‘tkazmalarni ilovaga kiritishni unutmang yoki shunchaki bugungi o‘tkazmalaringizni shu chatga yozib qo‘ying! ✍️`;
+    const reminderText = `Salom, <b>${escapeHtml(user.firstName)}</b>! 👋\n\nBugungi o‘tkazmalarni ilovaga kiritishni unutmang yoki shunchaki bugungi o‘tkazmalaringizni shu chatga yozib qo‘ying! ✍️`;
 
     try {
       const sendRes = await callTelegram('sendMessage', {
