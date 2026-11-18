@@ -107,9 +107,9 @@ export async function getDashboardHydrationData(
     id: t.id,
     type: (t.type === 'income' ? 'in' : 'ex') as 'in' | 'ex',
     amount: Number(t.amount) || 0,
-    cat: Array.isArray(t.categories)
-      ? t.categories[0]?.name || 'Boshqa'
-      : t.categories?.name || 'Boshqa',
+    cat:
+      (Array.isArray(t.categories) ? t.categories[0]?.name : t.categories?.name) ||
+      (t.type === 'income' ? 'Boshqa daromad' : 'Boshqa'),
     desc: t.description || '',
     date: t.transaction_date || '',
   }));

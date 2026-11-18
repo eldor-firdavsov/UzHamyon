@@ -213,7 +213,12 @@ function mapApiTransaction(t: ApiTransactionRow): Transaction {
     id: t.id,
     type: t.type === 'income' ? 'in' : 'ex',
     amount: Number(t.amount) || 0,
-    cat: normalizeCategory(t.categories?.name, t.type === 'income' ? 'in' : 'ex'),
+    // No category stored → "Boshqa" / "Boshqa daromad" (never a guessed category like "Maosh").
+    cat: t.categories?.name
+      ? normalizeCategory(t.categories.name, t.type === 'income' ? 'in' : 'ex')
+      : t.type === 'income'
+      ? 'Boshqa daromad'
+      : 'Boshqa',
     desc: t.description || t.categories?.name || '',
     date: t.transaction_date || TODAY_DATE,
   };

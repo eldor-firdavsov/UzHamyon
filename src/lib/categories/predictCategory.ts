@@ -6,6 +6,8 @@
  * matching (Uzbek Latin/Cyrillic, Russian, English) with AI fallbacks.
  */
 
+import { matchCategoryRow } from './catalog.ts';
+
 export interface CategoryPrediction {
   category: string;
   confidence: number;
@@ -228,47 +230,13 @@ export function predictCategoryFromTitle(
 }
 
 /**
- * Helper to match a predicted category name to a database Category item
+ * Matches a predicted (Uzbek) category name to a database category row.
+ * Exact name or the Uzbek → system mapping only (see categories/catalog.ts).
+ * Unknown → undefined, so the transaction is saved without a category ("Boshqa").
  */
 export function matchPredictedToDbCategory<T extends { id: string; name: string }>(
   predictedName: string,
   categories: T[]
 ): T | undefined {
-  if (!categories.length) return undefined;
-
-  const pred = predictedName.toLowerCase();
-
-  // 1. Direct name match or includes
-  const direct = categories.find((c) => {
-    const cn = c.name.toLowerCase();
-    return cn === pred || cn.includes(pred) || pred.includes(cn);
-  });
-  if (direct) return direct;
-
-  // 2. Mapping to English system names if stored as English
-  const SYSTEM_MAP: Record<string, string[]> = {
-    'Oziq-ovqat': ['groceries', 'food'],
-    'Kafeler va Restoranlar': ['dining', 'restaurant', 'cafe'],
-    'Transport': ['transport', 'transit', 'car'],
-    'Uy-joy': ['housing', 'rent', 'home'],
-    'Kommunal': ['utilities', 'water', 'electric'],
-    'Aloqa va Internet': ['internet', 'communication', 'phone'],
-    "Ko'ngilochar": ['entertainment', 'fun'],
-    'Xaridlar': ['shopping', 'clothes'],
-    'Salomatlik': ['healthcare', 'health', 'medical'],
-    "Ta'lim": ['education', 'study'],
-    'Shaxsiy parvarish': ['personal', 'care', 'beauty'],
-    'Maosh': ['salary', 'wage', 'payroll'],
-    'Frilans': ['freelance', 'consulting'],
-    'Investitsiyalar': ['investment', 'investments', 'dividend'],
-    "Sovg'alar": ['gift', 'gifts', 'grant'],
-  };
-
-  const aliases = SYSTEM_MAP[predictedName] || [];
-  for (const alias of aliases) {
-    const found = categories.find((c) => c.name.toLowerCase().includes(alias));
-    if (found) return found;
-  }
-
-  return categories[0];
+  return matchCategoryRow(predictedName, categories);
 }
