@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse, after } from 'next/server';
+import { isTelegramWebhookAuthorized } from '@/lib/telegram/requestAuth';
 import { handleTelegramUpdate } from '@/lib/telegram/bot';
 import {
   claimWebhookUpdate,
@@ -9,13 +10,10 @@ import {
 export const maxDuration = 30;
 
 export async function POST(req: NextRequest) {
-  // Optional Telegram webhook secret validation
-  const secretToken = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
-  if (secretToken) {
-    const headerSecret = req.headers.get('x-telegram-bot-api-secret-token');
-    if (headerSecret !== secretToken) {
-      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
-    }
+  // Production: TELEGRAM_WEBHOOK_SECRET is required and must match the header, otherwise
+  // anyone could POST a fake update with any from.id and act on that user's account.
+  if (!isTelegramWebhookAuthorized(req.headers.get('x-telegram-bot-api-secret-token'))) {
+    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
   }
 
   let updateId: number | undefined;
@@ -69,9 +67,11 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     console.error('Error in /api/telegram/webhook:', err);
     if (updateId) {
-      await failWebhookUpdate(updateId, String(err)).catch(() => {});
+      const detail = err instanceof Error ? err.message : String(err);
+      await failWebhookUpdate(updateId, detail).catch(() => {});
     }
-    return NextResponse.json({ ok: false, error: String(err) }, { status: 200 });
+    // Never echo internal error details back to the caller.
+    return NextResponse.json({ ok: false, error: 'Internal error' }, { status: 200 });
   }
 }
 
