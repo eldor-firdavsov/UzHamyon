@@ -12,6 +12,7 @@ import {
   completeOnboardingSchema,
   type CompleteOnboardingInput,
 } from '@/lib/onboarding/schemas';
+import { todayTashkent } from '@/lib/time/tashkent';
 
 export interface OnboardingActionResult<T = unknown> {
   success: boolean;
@@ -190,7 +191,7 @@ export async function completeOnboardingAction(
     const existingOnboardingData =
       (existingProfile?.onboarding_data as Record<string, unknown> | null) || {};
 
-    const todayDateStr = new Date().toISOString().split('T')[0];
+    const todayDateStr = todayTashkent();
     const effectiveFinancialStartDate = existingProfile?.financial_start_date || todayDateStr;
 
     // 2. Persist to profiles table.

@@ -11,6 +11,7 @@ import type {
   GoalFeasibility,
 } from './schemas.ts';
 import type { FinancialGoal } from '../../types/database.ts';
+import { todayTashkent } from '../time/tashkent.ts';
 
 export interface ServiceResult<T> {
   data: T | null;
@@ -40,9 +41,8 @@ function computeMonthsRemaining(today: Date, targetDateStr: string): number {
   const tMonth = parseInt(parts[1], 10); // 1-12
   const tDay = parseInt(parts[2], 10);
 
-  const cYear = today.getFullYear();
-  const cMonth = today.getMonth() + 1; // 1-12
-  const cDay = today.getDate();
+  // "Today" is the Tashkent calendar date, not the server's (UTC on Vercel).
+  const [cYear, cMonth, cDay] = todayTashkent(today).split('-').map(Number);
 
   const todayMs = Date.UTC(cYear, cMonth - 1, cDay);
   const targetMs = Date.UTC(tYear, tMonth - 1, tDay);

@@ -127,6 +127,7 @@ import {
   getSupabaseAnonKey,
   getSupabaseServiceRoleKey,
 } from '../supabase/config.ts';
+import { todayTashkent } from '../time/tashkent.ts';
 
 /**
  * Derives a deterministic internal email and secure password for a Telegram user.
@@ -312,7 +313,7 @@ export async function getOrCreateTelegramUser(tgUser: TelegramUser): Promise<Tel
 
   if (!existingProfile) {
     // Insert new profile
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayTashkent();
     await dbClient.from('profiles').insert({
       id: authUser.id,
       first_name: firstName,

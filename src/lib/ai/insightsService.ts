@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import type { Insight, InsightStatus } from '../../types/database.ts';
+import { todayTashkent, addDaysToDate } from '../time/tashkent.ts';
 
 export interface ServiceResult<T> {
   data: T | null;
@@ -30,8 +31,8 @@ export async function generateAndSaveInsights(
       return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
     }
 
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayTashkent();
+    const thirtyDaysAgo = addDaysToDate(today, -30);
 
     // 1. Fetch recent transactions
     const { data: rawTxs } = await supabase

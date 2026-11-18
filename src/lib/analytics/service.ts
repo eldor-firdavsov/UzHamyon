@@ -6,6 +6,7 @@ import type {
   TrendBucket,
   PeriodComparison,
 } from './schemas.ts';
+import { monthRangeTashkent } from '../time/tashkent.ts';
 
 export interface ServiceResult<T> {
   data: T | null;
@@ -64,13 +65,8 @@ export async function getAnalyticsSummary(
     }
 
     // Default date range: current month if not specified
-    const now = new Date();
-    const defaultStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1))
-      .toISOString()
-      .split('T')[0];
-    const defaultEnd = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 0))
-      .toISOString()
-      .split('T')[0];
+    // Default date range: current Tashkent calendar month
+    const { start: defaultStart, end: defaultEnd } = monthRangeTashkent();
 
     const { data: profile } = await supabase
       .from('profiles')
