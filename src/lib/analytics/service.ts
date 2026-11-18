@@ -7,6 +7,7 @@ import type {
   PeriodComparison,
 } from './schemas.ts';
 import { monthRangeTashkent } from '../time/tashkent.ts';
+import { computeBalances } from '../finance/balance.ts';
 
 export interface ServiceResult<T> {
   data: T | null;
@@ -47,24 +48,16 @@ export async function getAnalyticsSummary(
     let { currency } = parseResult.data;
     const { interval } = parseResult.data;
 
-    // If currency not explicitly provided in query, infer from user's transactions
-    const rawCurrency = (queryParams as Record<string, unknown> | undefined)?.currency;
-    if (!rawCurrency) {
-      const { data: firstTx } = await supabase
-        .from('transactions')
-        .select('currency')
-        .eq('user_id', user.id)
-        .order('transaction_date', { ascending: false })
-        .order('created_at', { ascending: false })
-        .order('id', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (firstTx?.currency) {
-        currency = firstTx.currency;
-      }
-    }
+    // Currency: UZS by default (schema default). Other currencies only when asked for
+    // explicitly; amounts in different currencies are never added together (#28).
 
-    // Default date range: current month if not specified
+    // Lifetime balances with the shared formula (#27): income − expense − goal savings.
+    const [lifetimeTxRes, goalsRes] = await Promise.all([
+      supabase.from('transactions').select('type, amount, currency').eq('user_id', user.id),
+      supabase.from('financial_goals').select('current_amount, currency').eq('user_id', user.id),
+    ]);
+    const balances = computeBalances(lifetimeTxRes.data || [], goalsRes.data || []);
+
     // Default date range: current Tashkent calendar month
     const { start: defaultStart, end: defaultEnd } = monthRangeTashkent();
 
@@ -102,6 +95,7 @@ export async function getAnalyticsSummary(
           },
           largestExpenses: [],
           largestIncome: [],
+          balances,
         },
         error: null,
         status: 200,
@@ -327,6 +321,7 @@ export async function getAnalyticsSummary(
 
     return {
       data: {
+        balances,
         currency,
         startDate,
         endDate,

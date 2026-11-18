@@ -55,6 +55,8 @@ export interface PeriodComparison {
 }
 
 export interface AnalyticsSummary {
+  /** Lifetime balance per currency, shared formula (src/lib/finance/balance.ts). */
+  balances?: import('../finance/balance.ts').BalanceSummary;
   currency: string;
   startDate: string;
   endDate: string;
