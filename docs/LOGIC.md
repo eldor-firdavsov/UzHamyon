@@ -127,9 +127,11 @@ All finance tables live in `public` and have RLS "owner only" (`auth.uid() = use
 
 **`budgets`** (007) — `category_id` (nullable = all expenses), `name`, `amount`, `currency`, `period_type` (`monthly|weekly|custom`), `start_date`, `end_date`.
 
-**`financial_goals`** (007) — this is both **maqsad** and **jamg'arma**:
+**`goal_contributions`** (013) — `id`, `user_id`, `goal_id` (cascade), `amount` (≠ 0; + add, − withdraw), `note`, `source` (`manual|telegram_ai|telegram_voice|initial_balance|adjustment`), `created_at`. Owner can select/insert real movements; no update/delete. Triggers: inserting a row moves `financial_goals.current_amount` (and status, `cancelled` kept) in the same statement and rejects going below 0; any other `current_amount` change is logged as `adjustment`; a goal created with money gets `initial_balance`. Existing goals were backfilled with one "Boshlang‘ich qoldiq" row.
+
+**`financial_goals`** (007, 013) — this is both **maqsad** and **jamg'arma**:
 `id`, `user_id`, `name`, `target_amount` (> 0), `current_amount` (≥ 0, the money saved so far), `currency` (DB default `'USD'`, app default `'UZS'`), `target_date` (nullable), `tracking_strategy` (`manual|category_linked|account_linked`, only `manual` is used), `status` (`in_progress|completed|cancelled`).
-There is **no contributions table**: only the running total `current_amount` is stored.
+Since 013 also `completed_notified_at`, `deadline_notified_at` (one-time Telegram notices) and DB default currency `UZS`. History lives in `goal_contributions`; `current_amount` is the running total kept in sync by triggers.
 
 **`insights`** (007) — AI insight cards: `type`, `title`, `explanation`, `status`, `confidence`, `evidence_metadata`, `period_start/end`.
 
@@ -310,13 +312,12 @@ Also: typing a confirmation word (`ha`, `tasdiqlayman`, `saqla`, `mayli`, `yes`,
 
 There is **no separate savings account or table**. "Jamg'arma" = the sum of `financial_goals.current_amount` across the user's goals.
 
-- **Add money** (web): goal detail → "Hissa qo'shish" → `handleSaveContribution` → optimistic UI → `POST /api/goals/:id/contributions {amount}` → `contributeToGoal()` (`src/lib/goals/service.ts:419`):
-  `new = max(0, round2(current + amount))`; `status = new >= target ? 'completed' : 'in_progress'`; update the row.
+- **Add money** (web, since 1C): goal detail → "Hissa qo'shish" → `handleSaveContribution` waits for `POST /api/goals/:id/contributions {amount, note}` → `contributeToGoal(..., 'manual')` inserts a `goal_contributions` row; the trigger updates `current_amount` and status. Without 013: direct update. A withdrawal below 0 is rejected ("Maqsadda buncha mablag‘ yo‘q"). Completion → one Telegram congrats.
 - **Add money** (AI/Telegram): action `contribute_goal` (e.g. "Noutbuk maqsadiga 500 ming qo'shdim"), see §4.6.
 - **Withdraw**: the API accepts a **negative** `amount` (schema only forbids 0), clamped at 0. The current Mini App sheet only sends positive amounts; the older `ContributeModal.tsx` has a "Balansga qaytarish" (withdraw) button but is not used by the live pages. The AI flow cannot withdraw (amount must be > 0).
-- **Where stored**: only `financial_goals.current_amount`. Individual contributions (date, note) are **not stored**; the UI rebuilds a fake history `contribs: [{a: current_amount, d: ''}]` after reload.
-- **Effect on balance** (commit `b086299`): the Mini App shows
-  `currentBalance = Σ income − Σ expense − Σ max(0, goal.current_amount)` over all loaded transactions (all currencies added together).
+- **Where stored** (since 1C): every movement is a `goal_contributions` row; `GET /api/goals/:id/contributions` returns the history, which the Mini App goal detail shows (+/−, note, "Boshlang‘ich qoldiq").
+- **Effect on balance** (since 1C): one formula, `computeBalances()` in `src/lib/finance/balance.ts`, per currency:
+  `balance = Σ income − Σ expense − Σ goal.current_amount` (all goal statuses). Used by the Mini App card (UZS, other currencies on a separate line), the advisor facts and `GET /api/analytics` (`balances`).
   Contributions do **not** create transactions, so analytics (net cash flow, savings rate) do not see them.
 
 ### 4.6 Maqsad (goals)
@@ -337,15 +338,13 @@ There is **no separate savings account or table**. "Jamg'arma" = the sum of `fin
   - `feasible` if `avgMonthlyNet ≥ monthlyNeeded`; `challenging` if `avgMonthlyNet > 0` and `monthlyNeeded ≤ 1.5 × avgMonthlyNet`; otherwise `unlikely`. No date → `not_applicable`.
 - The Mini App computes its own simpler `pct = min(100, round(saved / target × 100))`.
 
-**When a goal is reached**: `status` becomes `completed` automatically (in `contributeToGoal`, `updateGoal`, `createGoal` and in the RPC). Nothing else happens — **no Telegram message, no celebration, no transfer**. A later withdrawal below the target flips it back to `in_progress`.
+**When a goal is reached**: `status` becomes `completed` automatically (trigger / `updateGoal` / `createGoal` / RPC; `cancelled` is kept). Since 1C, `notifyCompletedGoals()` (`src/lib/goals/notifications.ts`) claims the goal (`completed_notified_at IS NULL` → now) and sends **once** "🎉 Tabriklaymiz! «<goal>» maqsadingizga yetdingiz!" — after a bot confirm and after web create/edit/contribution. A later withdrawal below the target flips it back to `in_progress`.
 
-**When the deadline passes**: nothing runs. There is no job. On the next read the feasibility becomes `unlikely` with "Belgilangan muddat o'tib ketgan. Yangi muddat belgilash kerak." The status stays `in_progress`.
+**When the deadline passes**: since 1C the daily cron (`runDailyGoalDeadlineNotices`) sends **one** friendly notice per `in_progress` goal whose `target_date` < today (Tashkent), suggesting a new date. Changing `target_date` resets the flag. Feasibility still shows `unlikely` with "Belgilangan muddat o'tib ketgan…".
 
 **Link to jamg'arma**: a goal *is* the savings bucket; its `current_amount` is the jamg'arma for that goal and is subtracted from the displayed balance.
 
-**AI goal matching**:
-- RPC path: `contribute_goal` / `update_goal` pick the most recently updated **`in_progress`** goal whose name `LIKE %goalName%` (or any in-progress goal if no name). Contributions to completed goals fail.
-- App-level path: `resolveUserGoal()` — exact name, then substring either way, any status; if no name, first `in_progress` goal or the first goal.
+**AI goal matching** (since 1C, one rule): SQL `find_user_goal()` (RPC) = TS `findUserGoal()` (`src/lib/goals/matchGoal.ts`, fallback). No name → newest `in_progress` goal; with a name → exact name first, then "one contains the other"; `in_progress` before `completed`; newest first; `cancelled` never matched. A contribution in another currency than the goal is rejected.
 
 ### 4.7 Financial analysis / reports
 
@@ -357,11 +356,11 @@ There are three separate calculators:
 - Expense by category for the month; top category; "AI recommendation" text = `top category share = round(cat / monthExpense × 100)%`.
 - Weeks = days 1–7, 8–14, 15–21, 22–28, 29–end (income and expense per chunk).
 - Budget card: `pct = round(spent / limit × 100)`; red if over 100 %, amber if ≥ 80 %.
-- All amounts are treated as so'm; currency is ignored.
+- Since 1C every total is **UZS only** (`currency` is mapped on transactions); other currencies get a separate line on the balance card and `$` in the list.
 
 **B. `GET /api/analytics`** → `getAnalyticsSummary()` (`src/lib/analytics/service.ts`). Its UI components (`AnalyticsView`, `TahlilHub`) are **not imported by any live page** (only named in comments), so today this API is used by tests and the Vite stack only:
 - Period: `startDate`/`endDate` query params, default = current calendar month (server time); clipped to `profiles.financial_start_date`.
-- Currency: one currency only; if not given, the currency of the newest transaction.
+- Currency: one currency only; default `UZS` (since 1C; before: the newest transaction's currency). Also returns `balances` (lifetime, shared formula).
 - `totalIncome`, `totalExpenses`, `netCashFlow = income − expenses`.
 - `savingsRate = min(100, net / income × 100)` if income > 0 and net > 0, else 0.
 - `averageTransactionAmount = (income + expenses) / count`.
@@ -370,7 +369,7 @@ There are three separate calculators:
 - Comparison with the previous period of the same length: absolute and % change (`null` % if previous is 0).
 - Top 5 largest expenses and incomes.
 
-**C. AI advisor facts** (`gatherUserFinancialContext`, `advisorService.ts:57`) — sent to Gemini as "verified context": lifetime balance `= income − expense` (**does not subtract goal savings**), per-month income/expense/top categories, month-over-month comparison of the two latest months, small expenses ≤ 100 000, budgets, goals with `monthlyNeeded = remaining / months` and feasibility `avgMonthlyNet ≥ monthlyNeeded`, onboarding planning numbers. Currency = currency of the oldest transaction.
+**C. AI advisor facts** (`gatherUserFinancialContext`, `advisorService.ts:57`) — sent to Gemini as "verified context": lifetime balance with the shared formula (since 1C: subtracts goal savings, UZS only, other currencies on separate lines), per-month income/expense/top categories, month-over-month comparison of the two latest months, small expenses ≤ 100 000, budgets, goals with `monthlyNeeded = remaining / months` and feasibility `avgMonthlyNet ≥ monthlyNeeded`, onboarding planning numbers. Currency = UZS (since 1C; before: the oldest transaction's currency).
 
 **Budgets** (`computeBudgetProgress`): `spent = Σ expense` in the budget currency, date range and category; `percentageUsed = spent / amount × 100`; `on_track` < 80 % ≤ `near_limit` < 100 % ≤ `over_budget`.
 
@@ -382,7 +381,7 @@ There are three separate calculators:
   - Auth (since 1A): every GET/POST needs `Authorization: Bearer $CRON_SECRET`; in production a missing secret rejects everything. Only outside production with no secret are requests allowed.
 - `GET /api/telegram/reminders` **without** `trigger` (authenticated) returns only the schedule and the recipient **count**.
 - Local alternatives: `scripts/send_transaction_reminders.mjs` (one-off) and `scripts/schedule_daily_reminders.mjs` (long-running `setTimeout` loop at 20:00 Tashkent).
-- No other jobs: nothing expires pending actions in bulk, nothing checks goal deadlines, no budget alerts are pushed to Telegram.
+- Since 1C the same cron first sends goal deadline notices (#33). Still no bulk expiry of pending actions and no budget alerts.
 
 ### 4.9 Free questions and chat in Telegram (financial_query / casual_chat)
 
@@ -665,13 +664,13 @@ Items marked ✅ are fixed on the named branch/commit (not deployed yet unless s
 
 ### Savings / goals / balance
 
-27. **Medium — Balance differs between app and bot.** The Mini App balance subtracts goal savings; the AI advisor's "Jami barcha vaqtlar balansi" does not. Analytics `netCashFlow` also ignores savings.
-28. **Medium — Currencies are mixed.** The Mini App sums UZS and USD amounts as if they were so'm. The AI can create USD transactions/goals. Goal feasibility and budgets filter by one currency; the advisor uses the oldest transaction's currency for everything.
-29. **Medium — No contribution history.** Only `current_amount` is stored; contribution dates/notes are lost (the `note` field in the schema is ignored). Withdrawals cannot be audited.
-30. **Medium — RPC and app path disagree on goals.** RPC only touches `in_progress` goals (completed goals cannot receive more money via AI); the fallback touches any status. RPC uses `LIKE %name%`; fallback uses exact/substring both ways.
-31. **Low — `cancelled` goal status is overwritten.** `updateGoal`/`contributeToGoal` recompute status from amounts, so a cancelled goal becomes `in_progress`/`completed` on the next change.
-32. **Low — DB default currency is `USD`** for `transactions` and `financial_goals`; any insert path that forgets `currency` stores USD.
-33. **Low — Nothing happens at goal completion or deadline** (no Telegram notice, status not changed when the date passes).
+27. ✅ *(fix/1c-goals-balance `a0535f9`, `abf0a30`: `src/lib/finance/balance.ts` used by Mini App, advisor, analytics)* **Medium — Balance differs between app and bot.** The Mini App balance subtracts goal savings; the AI advisor's "Jami barcha vaqtlar balansi" does not. Analytics `netCashFlow` also ignores savings.
+28. ✅ *(`a0535f9`, `abf0a30`, `79d396c`: totals per currency, UZS main, other currencies on a separate line; contributions must match the goal currency)* **Medium — Currencies are mixed.** The Mini App sums UZS and USD amounts as if they were so'm. The AI can create USD transactions/goals. Goal feasibility and budgets filter by one currency; the advisor uses the oldest transaction's currency for everything.
+29. ✅ *(`79d396c`, `e334f49`, `abf0a30`: `goal_contributions` + triggers + Mini App history)* **Medium — No contribution history.** Only `current_amount` is stored; contribution dates/notes are lost (the `note` field in the schema is ignored). Withdrawals cannot be audited.
+30. ✅ *(`79d396c`, `e334f49`: SQL `find_user_goal` = TS `findUserGoal`)* **Medium — RPC and app path disagree on goals.** RPC only touches `in_progress` goals (completed goals cannot receive more money via AI); the fallback touches any status. RPC uses `LIKE %name%`; fallback uses exact/substring both ways.
+31. ✅ *(`e334f49`, `79d396c`)* **Low — `cancelled` goal status is overwritten.** `updateGoal`/`contributeToGoal` recompute status from amounts, so a cancelled goal becomes `in_progress`/`completed` on the next change.
+32. ✅ *(`79d396c`: UZS, also for budgets)* **Low — DB default currency is `USD`** for `transactions` and `financial_goals`; any insert path that forgets `currency` stores USD.
+33. ✅ *(`e334f49`: one-time completion congrats, daily deadline notice)* **Low — Nothing happens at goal completion or deadline** (no Telegram notice, status not changed when the date passes).
 
 ### Reliability / scale
 
