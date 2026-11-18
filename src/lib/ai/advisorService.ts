@@ -374,6 +374,44 @@ function buildVerifiedFallbackAnswer(question: string, facts: VerifiedFinancialF
 }/**
  * Handles conversational financial advisory with Gemini grounded on verified facts
  */
+/**
+ * The user's single Telegram conversation (ai_conversations.channel = 'telegram').
+ * Returns undefined when migration 014 is not applied (caller then creates one per message).
+ */
+async function getOrCreateTelegramConversation(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<string | undefined> {
+  const find = async () => {
+    const { data, error } = await supabase
+      .from('ai_conversations')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('channel', 'telegram')
+      .limit(1)
+      .maybeSingle();
+    return { id: data?.id as string | undefined, error };
+  };
+
+  const existing = await find();
+  if (existing.error) return undefined; // column missing → old behaviour
+  if (existing.id) return existing.id;
+
+  const { data: created, error: insertError } = await supabase
+    .from('ai_conversations')
+    .insert({ user_id: userId, title: 'Telegram suhbati', channel: 'telegram' })
+    .select('id')
+    .single();
+  if (created?.id) return created.id as string;
+
+  // Unique index race: another message created it a moment ago.
+  if (insertError) {
+    const again = await find();
+    return again.id;
+  }
+  return undefined;
+}
+
 export interface AskAdvisorOptions {
   /**
    * 'telegram': the bot already ran the single action extraction for this message, so the
@@ -416,6 +454,10 @@ export async function askFinancialAdvisor(
 
     // 1. Resolve or create AI conversation
     let convId = conversationId;
+    // Telegram: one conversation per user, reused for every message (#40; needs migration 014).
+    if (!convId && options.channel === 'telegram') {
+      convId = await getOrCreateTelegramConversation(supabase, user.id);
+    }
     if (!convId) {
       const titleSummary = question.length > 40 ? question.slice(0, 37) + '...' : question;
       let { data: newConv, error: convErr } = await supabase
