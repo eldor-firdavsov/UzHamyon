@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { createClient, type Session, type User } from '@supabase/supabase-js';
+import { createClient, type Session, type SupabaseClient, type User } from '@supabase/supabase-js';
 
 export interface TelegramUser {
   id: number;
@@ -152,6 +152,47 @@ export function deriveTelegramCredentials(telegramId: number) {
 }
 
 /**
+ * Finds an auth user id by email, however many users the project has (#35):
+ * 1. profiles.email, 2. RPC get_auth_user_id_by_email (migration 014, service role),
+ * 3. auth.admin.listUsers paged (1 000 per page) until found.
+ */
+export async function findAuthUserIdByEmail(
+  adminClient: SupabaseClient,
+  email: string,
+  options: { perPage?: number; maxPages?: number } = {}
+): Promise<string | undefined> {
+  const target = email.trim().toLowerCase();
+
+  const { data: prof } = await adminClient
+    .from('profiles')
+    .select('id')
+    .eq('email', target)
+    .maybeSingle();
+  if (prof?.id) return prof.id as string;
+
+  const { data: rpcId, error: rpcError } = await adminClient.rpc('get_auth_user_id_by_email', { p_email: target });
+  if (!rpcError) {
+    return typeof rpcId === 'string' && rpcId ? rpcId : undefined;
+  }
+
+  // RPC missing (014 not applied): walk every page instead of only the first one.
+  const perPage = options.perPage ?? 1000;
+  const maxPages = options.maxPages ?? 1000;
+  for (let page = 1; page <= maxPages; page++) {
+    const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage });
+    if (error) {
+      console.error('[telegram/auth] listUsers failed:', error.message);
+      return undefined;
+    }
+    const users = data?.users || [];
+    const found = users.find((u: User) => (u.email || '').toLowerCase() === target);
+    if (found) return found.id;
+    if (users.length < perPage) return undefined;
+  }
+  return undefined;
+}
+
+/**
  * Authenticates or registers a verified Telegram user in Supabase.
  * - Single stable identity mapped to telegram_id.
  * - Never prompts for email/password.
@@ -202,8 +243,7 @@ export async function getOrCreateTelegramUser(tgUser: TelegramUser): Promise<Tel
       if (prof?.id) {
         existingUserId = prof.id;
       } else {
-        const { data: userList } = await adminClient.auth.admin.listUsers();
-        existingUserId = userList?.users?.find((u) => u.email === internalEmail)?.id;
+        existingUserId = await findAuthUserIdByEmail(adminClient, internalEmail);
       }
 
       if (existingUserId) {
@@ -249,10 +289,9 @@ export async function getOrCreateTelegramUser(tgUser: TelegramUser): Promise<Tel
 
       if (isAlreadyRegistered && adminClient) {
         // User already exists: locate real user and synchronize password
-        const { data: userList } = await adminClient.auth.admin.listUsers();
-        const found = userList?.users?.find((u) => u.email === internalEmail);
-        if (found?.id) {
-          await adminClient.auth.admin.updateUserById(found.id, {
+        const foundId = await findAuthUserIdByEmail(adminClient, internalEmail);
+        if (foundId) {
+          await adminClient.auth.admin.updateUserById(foundId, {
             password: internalPassword,
             email_confirm: true,
           });
