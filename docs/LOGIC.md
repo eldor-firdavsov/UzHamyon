@@ -118,10 +118,10 @@ All finance tables live in `public` and have RLS "owner only" (`auth.uid() = use
 `id` (PK, FK → auth.users), `first_name`, `last_name`, `email`, `role` (enum `user_role` from the old app; Telegram users get `'teacher'`), `teacher_id` (old app), `is_active`, `declared_monthly_income`, `declared_monthly_expenses`, `target_expense_reduction_percent`, `target_monthly_expenses`, `onboarding_completed`, `onboarding_step`, `onboarding_data` JSONB (holds `telegram_id`, `telegram_username`, `language_code`, `is_telegram`, onboarding answers), `financial_start_date` DATE, timestamps.
 
 **`categories`** (007)
-`id`, `user_id` (NULL for system rows), `name`, `type` (`income|expense`), `description`, `icon`, `color`, `is_system`. Unique on `(lower(trim(name)), type)` per owner. 16 **English** system categories are seeded (e.g. `Groceries`, `Dining Out`, `Transportation`, `Salary`, …).
+`id`, `user_id` (NULL for system rows), `name`, `type` (`income|expense`), `description`, `icon`, `color`, `is_system`. Unique on `(lower(trim(name)), type)` per owner. 16 **English** system categories are seeded (e.g. `Groceries`, `Dining Out`, `Transportation`, `Salary`, …); 012 adds `Internet & Phone`. The Uzbek ↔ English mapping lives in `src/lib/categories/catalog.ts`.
 
-**`transactions`** (007)
-`id`, `user_id`, `category_id` (FK, `ON DELETE SET NULL`), `description` (≤255), `amount` NUMERIC(12,2) **> 0** (direction is in `type`), `currency` VARCHAR(3) (DB default `'USD'`, app default `'UZS'`), `type` (`income|expense`), `transaction_date` DATE, `merchant`, `notes`, `source` (`manual|csv|excel|recurring`), `import_job_id`, `created_at`, `updated_at`. A trigger checks the category/import job belongs to the same user.
+**`transactions`** (007, 012)
+`id`, `user_id`, `category_id` (FK, `ON DELETE SET NULL`), `description` (≤255), `amount` NUMERIC(12,2) **> 0** (direction is in `type`), `currency` VARCHAR(3) (DB default `'USD'`, app default `'UZS'`), `type` (`income|expense`), `transaction_date` DATE, `merchant`, `notes`, `source` (`manual|csv|excel|recurring|telegram_ai|telegram_voice` — the last two since 012), `import_job_id`, `created_at` (holds the entered time as a real UTC instant since 1B; older rows hold Tashkent time marked as UTC), `updated_at`. A trigger checks the category/import job belongs to the same user.
 
 **`import_jobs`** (007) — `filename`, `status`, row counters, `error_summary`.
 
@@ -282,9 +282,9 @@ There is no `setMyCommands`; the command menu (if any) was set by hand in BotFat
 Trigger: user taps "+" in `UzHamyonPrototypeApp`, picks type (`in`/`ex`), amount, Uzbek category name (e.g. `Oziq-ovqat`), description, date, time.
 Handler: `handleSaveTransaction` (`UzHamyonPrototypeApp.tsx` ~line 1040):
 1. Optimistic UI update.
-2. `matchPredictedToDbCategory(cat, categoriesOfThatType)` maps the Uzbek name to a DB category (direct/substring match, then an Uzbek→English alias map, else **the first category in the list**).
+2. `matchPredictedToDbCategory(cat, categoriesOfThatType)` maps the Uzbek name to a DB category: exact name, or the Uzbek→system mapping in `catalog.ts`; unknown → no category (since 1B; before, it fell back to the first category).
 3. `POST /api/transactions` (or `PUT /api/transactions/:id`) with `{description, amount, type, currency: 'UZS', transaction_date, transaction_time, category_id}` and `Authorization: Bearer <token>`.
-4. `createTransaction()` (`src/lib/transactions/service.ts:36`): zod validation (amount > 0, ≤ 2 decimals, valid date), category must be system or own and same type, insert with `source='manual'`; if a time is given, `created_at = "<date>T<time>:00Z"`; moves `profiles.financial_start_date` earlier if needed.
+4. `createTransaction()` (`src/lib/transactions/service.ts`): zod validation (amount > 0, ≤ 2 decimals, valid date), category must be system or own and same type, insert with `source` (default `manual`); if a time is given, `created_at = "<date>T<time>:00+05:00"` (Tashkent); if the `source` check fails (012 not applied) it retries once as `manual`; moves `profiles.financial_start_date` earlier if needed.
 Reply: toast in the app.
 
 Delete: `DELETE /api/transactions/:id`.
@@ -292,7 +292,7 @@ Delete: `DELETE /api/transactions/:id`.
 #### AI flow (Telegram text) — summary (full detail in section 5)
 
 Trigger: any non-command text that is not a short "ha"/"bekor".
-`extractFinancialActions(text)` (Gemini) **in parallel with** `getTelegramUserSupabaseClient(from)` → if `intent = action_proposal` → save a `pending_ai_actions` row → send `summaryUzbek` with buttons **✅ Tasdiqlash** (`act_confirm:<id>`) / **❌ Bekor qilish** (`act_cancel:<id>`) → on confirm run `executePendingActionRecord()` → insert into `transactions` (and/or goals) → edit the message to the result.
+`getTelegramUserSupabaseClient(from)` → `loadCategoryOptions()` → `extractFinancialActions(text, {categories, budget})` (Gemini, one call) → if `intent = action_proposal` → `attachCategoryIds()` → save a `pending_ai_actions` row → send `summaryUzbek` with buttons **✅ Tasdiqlash** (`act_confirm:<id>`) / **❌ Bekor qilish** (`act_cancel:<id>`) → on confirm run `executePendingActionRecord()` → insert into `transactions` (and/or goals) → edit the message to the result.
 
 Also: typing a confirmation word (`ha`, `tasdiqlayman`, `saqla`, `mayli`, `yes`, …) confirms the **latest** pending action of this Telegram user; a cancel word (`yo'q`, `bekor`, `rad`, `kerak emas`, `no`, …) cancels it (`isUserConfirmation` / `isUserCancellation` in `pendingActionStore.ts`).
 
@@ -301,10 +301,10 @@ Also: typing a confirmation word (`ha`, `tasdiqlayman`, `saqla`, `mayli`, `yes`,
 - System categories: 16 English rows seeded by migration 007. Users can add their own (`/api/categories`, `createCategory`); unique per user by lower-cased name + type. System categories cannot be edited/deleted (RLS + service). A category's type cannot change while transactions use it.
 - The UI shows **Uzbek** names (`Oziq-ovqat`, `Kafeler va Restoranlar`, `Transport`, `Uy-joy`, `Kommunal`, `Aloqa va Internet`, `Ko'ngilochar`, `Xaridlar`, `Salomatlik`, `Ta'lim`, `Shaxsiy parvarish`, `Maosh`, `Frilans`, `Investitsiyalar`, `Sovg'alar`). `predictCategoryFromTitle()` guesses one from the description with a keyword list (Uzbek Latin, Russian, English); default `Oziq-ovqat` / `Maosh`.
 - Mapping Uzbek name → DB row: `matchPredictedToDbCategory()` (see 4.3).
-- AI flow: Gemini returns a free-text `categoryName` (the prompt does **not** give it the category list).
-  - RPC path: exact case-insensitive name match against user + system categories, else `NULL`.
-  - App-level fallback path: `matchPredictedToDbCategory()` (which falls back to the first category).
-- Transactions with no category show as "Boshqa" in the UI and "Uncategorized" in analytics.
+- AI flow (since 1B): the prompt lists the user's categories per type (system rows under Uzbek names + own categories, `buildCategoryOptions()`); `categoryName` must be one of them or `null` (`pickAllowedName()`). Before saving the proposal, `attachCategoryIds()` stores `categoryId`, the DB name (in `categoryName`) and the Uzbek `categoryDisplayName`.
+  - RPC path (012): `categoryId` (checked: system or own, same type), else exact name, else `NULL`.
+  - App-level fallback path: same id, else `matchCategoryRow()` (exact only), else no category.
+- Transactions with no category show as "Boshqa" (expense) / "Boshqa daromad" (income) in the Mini App and "Uncategorized" in analytics.
 
 ### 4.5 Jamg'arma (savings)
 
@@ -386,7 +386,7 @@ There are three separate calculators:
 
 ### 4.9 Free questions and chat in Telegram (financial_query / casual_chat)
 
-If Gemini says `financial_query` or `casual_chat` (or the Gemini call **fails**, which also returns `financial_query`), the bot calls `askFinancialAdvisor(text, undefined, userClient)`:
+**Since 1B:** if the extraction fails (AI down or the 25 s budget is spent) the bot replies "⏳ Kechirasiz, hozir xabaringizni tahlil qila olmadim…" and stops. If Gemini says `financial_query` or `casual_chat`, the bot calls `askFinancialAdvisor(text, undefined, userClient, { channel: 'telegram', budget })`, which **skips steps 3–5 below** (no regex engine, no "ha" lookup, no second extraction) and only answers (step 6). The steps below describe the **web** advisor:
 1. Creates a **new** `ai_conversations` row for every Telegram message (no conversation id is kept).
 2. Saves the user message in `ai_messages`.
 3. Runs `processFinancialIntent()` (old regex engine): "bu oy … sarfladim" → sum of this month's expenses; "oxirgi xarajatni bekor qil" → proposes deleting the last expense; "naqd pul bor" → asks "existing money or income?"; "ishlab topdim" → proposes income; "sarfladim/ishlatdim/sotib oldim" + amount → proposes expense. These proposals live only inside that one-message conversation, so **they cannot be confirmed from Telegram** (§7).
@@ -400,7 +400,7 @@ The bot sends the answer text, HTML-escaped (casual chat also gets the Mini App 
 - **Language**: Uzbek (Latin) only. All bot texts and AI prompts are Uzbek. `language_code` from Telegram is saved in `onboarding_data` but never used. Russian input is understood only because Gemini understands it and the category keyword list has Russian words.
 - **Currency**: default `UZS`. The AI prompt allows `UZS` or `USD`. There is **no conversion** anywhere and no user currency setting. The Mini App always sends `UZS`. Money is formatted as `45 000 so'm`; USD as `… dollar`.
 - **Settings** (`/settings`, `ProfileForm`): name, and shows whether the account is linked to Telegram. **Onboarding** (`/onboarding`) stores `declared_monthly_income`, `declared_monthly_expenses`, `target_expense_reduction_percent`, `target_monthly_expenses`, `onboarding_step`, `onboarding_completed`. These are used only as "planning estimates" in the AI advisor context and to tell new vs returning users on `/start`.
-- **Time zone**: the server's local time is used for "today" (`getNowLocalDateString`). On Vercel this is UTC, not Tashkent.
+- **Time zone** (since 1B): server code uses `src/lib/time/tashkent.ts` (Asia/Tashkent, UTC+5) for today, yesterday, month boundaries and stored times. Client components still use the browser clock.
 
 ### 4.11 Other web-only features (short)
 
@@ -425,13 +425,13 @@ const [userAuth, extracted] = await Promise.all([
 `extractFinancialActions(userText, userFinancialContextText?)` in `src/lib/ai/actionExtractionEngine.ts:142`:
 1. Empty text → `casual_chat`.
 2. `sanitizeUserInputForAi()` replaces card numbers → `[KARTA]`, Uzbek phone numbers → `[TELEFON]`, emails → `[EMAIL]`, bearer tokens/API keys → `[TOKEN]`.
-3. `todayDate = getNowLocalDateString()`, `currentTime = getNowLocalTimeString()` (server time).
-4. Builds the system prompt (5.3) and the user prompt:
+3. `todayDate`, `currentTime`, `yesterday` from `nowTashkent()` / `yesterdayTashkent()` (since 1B).
+4. Builds the system prompt (5.3, since 1B also with the allowed category names) and the user prompt:
    ```
    FOYDALANUVCHI XABARI: "<sanitized text>"
    ```
    (plus `FOYDALANUVCHINING MAVJUD MA'LUMOTLARI:` + context when called from the advisor; the bot passes no context).
-5. `generateGeminiJson(fullPrompt, systemPrompt)` (timeout 30 000 ms per HTTP attempt).
+5. `generateGeminiJson(fullPrompt, systemPrompt, …, { budget })` — with a Telegram budget each HTTP attempt gets `min(10 s, time left)`; without one 30 s.
 
 ### 5.2 Model, SDK and request
 
@@ -454,7 +454,7 @@ const [userAuth, extracted] = await Promise.all([
   6. then OpenRouter `google/gemini-2.5-flash` (if `OPENROUTER_API_KEY`/`AI_API_KEY` is set; text parts only, `max_tokens 1500`, `temperature 0.1`).
 
   So in normal operation the **first model that answers is `gemini-flash-lite-latest`**. The code comment says this is to avoid the free-tier daily quota on `gemini-3.8-flash`.
-- Retry rules per model: up to 2 attempts. `404` or `429` → the model is put in a process-wide `disabledModels` set (skipped until the server instance restarts) and the next model is tried. `5xx` → wait 500 ms, retry once, then next model. Other `4xx` → next model. Network error/timeout → wait 500 ms, retry once.
+- Retry rules per model (since 1B): up to 2 attempts. `429` → model skipped for 10 min, `404` → 1 h (`disabledModels` map with expiry), next model. `5xx` → wait 500 ms, retry once if time is left, then next model. Other `4xx` → next model. Timeout → next model (no retry). Network error → wait 500 ms, retry once. With a budget: no new attempt when < 2 s is left; then `AiBudgetExceededError`.
 - The text of all `parts` of the first candidate is joined; markdown code fences are stripped; `JSON.parse`. Parse failure throws.
 
 ### 5.3 The full prompt (system instruction)
@@ -523,16 +523,17 @@ Shape: exactly the schema in the prompt (`RawGeminiOutput`). Validation in `extr
 | `intent` | Must be one of the 4 values, else `casual_chat`. |
 | amount | `rawAmount = Number(amount) \|\| Number(targetAmount) \|\| 0` |
 | `currency` | `"USD"` stays USD; anything else → `UZS`. |
-| `date` | Kept if a valid calendar date, else today. Future dates are allowed. |
-| `time` | Kept as-is if present (not validated), else now. |
+| `date` | Kept if a valid calendar date, else today (Tashkent). Future dates are allowed. |
+| `time` | Kept if valid `HH:mm`, else now (Tashkent). |
+| limits (1B) | More than 10 actions, or any amount above 1 000 000 000 UZS / 100 000 USD → `clarification` with a friendly message, **no** actions. |
 | `create_goal` / `update_goal` | Kept only if `targetAmount > 0`. `goalName` default "Jamg'arma maqsadi". `targetDate` kept only if valid. Description generated. |
 | `contribute_goal` | Kept only if `amount > 0`. |
-| anything else | Treated as `create_transaction`; kept only if `amount > 0`; `transactionType` `income` or else `expense`; description default "Daromad"/"Xarajat"; `categoryName` as given. |
+| anything else | Treated as `create_transaction`; kept only if `amount > 0`; `transactionType` `income` or else `expense`; description default "Daromad"/"Xarajat"; `categoryName` only if it is one of the allowed names (else none). |
 | After loop | If ≥ 1 valid action → `intent = action_proposal`. If Gemini said `action_proposal` but nothing survived → `clarification`. |
 | `summaryUzbek` | Gemini's text; if empty, a template is built (single action or numbered list). Final fallback "Iltimos, ma'lumotingizni tasdiqlang." |
-| On any exception | Logged; returns `{ intent: 'financial_query', actions: [] }` → bot goes to the advisor (§4.9). |
+| On any exception | Logged; returns `{ intent: 'financial_query', actions: [], error: 'ai_unavailable' \| 'budget_exceeded' }`. The bot shows a "try again" message; the web advisor continues as before. |
 
-There is no upper limit on amount (the DB column caps at 9 999 999 999.99) and no limit on the number of actions.
+Limits (since 1B): max 10 actions per message and per-currency amount caps (`src/lib/ai/limits.ts`), checked again in the RPC and the fallback.
 
 ### 5.5 Confirmation step
 
@@ -553,13 +554,13 @@ There is no upper limit on amount (the DB column caps at 9 999 999 999.99) and n
 2. **Path A — RPC** `execute_pending_ai_action_atomic` (migration 011), one DB transaction with `SELECT … FOR UPDATE`:
    - identity checks, idempotency (`executed` → return old message), `cancelled`/expired checks, 2-minute lock;
    - per action:
-     - `create_transaction` → `INSERT transactions (user_id, category_id [exact name match or NULL], description, amount, currency, type, transaction_date, source='manual')`. **`time` is ignored.**
+     - `create_transaction` → `INSERT transactions (user_id, category_id [categoryId if allowed, else exact name, else NULL], description, amount, currency, type, transaction_date, source [action source, default telegram_ai for Telegram], created_at [date + time in Asia/Tashkent])` — since migration 012. Before 012: exact name match, `source='manual'`, time ignored.
      - `create_goal` → `INSERT financial_goals (…, current_amount 0, status 'in_progress')`.
      - `update_goal` → update `target_amount`/`target_date` of the newest in-progress goal whose name matches.
      - `contribute_goal` → `current_amount += amount`, `status = completed` if it reaches target.
    - success → `status='executed'`, `result_message = "✅ Muvaffaqiyatli bajarildi:\n• …"` (amounts like `45,000 UZS`).
    - any error → everything rolls back, `status='failed'`, returns the SQL error text.
-3. **Path B — app-level fallback** (only if the RPC call returns an error, e.g. migration 011 not applied): `claimPendingAction()` (set `executing` + token + lock) → call `createTransaction` / `createGoal` / `updateGoal` / `contributeToGoal` one by one → stop on first error → delete created transactions/goals (rollback) → `markPendingActionCompleted` / `markPendingActionFailed`. Result lines like "Tushlik (45 000 so'm xarajat)".
+3. **Path B — app-level fallback** (only if the RPC call returns an error, e.g. migration 011 not applied): `claimPendingAction()` (conditional UPDATE: pending/failed or stale executing, not expired; exactly one row) → call `createTransaction` (with `categoryId`, time, source) / `createGoal` / `updateGoal` / `contributeToGoal` one by one → stop on first error → rollback: delete created transactions/goals **and restore changed goals** → `markPendingActionCompleted` / `markPendingActionFailed`. Result lines like "Tushlik (45 000 so'm xarajat)". Already executed → success with the stored result (#24).
 
 ### 5.7 Error handling
 
@@ -646,21 +647,21 @@ Items marked ✅ are fixed on the named branch/commit (not deployed yet unless s
 ### Bugs and edge cases in the AI / confirmation flow
 
 11. ✅ *(`7a99dac`: "⏳ Saqlanmoqda..." then the real result; resolved actions show their stored status; ❌ also checks first)* **High — "✅ saved" shown when nothing was saved.** The confirm button edits the message to "Tranzaksiya muvaffaqiyatli saqlandi" *before* checking anything. If the action was already **cancelled** (e.g. user typed "bekor" and then tapped ✅ on the still-visible buttons), `getPendingAction` returns `already_processed` and the handler returns silently — the user keeps seeing "saved".
-12. **Medium — Race in the app-level fallback claim.** `claimPendingAction` updates the row without `WHERE status = 'pending'` (`pendingActionStore.ts:356`), so two near-simultaneous confirms can both execute → duplicate transactions. (The RPC path is safe because of `FOR UPDATE`.)
-13. **Medium — Rollback is incomplete in the fallback path.** It deletes created transactions/goals but does not undo `update_goal` or `contribute_goal` changes.
-14. **Medium — Category is usually lost in the AI flow.** Gemini is not given the category list, so `categoryName` is free text (e.g. "Ovqat"); the RPC needs an exact name match against English system names → `category_id = NULL` → shows as "Boshqa".
-15. **Medium — `matchPredictedToDbCategory` falls back to the first category** (`predictCategory.ts`, `return categories[0]`), so unknown names silently get an unrelated category (web manual flow and AI fallback path). The substring rule (`pred.includes(cn)`) can also match wrong short names.
-16. **Medium — Time zone.** "Today", "now", "kecha" and month boundaries use the server clock (UTC on Vercel). Between 00:00 and 05:00 Tashkent, "bugun" is saved as yesterday. The prompt's "kecha" uses `toISOString()` (UTC) while "bugun" uses local time.
-17. **Medium — Transaction time is lost or wrong.** The AI `time` is ignored by both execution paths. In the web flow, `created_at` is built as `"<date>T<time>:00Z"`, i.e. Tashkent time stored as UTC (5 h off).
-18. **Medium — AI-created rows are marked `source='manual'`**, so you cannot tell Telegram/AI entries from manual ones.
-19. **Medium — Proposals made inside the advisor cannot be confirmed from Telegram.** (a) The 2nd extraction in `askFinancialAdvisor` saves pending actions **without** `telegram_user_id`, but the bot's "ha" lookup filters by `telegram_user_id`; and they are sent without buttons. (b) `processFinancialIntent` proposals are stored in a conversation that is created fresh for every Telegram message, so the next "ha" never sees them. This mainly happens when the first Gemini call fails.
-20. **Medium — Hard-coded 5 000 000 default.** In `financialActionEngine.ts` scenario 1 ("naqd pul bor"), if no amount is parsed it proposes **5 000 000 so'm**.
-21. **Medium — Duplicate/slow AI work per message.** A `financial_query` costs up to three Gemini calls (extraction, extraction again, answer). With 5 models × 2 attempts × 30 s timeout plus OpenRouter, the worst case is far beyond the webhook's `maxDuration = 30` s; the function may be killed mid-way and the user gets nothing.
-22. **Medium — `disabledModels` is permanent per server instance.** One `429` disables a model until the instance restarts, even after the quota resets.
-23. **Low — A failed action can be re-confirmed** (status `failed` passes all checks), which is fine for retries but `retry_count` only increments for stale `executing` locks.
-24. **Low — RPC "already executed" is reported as an error** ("⚠️ Xatolik yuz berdi: Ushbu amal allaqachon bajarilgan") on a double tap race.
-25. **Low — No limits** on number of actions per message or on very large amounts (DB will reject > 9 999 999 999.99 with a raw SQL error shown to the user).
-26. **Low — Old buttons stay forever.** Expired proposals are never edited; the buttons stay until pressed.
+12. ✅ *(fix/1b-ai-flow `a376ab7`: conditional UPDATE + exactly one row)* **Medium — Race in the app-level fallback claim.** `claimPendingAction` updates the row without `WHERE status = 'pending'` (`pendingActionStore.ts:356`), so two near-simultaneous confirms can both execute → duplicate transactions. (The RPC path is safe because of `FOR UPDATE`.)
+13. ✅ *(`a376ab7`: goal snapshots restored)* **Medium — Rollback is incomplete in the fallback path.** It deletes created transactions/goals but does not undo `update_goal` or `contribute_goal` changes.
+14. ✅ *(`7d23dbc`, `cafe57e`, `b3cd679`: user's category list in the prompt, whitelist, `categoryId` in both paths, new `Internet & Phone` system row)* **Medium — Category is usually lost in the AI flow.** Gemini is not given the category list, so `categoryName` is free text (e.g. "Ovqat"); the RPC needs an exact name match against English system names → `category_id = NULL` → shows as "Boshqa".
+15. ✅ *(`7d23dbc`: exact / Uzbek→system mapping only)* **Medium — `matchPredictedToDbCategory` falls back to the first category** (`predictCategory.ts`, `return categories[0]`), so unknown names silently get an unrelated category (web manual flow and AI fallback path). The substring rule (`pred.includes(cn)`) can also match wrong short names.
+16. ✅ *(`f27e369`, `e6e0a25`: `src/lib/time/tashkent.ts`)* **Medium — Time zone.** "Today", "now", "kecha" and month boundaries use the server clock (UTC on Vercel). Between 00:00 and 05:00 Tashkent, "bugun" is saved as yesterday. The prompt's "kecha" uses `toISOString()` (UTC) while "bugun" uses local time.
+17. ✅ *(`b3cd679`, `a376ab7`: `+05:00` in web flow, RPC and fallback)* **Medium — Transaction time is lost or wrong.** The AI `time` is ignored by both execution paths. In the web flow, `created_at` is built as `"<date>T<time>:00Z"`, i.e. Tashkent time stored as UTC (5 h off).
+18. ✅ *(`b3cd679`: `telegram_ai` / `telegram_voice`; needs migration 012)* **Medium — AI-created rows are marked `source='manual'`**, so you cannot tell Telegram/AI entries from manual ones.
+19. ✅ *(`e6e0a25`: Telegram advisor only answers; all Telegram proposals come from the bot's extraction with buttons)* **Medium — Proposals made inside the advisor cannot be confirmed from Telegram.** (a) The 2nd extraction in `askFinancialAdvisor` saves pending actions **without** `telegram_user_id`, but the bot's "ha" lookup filters by `telegram_user_id`; and they are sent without buttons. (b) `processFinancialIntent` proposals are stored in a conversation that is created fresh for every Telegram message, so the next "ha" never sees them. This mainly happens when the first Gemini call fails.
+20. ✅ *(`e6e0a25`: asks for the amount)* **Medium — Hard-coded 5 000 000 default.** In `financialActionEngine.ts` scenario 1 ("naqd pul bor"), if no amount is parsed it proposes **5 000 000 so'm**.
+21. ✅ *(`cafe57e`, `e6e0a25`: one extraction, 25 s budget, ≤10 s per call)* **Medium — Duplicate/slow AI work per message.** A `financial_query` costs up to three Gemini calls (extraction, extraction again, answer). With 5 models × 2 attempts × 30 s timeout plus OpenRouter, the worst case is far beyond the webhook's `maxDuration = 30` s; the function may be killed mid-way and the user gets nothing.
+22. ✅ *(`cafe57e`: 429 → 10 min, 404 → 1 h)* **Medium — `disabledModels` is permanent per server instance.** One `429` disables a model until the instance restarts, even after the quota resets.
+23. ➖ *(kept as is by decision; ✅ re-attaches the buttons after a failure so a retry is possible)* **Low — A failed action can be re-confirmed** (status `failed` passes all checks), which is fine for retries but `retry_count` only increments for stale `executing` locks.
+24. ✅ *(`a376ab7`)* **Low — RPC "already executed" is reported as an error** ("⚠️ Xatolik yuz berdi: Ushbu amal allaqachon bajarilgan") on a double tap race.
+25. ✅ *(`cafe57e`, `b3cd679`: max 10 actions, 1 000 000 000 so'm / 100 000 $ per action, checked in extraction, RPC and fallback)* **Low — No limits** on number of actions per message or on very large amounts (DB will reject > 9 999 999 999.99 with a raw SQL error shown to the user).
+26. ✅ *(1A `7a99dac` on press; 1B `e6e0a25` bare "ha" says it expired)* **Low — Old buttons stay forever.** Expired proposals are never edited; the buttons stay until pressed.
 
 ### Savings / goals / balance
 
