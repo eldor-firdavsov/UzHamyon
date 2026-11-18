@@ -14,6 +14,8 @@ import { executePendingActionRecord } from '../ai/actionExecutor.ts';
 import { askFinancialAdvisor } from '../ai/advisorService.ts';
 import type { PendingActionRecord } from '../ai/pendingActionStore.ts';
 import { escapeHtml } from './html.ts';
+import { callBotApi, getBotToken } from './botApi.ts';
+import { telegramSessionCache, sessionExpiryMs } from './sessionCache.ts';
 import { AiBudget } from '../ai/aiBudget.ts';
 import { loadCategoryOptions, categoryNamesByType, attachCategoryIds } from '../categories/catalog.ts';
 import { notifyCompletedGoals } from '../goals/notifications.ts';
@@ -21,14 +23,6 @@ import { notifyCompletedGoals } from '../goals/notifications.ts';
 /** Shown when the AI could not answer in time or is unavailable (#21). */
 export const AI_RETRY_MESSAGE =
   '⏳ Kechirasiz, hozir xabaringizni tahlil qila olmadim. Iltimos, birozdan so‘ng qayta yozib ko‘ring.';
-
-function getBotToken(): string {
-  const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
-  if (!token) {
-    throw new Error('TELEGRAM_BOT_TOKEN muhit o‘zgaruvchisi sozlanmagan');
-  }
-  return token;
-}
 
 export const MINIAPP_URL = process.env.TELEGRAM_MINIAPP_URL || 'https://uzhamyon.vercel.app/';
 
@@ -38,7 +32,6 @@ export const MINIAPP_URL = process.env.TELEGRAM_MINIAPP_URL || 'https://uzhamyon
  * If chatId is provided, sets it specifically for that chat; otherwise sets default for all users.
  */
 export async function setTelegramChatMenuButton(chatId?: number): Promise<{ ok: boolean; error?: string }> {
-  const url = `https://api.telegram.org/bot${getBotToken()}/setChatMenuButton`;
   const payload: Record<string, unknown> = {
     menu_button: {
       type: 'web_app',
@@ -49,19 +42,8 @@ export async function setTelegramChatMenuButton(chatId?: number): Promise<{ ok: 
   if (chatId) {
     payload.chat_id = chatId;
   }
-
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json();
-    return { ok: Boolean(data?.ok), error: data?.description };
-  } catch (err) {
-    console.error('Failed to set Telegram chat menu button:', err);
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
-  }
+  const data = await callBotApi('setChatMenuButton', payload);
+  return { ok: Boolean(data?.ok), error: data?.description };
 }
 
 export interface TelegramUpdate {
@@ -111,16 +93,7 @@ export interface TelegramUpdate {
  * Sends a message via Telegram Bot API with optional WebApp inline keyboard.
  */
 export async function sendTelegramMessage(chatId: number, text: string, buttonText?: string, webAppUrl?: string) {
-  const url = `https://api.telegram.org/bot${getBotToken()}/sendMessage`;
-
-  const payload: {
-    chat_id: number;
-    text: string;
-    parse_mode: string;
-    reply_markup?: {
-      inline_keyboard: Array<Array<{ text: string; web_app: { url: string } }>>;
-    };
-  } = {
+  const payload: Record<string, unknown> = {
     chat_id: chatId,
     text,
     parse_mode: 'HTML',
@@ -128,28 +101,11 @@ export async function sendTelegramMessage(chatId: number, text: string, buttonTe
 
   if (buttonText && webAppUrl) {
     payload.reply_markup = {
-      inline_keyboard: [
-        [
-          {
-            text: buttonText,
-            web_app: { url: webAppUrl },
-          },
-        ],
-      ],
+      inline_keyboard: [[{ text: buttonText, web_app: { url: webAppUrl } }]],
     };
   }
 
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    return await res.json();
-  } catch (err) {
-    console.error('Failed to send Telegram message:', err);
-    return null;
-  }
+  return callBotApi('sendMessage', payload);
 }
 
 /**
@@ -160,50 +116,21 @@ export async function sendTelegramInlineButtons(
   text: string,
   inlineKeyboard: Array<Array<{ text: string; callback_data?: string; web_app?: { url: string } }>>
 ) {
-  const url = `https://api.telegram.org/bot${getBotToken()}/sendMessage`;
-  const payload = {
+  return callBotApi('sendMessage', {
     chat_id: chatId,
     text,
     parse_mode: 'HTML',
-    reply_markup: {
-      inline_keyboard: inlineKeyboard,
-    },
-  };
-
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    return await res.json();
-  } catch (err) {
-    console.error('Failed to send Telegram inline keyboard message:', err);
-    return null;
-  }
+    reply_markup: { inline_keyboard: inlineKeyboard },
+  });
 }
 
 /**
  * Acknowledges a Telegram callback query
  */
 export async function answerTelegramCallbackQuery(callbackQueryId: string, text?: string) {
-  const url = `https://api.telegram.org/bot${getBotToken()}/answerCallbackQuery`;
-  const payload: { callback_query_id: string; text?: string } = {
-    callback_query_id: callbackQueryId,
-  };
+  const payload: Record<string, unknown> = { callback_query_id: callbackQueryId };
   if (text) payload.text = text;
-
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    return await res.json();
-  } catch (err) {
-    console.error('Failed to answer Telegram callback query:', err);
-    return null;
-  }
+  return callBotApi('answerCallbackQuery', payload);
 }
 
 /**
@@ -215,7 +142,6 @@ export async function editTelegramMessageText(
   text: string,
   inlineKeyboard?: Array<Array<{ text: string; callback_data?: string; web_app?: { url: string } }>>
 ) {
-  const url = `https://api.telegram.org/bot${getBotToken()}/editMessageText`;
   // Without reply_markup Telegram removes the inline keyboard from the edited message.
   const payload: Record<string, unknown> = {
     chat_id: chatId,
@@ -227,36 +153,15 @@ export async function editTelegramMessageText(
     payload.reply_markup = { inline_keyboard: inlineKeyboard };
   }
 
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    return await res.json();
-  } catch (err) {
-    console.error('Failed to edit Telegram message text:', err);
-    return null;
-  }
+  return callBotApi('editMessageText', payload);
 }
 
 /**
  * Broadcasts a chat action (e.g. 'typing') to inform the user the bot is actively processing.
  */
 export async function sendTelegramChatAction(chatId: number, action: string = 'typing'): Promise<boolean> {
-  const url = `https://api.telegram.org/bot${getBotToken()}/sendChatAction`;
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, action }),
-    });
-    const data = await res.json();
-    return Boolean(data?.ok);
-  } catch (err) {
-    console.warn('[Telegram Bot] Failed to send chat action:', err);
-    return false;
-  }
+  const data = await callBotApi('sendChatAction', { chat_id: chatId, action }, { timeoutMs: 5_000 });
+  return Boolean(data?.ok);
 }
 
 /**
@@ -268,6 +173,23 @@ export async function getTelegramUserSupabaseClient(tgUser: {
   last_name?: string;
   username?: string;
 }): Promise<{ client: SupabaseClient; userId: string; onboardingCompleted: boolean } | null> {
+  const buildClient = (accessToken: string) =>
+    createClient(getSupabaseUrl(), getSupabaseAnonKey(), {
+      global: { headers: { Authorization: `Bearer ${accessToken}` } },
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+  // 1. Reuse a fresh cached session (no Supabase Auth call) — #34.
+  const cached = telegramSessionCache.get(tgUser.id);
+  if (cached) {
+    return {
+      client: buildClient(cached.accessToken),
+      userId: cached.userId,
+      onboardingCompleted: cached.onboardingCompleted,
+    };
+  }
+
+  // 2. Otherwise sign in (or create the user) and cache the session.
   try {
     const authSession = await getOrCreateTelegramUser({
       id: tgUser.id,
@@ -280,22 +202,24 @@ export async function getTelegramUserSupabaseClient(tgUser: {
       return null;
     }
 
-    const client = createClient(getSupabaseUrl(), getSupabaseAnonKey(), {
-      global: {
-        headers: {
-          Authorization: `Bearer ${authSession.session.access_token}`,
-        },
-      },
-      auth: { autoRefreshToken: false, persistSession: false },
+    telegramSessionCache.set(tgUser.id, {
+      userId: authSession.user.id,
+      accessToken: authSession.session.access_token,
+      onboardingCompleted: authSession.onboarding_completed,
+      expiresAtMs: sessionExpiryMs(authSession.session.expires_at, authSession.session.access_token),
     });
 
     return {
-      client,
+      client: buildClient(authSession.session.access_token),
       userId: authSession.user.id,
       onboardingCompleted: authSession.onboarding_completed,
     };
   } catch (err) {
-    console.error('[Telegram Bot] Failed to resolve Supabase user client for Telegram ID:', tgUser.id, err);
+    console.error(
+      '[Telegram Bot] Failed to resolve Supabase user client for Telegram ID:',
+      tgUser.id,
+      err instanceof Error ? err.message : err
+    );
     return null;
   }
 }
@@ -330,6 +254,32 @@ export async function isReturningTelegramUser(telegramId: number): Promise<boole
     console.error('Error checking returning user:', e);
     return false;
   }
+}
+
+export const BOT_USERNAME = 'uz_hamyonbot';
+
+export const GROUP_CHAT_NOTE =
+  `Men faqat shaxsiy chatda ishlayman — moliyaviy ma’lumotlaringiz xavfsizligi uchun. 🙂\n👉 t.me/${BOT_USERNAME}`;
+
+/** "/start", "/help@uz_hamyonbot" → true; "/help@other_bot" or plain text → false. */
+export function isCommandForThisBot(text: string, botUsername: string = BOT_USERNAME): boolean {
+  const m = text.trim().match(/^\/[A-Za-z0-9_]+(?:@([A-Za-z0-9_]+))?(?:\s|$)/);
+  if (!m) return false;
+  return !m[1] || m[1].toLowerCase() === botUsername.toLowerCase();
+}
+
+/** Clears profiles.telegram_blocked_at (migration 014). Silent if the column is missing. */
+async function clearTelegramBlockedFlag(telegramId: number): Promise<void> {
+  const serviceRoleKey = getSupabaseServiceRoleKey();
+  if (!serviceRoleKey) return;
+  const admin = createClient(getSupabaseUrl(), serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  await admin
+    .from('profiles')
+    .update({ telegram_blocked_at: null })
+    .eq('email', `tg_${telegramId}@telegram.uzhamyon.uz`)
+    .not('telegram_blocked_at', 'is', null);
 }
 
 function buildConfirmKeyboard(actionId: string) {
@@ -381,7 +331,8 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
     if (!from || !message || typeof from.id !== 'number' || from.id <= 0) return;
 
     await answerTelegramCallbackQuery(cb.id);
-    setTelegramChatMenuButton(message.chat.id).catch(() => {});
+    // Financial actions only in private chats (#39).
+    if (message.chat.type !== 'private') return;
 
     if (data.startsWith('act_confirm:')) {
       const actionId = data.replace('act_confirm:', '');
@@ -479,6 +430,15 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
   const message = update.message;
   if (!message || !message.text || !message.from || typeof message.from.id !== 'number' || message.from.id <= 0) return;
 
+  // Groups / channels: finance data must never be shown there (#39). Ignore everything
+  // except a command addressed to the bot, which gets one short note.
+  if (message.chat.type !== 'private') {
+    if (isCommandForThisBot(message.text)) {
+      await sendTelegramMessage(message.chat.id, GROUP_CHAT_NOTE);
+    }
+    return;
+  }
+
   // One AI time budget for everything this update does (#21).
   const budget = new AiBudget();
 
@@ -490,11 +450,12 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
   // Immediately broadcast 'typing' chat action so user sees loading feedback right away
   sendTelegramChatAction(chatId, 'typing').catch(() => {});
 
-  // Ensure Chat Menu Button is always active on the left side of the chat
-  setTelegramChatMenuButton(chatId).catch(() => {});
-
   // 2.1 Slash command: /start
   if (text.startsWith('/start')) {
+    // Menu button only here (#38); the global default is set by scripts/set_webhook.mjs.
+    setTelegramChatMenuButton(chatId).catch(() => {});
+    // A user who unblocked the bot usually presses Start: allow reminders again (#36).
+    clearTelegramBlockedFlag(from.id).catch(() => {});
     const isReturning = await isReturningTelegramUser(from.id);
 
     if (isReturning) {
