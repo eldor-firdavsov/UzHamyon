@@ -39,7 +39,8 @@ function scheduleNext() {
   setTimeout(async () => {
     console.log(`\n🔔 [${new Date().toLocaleTimeString('uz-UZ', { timeZone: 'Asia/Tashkent' })}] Soat 20:00 bo‘ldi! Barcha foydalanuvchilarga eslatma yuborilmoqda...`);
     try {
-      const res = await broadcastDailyTransactionReminders();
+      // Long-running local process: no serverless time limit.
+      const res = await broadcastDailyTransactionReminders(undefined, { timeBudgetMs: 6 * 60 * 60 * 1000 });
       console.log(`✅ Eslatmalar yuborildi: Jami: ${res.total}, Yuborildi: ${res.sent}, Bloklagan: ${res.blocked}, Xato: ${res.failed}`);
     } catch (err) {
       console.error('❌ Eslatma yuborishda xatolik:', err);

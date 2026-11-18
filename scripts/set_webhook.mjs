@@ -11,6 +11,9 @@
  *   TELEGRAM_BOT_TOKEN       (required)
  *   TELEGRAM_WEBHOOK_SECRET  (required) 1-256 chars, only A-Z a-z 0-9 _ -
  *   WEBHOOK_URL              (optional) default https://uzhamyon.vercel.app/api/telegram/webhook
+ *   TELEGRAM_MINIAPP_URL     (optional) default https://uzhamyon.vercel.app/ — also sets the
+ *                            default "UzHamyon" menu button for ALL chats (so the bot no longer
+ *                            calls setChatMenuButton on every message).
  */
 
 const DEFAULT_WEBHOOK_URL = 'https://uzhamyon.vercel.app/api/telegram/webhook';
@@ -54,6 +57,12 @@ await callBotApi('setWebhook', {
   allowed_updates: ALLOWED_UPDATES,
   drop_pending_updates: false,
 });
+
+const miniAppUrl = process.env.TELEGRAM_MINIAPP_URL?.trim() || 'https://uzhamyon.vercel.app/';
+await callBotApi('setChatMenuButton', {
+  menu_button: { type: 'web_app', text: 'UzHamyon', web_app: { url: miniAppUrl } },
+});
+console.log(`✅ Default menu button set → ${miniAppUrl}`);
 
 const info = await callBotApi('getWebhookInfo');
 console.log('✅ Webhook set. Current info (no secrets):');
