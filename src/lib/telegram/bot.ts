@@ -14,6 +14,12 @@ import { executePendingActionRecord } from '../ai/actionExecutor.ts';
 import { askFinancialAdvisor } from '../ai/advisorService.ts';
 import type { PendingActionRecord } from '../ai/pendingActionStore.ts';
 import { escapeHtml } from './html.ts';
+import { AiBudget } from '../ai/aiBudget.ts';
+import { loadCategoryOptions, categoryNamesByType, attachCategoryIds } from '../categories/catalog.ts';
+
+/** Shown when the AI could not answer in time or is unavailable (#21). */
+export const AI_RETRY_MESSAGE =
+  '⏳ Kechirasiz, hozir xabaringizni tahlil qila olmadim. Iltimos, birozdan so‘ng qayta yozib ko‘ring.';
 
 function getBotToken(): string {
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
@@ -470,6 +476,9 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
   const message = update.message;
   if (!message || !message.text || !message.from || typeof message.from.id !== 'number' || message.from.id <= 0) return;
 
+  // One AI time budget for everything this update does (#21).
+  const budget = new AiBudget();
+
   const chatId = message.chat.id;
   const from = message.from;
   const text = message.text.trim();
@@ -540,14 +549,21 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
           return;
         }
       }
+
+      // A bare "ha" / "bekor" with nothing active (e.g. the 15-minute window passed):
+      // say so instead of sending the word to the AI (#26).
+      if (text.split(/\s+/).length <= 2) {
+        await sendTelegramMessage(
+          chatId,
+          '⌛ Tasdiqlanadigan faol taklif topilmadi (muddati tugagan bo‘lishi mumkin). Iltimos, xabaringizni qayta yuboring.'
+        );
+        return;
+      }
     }
   }
 
-  // Ultra-fast parallel execution: resolve Supabase user client and extract AI actions concurrently
-  const [userAuth, extracted] = await Promise.all([
-    getTelegramUserSupabaseClient(from),
-    extractFinancialActions(text),
-  ]);
+  // Sign in first so the AI gets the user's real category list (#14).
+  const userAuth = await getTelegramUserSupabaseClient(from);
 
   if (!userAuth) {
     const defaultMsg = `Assalomu alaykum, ${firstName}!\n\nUzHamyon ilovasi orqali hisobingizni ochish uchun quyidagi tugmani bosing:`;
@@ -555,10 +571,28 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
     return;
   }
 
+  const categoryOptions = await loadCategoryOptions(userAuth.client);
+
+  // Exactly ONE extraction per message (#21), within the shared time budget.
+  const extracted = await extractFinancialActions(text, {
+    categories: categoryOptions.length ? categoryNamesByType(categoryOptions) : undefined,
+    budget,
+  });
+
+  if (extracted.error) {
+    // The AI was unavailable or out of time: do not guess, ask the user to retry.
+    await sendTelegramMessage(chatId, AI_RETRY_MESSAGE);
+    return;
+  }
+
   if (extracted.intent === 'action_proposal' && extracted.actions.length > 0) {
+    const actions = attachCategoryIds(extracted.actions, categoryOptions).map((a) => ({
+      ...a,
+      source: a.source || 'telegram_ai',
+    }));
     const saveRes = await savePendingAction(
       userAuth.userId,
-      extracted.actions,
+      actions,
       extracted.summaryUzbek,
       {
         telegramUserId: from.id,
@@ -595,7 +629,7 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
   }
 
   if (extracted.intent === 'financial_query') {
-    const advisorRes = await askFinancialAdvisor(text, undefined, userAuth.client);
+    const advisorRes = await askFinancialAdvisor(text, undefined, userAuth.client, { channel: 'telegram', budget });
     const reply = advisorRes.data?.answer
       ? escapeHtml(advisorRes.data.answer)
       : 'Moliyaviy ma’lumotlarni tahlil qilishda xatolik yuz berdi.';
@@ -604,7 +638,7 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
   }
 
   // Casual chat or general query fallback
-  const advisorRes = await askFinancialAdvisor(text, undefined, userAuth.client);
+  const advisorRes = await askFinancialAdvisor(text, undefined, userAuth.client, { channel: 'telegram', budget });
   const reply = advisorRes.data?.answer
     ? escapeHtml(advisorRes.data.answer)
     : `Assalomu alaykum, ${firstName}! Sizga qanday yordam bera olaman?`;

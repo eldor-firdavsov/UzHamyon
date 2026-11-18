@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { createTransaction, deleteTransaction } from '../transactions/service.ts';
+import { todayTashkent, yesterdayTashkent, monthRangeTashkent } from '../time/tashkent.ts';
 
 export interface PendingAction {
   action_id: string;
@@ -218,7 +219,7 @@ export async function executePendingAction(
           currency,
           type: 'income',
           description,
-          transaction_date: date || new Date().toISOString().split('T')[0],
+          transaction_date: date || todayTashkent(),
           category_id: category_id || undefined,
         },
         supabase
@@ -243,7 +244,7 @@ export async function executePendingAction(
           currency,
           type: 'expense',
           description,
-          transaction_date: date || new Date().toISOString().split('T')[0],
+          transaction_date: date || todayTashkent(),
           category_id: category_id || undefined,
         },
         supabase
@@ -307,8 +308,7 @@ export async function executePendingAction(
     if (action.type === 'create_goal') {
       const { amount, target_amount, currency = 'UZS', goal_name = 'Jamg‘arma maqsadi', target_date } = action.params;
       const targetAmt = target_amount || amount || 1000000;
-      const now = new Date();
-      const defaultDate = target_date || new Date(Date.UTC(now.getFullYear() + 1, now.getMonth(), 1)).toISOString().split('T')[0];
+      const defaultDate = target_date || monthRangeTashkent(Number(todayTashkent().slice(0, 4)) + 1, Number(todayTashkent().slice(5, 7))).start;
 
       const { data: userAuth } = await supabase.auth.getUser();
       const uid = userAuth?.user?.id;
@@ -433,9 +433,9 @@ export async function processFinancialIntent(
   supabase: SupabaseClient
 ): Promise<EngineResult> {
   const norm = cleanText(userText);
-  const now = new Date();
-  const today = now.toISOString().split('T')[0];
-  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  const today = todayTashkent();
+  const yesterday = yesterdayTashkent();
+  const [nowYear, nowMonth] = today.split('-').map(Number);
 
   // 1. Fetch the last assistant message in this conversation to inspect pending actions
   const { data: lastAssistantMsgs } = await supabase
@@ -683,7 +683,7 @@ export async function processFinancialIntent(
     }
 
     const { amount, currency } = parsed;
-    const nextYear = new Date(Date.UTC(now.getFullYear() + 1, now.getMonth(), 1)).toISOString().split('T')[0];
+    const nextYear = monthRangeTashkent(nowYear + 1, nowMonth).start;
 
     const pendingAction: PendingAction = {
       action_id: `act-${Date.now()}`,
@@ -724,7 +724,7 @@ export async function processFinancialIntent(
 
     const { amount, currency } = parsed;
     const goalName = item === 'mashina' ? 'Mashina' : 'Yangi uy';
-    const nextYear = new Date(Date.UTC(now.getFullYear() + 1, now.getMonth(), 1)).toISOString().split('T')[0];
+    const nextYear = monthRangeTashkent(nowYear + 1, nowMonth).start;
 
     const pendingAction: PendingAction = {
       action_id: `act-${Date.now()}`,
@@ -751,8 +751,7 @@ export async function processFinancialIntent(
     (norm.includes('bu oy') || norm.includes('shu oy')) &&
     (norm.includes('sarfladim') || norm.includes('xarajat') || norm.includes('sarfla'))
   ) {
-    const startOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1)).toISOString().split('T')[0];
-    const endOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 0)).toISOString().split('T')[0];
+    const { start: startOfMonth, end: endOfMonth } = monthRangeTashkent(nowYear, nowMonth);
 
     const { data: txs } = await supabase
       .from('transactions')
@@ -827,8 +826,14 @@ export async function processFinancialIntent(
     (norm.includes('naqd') && norm.includes('bor'))
   ) {
     const parsed = extractAmountAndCurrency(userText);
-    const amount = parsed ? parsed.amount : 5000000;
-    const currency = parsed ? parsed.currency : 'UZS';
+    if (!parsed) {
+      // Never assume an amount: ask the user instead.
+      return {
+        handled: true,
+        answer: 'Qancha naqd pulingiz bor? Iltimos, summani yozing (masalan: 2 000 000 so‘m).',
+      };
+    }
+    const { amount, currency } = parsed;
 
     const pendingAction: PendingAction = {
       action_id: `act-${Date.now()}`,

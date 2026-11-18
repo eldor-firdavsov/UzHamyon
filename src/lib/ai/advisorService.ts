@@ -1,6 +1,8 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { generateAIContent } from './aiClient.ts';
+import type { AiBudget } from './aiBudget.ts';
 import type { AIConversation, AIMessage } from '../../types/database.ts';
+import { todayTashkent, addDaysToDate } from '../time/tashkent.ts';
 
 export interface ServiceResult<T> {
   data: T | null;
@@ -29,9 +31,8 @@ function computeMonthsRemaining(today: Date, targetDateStr: string): number {
   const tYear = parseInt(parts[0], 10);
   const tMonth = parseInt(parts[1], 10);
   const tDay = parseInt(parts[2], 10);
-  const cYear = today.getFullYear();
-  const cMonth = today.getMonth() + 1;
-  const cDay = today.getDate();
+  // "Today" is the Tashkent calendar date, not the server's (UTC on Vercel).
+  const [cYear, cMonth, cDay] = todayTashkent(today).split('-').map(Number);
   const todayMs = Date.UTC(cYear, cMonth - 1, cDay);
   const targetMs = Date.UTC(tYear, tMonth - 1, tDay);
   if (targetMs < todayMs) return 0;
@@ -358,10 +359,22 @@ function buildVerifiedFallbackAnswer(question: string, facts: VerifiedFinancialF
 }/**
  * Handles conversational financial advisory with Gemini grounded on verified facts
  */
+export interface AskAdvisorOptions {
+  /**
+   * 'telegram': the bot already ran the single action extraction for this message, so the
+   * advisor only answers. It skips the regex engine, the typed "ha"/"bekor" lookup and the
+   * second extraction (proposals there could not be confirmed from Telegram; see #19, #21).
+   */
+  channel?: 'web' | 'telegram';
+  /** Shared AI time budget for this Telegram update. */
+  budget?: AiBudget;
+}
+
 export async function askFinancialAdvisor(
   question: string,
   conversationId?: string,
-  client?: SupabaseClient
+  client?: SupabaseClient,
+  options: AskAdvisorOptions = {}
 ): Promise<
   ServiceResult<{
     conversationId: string;
@@ -466,9 +479,14 @@ export async function askFinancialAdvisor(
       } catch {}
     }
 
+    const isTelegram = options.channel === 'telegram';
+
     // 3.1 Check deterministic financial action engine (5 core scenarios, clarifications, confirmations)
+    // Web only: its proposals live in this conversation and cannot be confirmed from Telegram.
     const { processFinancialIntent } = await import('./financialActionEngine.ts');
-    const intentResult = await processFinancialIntent(question, convId!, user.id, supabase);
+    const intentResult = isTelegram
+      ? { handled: false as const, answer: '', pendingAction: undefined, actionResult: undefined }
+      : await processFinancialIntent(question, convId!, user.id, supabase);
 
     if (intentResult.handled) {
       const evidence = {
@@ -518,7 +536,7 @@ export async function askFinancialAdvisor(
     } = await import('./pendingActionStore.ts');
     const { executePendingActionRecord } = await import('./actionExecutor.ts');
 
-    const latestPending = await getLatestActivePendingAction(user.id);
+    const latestPending = isTelegram ? null : await getLatestActivePendingAction(user.id);
     if (latestPending && latestPending.status === 'pending') {
       if (isUserConfirmation(question)) {
         const execRes = await executePendingActionRecord(latestPending, supabase);
@@ -592,10 +610,20 @@ export async function askFinancialAdvisor(
 
     // 3.3 Gemini structured action extraction (multi-transaction, goals, savings)
     const { extractFinancialActions } = await import('./actionExtractionEngine.ts');
-    const extraction = await extractFinancialActions(question, verified.text);
+    const { loadCategoryOptions, categoryNamesByType, attachCategoryIds } = await import(
+      '../categories/catalog.ts'
+    );
+    const categoryOptions = isTelegram ? [] : await loadCategoryOptions(supabase);
+    const extraction = isTelegram
+      ? { intent: 'financial_query' as const, actions: [], summaryUzbek: '', clarificationQuestion: undefined }
+      : await extractFinancialActions(question, {
+          userFinancialContextText: verified.text,
+          categories: categoryOptions.length ? categoryNamesByType(categoryOptions) : undefined,
+        });
 
     if (extraction.intent === 'action_proposal' && extraction.actions.length > 0) {
-      const saveRes = await savePendingAction(user.id, extraction.actions, extraction.summaryUzbek);
+      const actionsWithCategories = attachCategoryIds(extraction.actions, categoryOptions);
+      const saveRes = await savePendingAction(user.id, actionsWithCategories, extraction.summaryUzbek);
       const pending = saveRes.record;
       if (!pending) {
         return {
@@ -725,7 +753,7 @@ Asosiy vazifalar va javob tuzilishi:
     const sanitizedQuestion = sanitizeUserInputForAi(question.trim());
     const fullPrompt = `${verified.text}\n\nUSER QUESTION: ${sanitizedQuestion}`;
 
-    const aiRes = await generateAIContent(fullPrompt, systemInstruction);
+    const aiRes = await generateAIContent(fullPrompt, systemInstruction, 25000, { budget: options.budget });
 
     // If the AI provider is unavailable, answer only from verified database facts
     const finalAnswer =
@@ -827,7 +855,7 @@ export async function simulateBudgetScenario(
       return { data: null, error: 'Avtorizatsiyadan o‘tilmagan: Tizimga kirish talab qilinadi', status: 401 };
     }
 
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
+    const thirtyDaysAgo = addDaysToDate(todayTashkent(), -30);
 
     const { data: txs } = await supabase
       .from('transactions')
