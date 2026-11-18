@@ -217,12 +217,13 @@ describe('Gemini API Integration & Safe AI Financial Action Execution', () => {
     const firstExec = await executePendingActionRecord(pending, testUserClient);
     assert.strictEqual(firstExec.success, true);
 
-    // Immediate second execution must be rejected idempotently
+    // Immediate second execution is idempotent (#24): it reports the stored result as
+    // success instead of an error, and must NOT insert a second row (checked below).
     const secondExec = await executePendingActionRecord(pending, testUserClient);
-    assert.strictEqual(secondExec.success, false);
+    assert.strictEqual(secondExec.success, true);
     assert.ok(
-      secondExec.message.includes('allaqachon bajarilgan') ||
-      secondExec.message.includes('imkonsiz')
+      secondExec.message.includes('Muvaffaqiyatli') ||
+      secondExec.message.includes('allaqachon saqlangan')
     );
 
     // Verify database has only 1 transaction, not 2
