@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getGoal, updateGoal, deleteGoal } from '@/lib/goals/service';
+import { notifyCompletedGoals } from '@/lib/goals/notifications';
+import { createClient } from '@/lib/supabase/server';
 
 export async function GET(
   _request: NextRequest,
@@ -31,6 +33,10 @@ export async function PUT(
 
     if (result.error) {
       return NextResponse.json({ error: result.error }, { status: result.status });
+    }
+
+    if (result.data?.status === 'completed') {
+      await notifyCompletedGoals(await createClient());
     }
 
     return NextResponse.json({ goal: result.data }, { status: 200 });

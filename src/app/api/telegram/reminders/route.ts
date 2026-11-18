@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   getRegisteredTelegramUsers,
   broadcastDailyTransactionReminders,
+  runDailyGoalDeadlineNotices,
 } from '@/lib/telegram/reminders';
 import { isCronAuthorized as isCronHeaderAuthorized } from '@/lib/telegram/requestAuth';
 
@@ -12,6 +13,8 @@ function isCronAuthorized(req: NextRequest): boolean {
 
 async function runBroadcast(logLabel: string) {
   try {
+    // Small and bounded, so it runs before the (longer) reminder broadcast.
+    const goalDeadlines = await runDailyGoalDeadlineNotices();
     const result = await broadcastDailyTransactionReminders();
     return NextResponse.json({
       ok: true,
@@ -20,6 +23,7 @@ async function runBroadcast(logLabel: string) {
       triggered_at: new Date().toISOString(),
       message: `${result.sent} ta foydalanuvchiga soat 20:00 eslatma xabari yuborildi`,
       result: { total: result.total, sent: result.sent, blocked: result.blocked, failed: result.failed },
+      goal_deadline_notices: goalDeadlines,
     });
   } catch (err) {
     console.error(`[Reminders] ${logLabel} execution error:`, err);

@@ -12,6 +12,7 @@ import type {
 } from './schemas.ts';
 import type { FinancialGoal } from '../../types/database.ts';
 import { todayTashkent } from '../time/tashkent.ts';
+import { nextGoalStatus } from './matchGoal.ts';
 
 export interface ServiceResult<T> {
   data: T | null;
@@ -367,7 +368,7 @@ export async function updateGoal(
 
     const { data: existing } = await supabase
       .from('financial_goals')
-      .select('id, user_id, target_amount, current_amount')
+      .select('id, user_id, target_amount, current_amount, status')
       .eq('id', id)
       .eq('user_id', user.id)
       .maybeSingle();
@@ -388,10 +389,13 @@ export async function updateGoal(
     if (validated.tracking_strategy !== undefined) updatePayload.tracking_strategy = validated.tracking_strategy;
 
     if (validated.status !== undefined) {
+      // Explicit status from the user (this is how a cancelled goal is reopened).
       updatePayload.status = validated.status;
     } else {
-      updatePayload.status = effectiveCurrent >= effectiveTarget ? 'completed' : 'in_progress';
+      // 'cancelled' stays cancelled unless the user explicitly reopens it (#31).
+      updatePayload.status = nextGoalStatus(existing.status, effectiveCurrent, effectiveTarget);
     }
+    // Note: a direct current_amount change is logged as an 'adjustment' row by a DB trigger (013).
 
     const { data: updated, error } = await supabase
       .from('financial_goals')
@@ -413,13 +417,48 @@ export async function updateGoal(
   }
 }
 
+export type GoalContributionSource = 'manual' | 'telegram_ai' | 'telegram_voice';
+
+export interface GoalContributionRow {
+  id: string;
+  goal_id: string;
+  amount: number;
+  note: string | null;
+  source: string;
+  created_at: string;
+}
+
+/** True when Supabase says the goal_contributions table / migration 013 is missing. */
+function isMissingContributionsTable(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false;
+  const msg = String(error.message || '');
+  return (
+    error.code === '42P01' ||
+    error.code === 'PGRST205' ||
+    (msg.includes('goal_contributions') && (msg.includes('does not exist') || msg.includes('schema cache')))
+  );
+}
+
+function toUzbekContributionError(message: string): { error: string; status: number } {
+  if (message.includes('yetarli mablag')) {
+    return { error: 'Maqsadda buncha mablag‘ yo‘q. Kichikroq summani kiriting.', status: 400 };
+  }
+  return { error: message || 'Hissani saqlab bo‘lmadi', status: 500 };
+}
+
 /**
- * Records a contribution deposit (positive) or withdrawal (negative) to a goal
+ * Records a contribution deposit (positive) or withdrawal (negative) to a goal.
+ *
+ * With migration 013: inserts a goal_contributions row; a DB trigger updates
+ * current_amount and status in the same statement (atomic, with history).
+ * Without 013: falls back to updating current_amount directly (no history).
+ * A withdrawal larger than the saved amount is rejected (never silently clamped).
  */
 export async function contributeToGoal(
   id: string,
   input: unknown,
-  client?: SupabaseClient
+  client?: SupabaseClient,
+  source: GoalContributionSource = 'manual'
 ): Promise<ServiceResult<GoalWithProgress>> {
   try {
     const supabase = await resolveClient(client);
@@ -438,7 +477,7 @@ export async function contributeToGoal(
       return { data: null, error: err, status: 400 };
     }
 
-    const { amount } = parseResult.data;
+    const { amount, note } = parseResult.data;
 
     const { data: existing } = await supabase
       .from('financial_goals')
@@ -451,17 +490,47 @@ export async function contributeToGoal(
       return { data: null, error: 'Financial goal not found', status: 404 };
     }
 
+    // 1. Preferred path: history row; the DB trigger moves the money atomically.
+    const { error: insertError } = await supabase.from('goal_contributions').insert({
+      user_id: user.id,
+      goal_id: id,
+      amount,
+      note: note?.trim() || null,
+      source,
+    });
+
+    if (!insertError) {
+      const { data: updated, error: readError } = await supabase
+        .from('financial_goals')
+        .select()
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .single();
+      if (readError || !updated) {
+        return { data: null, error: readError?.message || 'Maqsadni o‘qib bo‘lmadi', status: 500 };
+      }
+      const computed = await computeGoalProgress(updated, supabase);
+      return { data: computed, error: null, status: 200 };
+    }
+
+    if (!isMissingContributionsTable(insertError)) {
+      const mapped = toUzbekContributionError(insertError.message);
+      return { data: null, error: mapped.error, status: mapped.status };
+    }
+
+    // 2. Legacy path (migration 013 not applied yet): update the running total only.
     const current = Number(existing.current_amount) || 0;
     const target = Number(existing.target_amount) || 0;
-    const newAmount = Math.max(0, Math.round((current + amount) * 100) / 100);
-
-    const newStatus = newAmount >= target ? 'completed' : 'in_progress';
+    const newAmount = Math.round((current + amount) * 100) / 100;
+    if (newAmount < 0) {
+      return { data: null, error: 'Maqsadda buncha mablag‘ yo‘q. Kichikroq summani kiriting.', status: 400 };
+    }
 
     const { data: updated, error } = await supabase
       .from('financial_goals')
       .update({
         current_amount: newAmount,
-        status: newStatus,
+        status: nextGoalStatus(existing.status, newAmount, target),
       })
       .eq('id', id)
       .eq('user_id', user.id)
@@ -476,6 +545,49 @@ export async function contributeToGoal(
     return { data: computed, error: null, status: 200 };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error contributing to goal';
+    return { data: null, error: msg, status: 500 };
+  }
+}
+
+/**
+ * Lists a goal's contribution history (newest first). `available: false` means
+ * migration 013 is not applied yet, so there is no history table.
+ */
+export async function listGoalContributions(
+  goalId: string,
+  client?: SupabaseClient,
+  limit: number = 100
+): Promise<ServiceResult<{ contributions: GoalContributionRow[]; available: boolean }>> {
+  try {
+    const supabase = await resolveClient(client);
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+    }
+
+    const { data, error } = await supabase
+      .from('goal_contributions')
+      .select('id, goal_id, amount, note, source, created_at')
+      .eq('goal_id', goalId)
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(Math.min(Math.max(limit, 1), 500));
+
+    if (error) {
+      if (isMissingContributionsTable(error)) {
+        return { data: { contributions: [], available: false }, error: null, status: 200 };
+      }
+      return { data: null, error: error.message, status: 500 };
+    }
+
+    const contributions = (data || []).map((r) => ({ ...r, amount: Number(r.amount) })) as GoalContributionRow[];
+    return { data: { contributions, available: true }, error: null, status: 200 };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error listing contributions';
     return { data: null, error: msg, status: 500 };
   }
 }

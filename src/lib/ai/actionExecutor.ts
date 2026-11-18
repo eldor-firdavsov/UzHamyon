@@ -13,6 +13,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { createTransaction } from '../transactions/service.ts';
 import { createGoal, updateGoal, contributeToGoal } from '../goals/service.ts';
 import { matchCategoryRow } from '../categories/catalog.ts';
+import { findUserGoal } from '../goals/matchGoal.ts';
 import { todayTashkent } from '../time/tashkent.ts';
 import { isAmountWithinLimit, AMOUNT_TOO_LARGE_MESSAGE } from './limits.ts';
 import {
@@ -80,6 +81,8 @@ interface GoalSnapshot {
   target_amount: number;
   target_date?: string | null;
   status?: string;
+  currency?: string;
+  updated_at?: string | null;
 }
 
 /**
@@ -93,25 +96,12 @@ async function resolveUserGoal(
   try {
     const { data: goals } = await supabase
       .from('financial_goals')
-      .select('id, name, current_amount, target_amount, target_date, status')
+      .select('id, name, current_amount, target_amount, target_date, status, currency, updated_at')
       .eq('user_id', userId);
 
     if (!goals || goals.length === 0) return null;
-
-    if (goalName) {
-      const cleanName = goalName.toLowerCase().trim();
-      const direct = goals.find((g) => g.name.toLowerCase() === cleanName);
-      if (direct) return direct;
-
-      const partial = goals.find((g) => g.name.toLowerCase().includes(cleanName) || cleanName.includes(g.name.toLowerCase()));
-      if (partial) return partial;
-
-      return null;
-    }
-
-    // Fallback to active in-progress goal only when no specific goalName is requested
-    const active = goals.find((g) => g.status === 'in_progress');
-    return active || goals[0];
+    // Same rule as SQL public.find_user_goal() (#30).
+    return findUserGoal(goals, goalName);
   } catch (err) {
     console.error('[ActionExecutor] Error resolving user goal:', err);
     return null;
@@ -320,11 +310,24 @@ export async function executePendingActionRecord(
           break; // Stop batch
         }
 
+        // Never add one currency's money to a goal kept in another currency (#28).
+        if (goal.currency && (item.currency || 'UZS') !== goal.currency) {
+          executionResults.push({
+            type: 'contribute_goal',
+            success: false,
+            error: `«${goal.name}» maqsadi ${goal.currency} valyutasida, hissa esa ${item.currency || 'UZS'} da`,
+          });
+          break;
+        }
+
         if (!goalSnapshots.has(goal.id)) goalSnapshots.set(goal.id, { ...goal });
+        const contribSource =
+          item.source === 'telegram_voice' ? 'telegram_voice' : record.telegramUserId ? 'telegram_ai' : 'manual';
         const contribRes = await contributeToGoal(
           goal.id,
-          { amount: item.amount },
-          supabase
+          { amount: item.amount, note: item.description?.slice(0, 255) },
+          supabase,
+          contribSource
         );
 
         if (contribRes.error || !contribRes.data) {

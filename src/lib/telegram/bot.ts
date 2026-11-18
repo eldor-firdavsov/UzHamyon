@@ -16,6 +16,7 @@ import type { PendingActionRecord } from '../ai/pendingActionStore.ts';
 import { escapeHtml } from './html.ts';
 import { AiBudget } from '../ai/aiBudget.ts';
 import { loadCategoryOptions, categoryNamesByType, attachCategoryIds } from '../categories/catalog.ts';
+import { notifyCompletedGoals } from '../goals/notifications.ts';
 
 /** Shown when the AI could not answer in time or is unavailable (#21). */
 export const AI_RETRY_MESSAGE =
@@ -422,6 +423,8 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
       const execRes = await executePendingActionRecord(pending.record, userAuth.client);
       if (execRes.success) {
         await editTelegramMessageText(chatId, messageId, escapeHtml(execRes.message || '✅ Saqlandi.'));
+        // A contribution may have just completed a goal: congratulate once (#33).
+        await notifyCompletedGoals(userAuth.client, { userId: userAuth.userId, chatId });
       } else {
         // A parallel tap may have executed it already: show the real stored status then.
         const after = await getPendingAction(actionId, userAuth.userId, from.id, userAuth.client);
@@ -538,6 +541,9 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
         if (isSimpleConfirmation) {
           const execRes = await executePendingActionRecord(latestAction, userAuth.client);
           await sendTelegramMessage(chatId, escapeHtml(execRes.message));
+          if (execRes.success) {
+            await notifyCompletedGoals(userAuth.client, { userId: userAuth.userId, chatId });
+          }
           return;
         }
         if (isSimpleCancellation) {

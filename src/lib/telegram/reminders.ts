@@ -183,3 +183,16 @@ export async function broadcastDailyTransactionReminders(
   return results;
 }
 
+
+/**
+ * Daily cron step: one friendly notice per in-progress goal whose deadline passed (#33).
+ */
+export async function runDailyGoalDeadlineNotices(client?: SupabaseClient): Promise<{ claimed: number; sent: number }> {
+  const db = getAdminClient(client);
+  if (!db) {
+    console.warn('[Reminders] Goal deadline notices skipped: no admin client');
+    return { claimed: 0, sent: 0 };
+  }
+  const { sendGoalDeadlineNotices } = await import('../goals/notifications.ts');
+  return sendGoalDeadlineNotices(db);
+}
