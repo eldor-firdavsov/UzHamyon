@@ -31,6 +31,7 @@ import {
   X,
 } from 'lucide-react';
 import { invalidateAllFinancialCaches } from '@/lib/cache/clientCache';
+import { computeBalances, normalizeCurrency, PRIMARY_CURRENCY } from '@/lib/finance/balance';
 import { getNowLocalDateString, getNowLocalTimeString, isValidCalendarDate, isValidTimeString } from '@/lib/transactions/dateTime';
 
 // ── Types & Interfaces ──
@@ -56,6 +57,8 @@ export interface Transaction {
   desc: string;
   date: string;
   time?: string;
+  /** ISO currency; totals never mix currencies (UZS is the main one). */
+  currency?: string;
 }
 
 export interface Budget {
@@ -70,8 +73,11 @@ export interface Budget {
 }
 
 export interface Contribution {
+  /** Signed amount: + add, − withdraw. */
   a: number;
   d: string;
+  note?: string | null;
+  source?: string;
 }
 
 export interface Goal {
@@ -79,7 +85,13 @@ export interface Goal {
   name: string;
   target: number;
   date: string;
+  /** Real saved amount (financial_goals.current_amount). */
+  saved: number;
+  currency?: string;
+  status?: string;
+  /** History, loaded from /api/goals/:id/contributions when the goal is opened. */
   contribs: Contribution[];
+  contribsLoaded?: boolean;
 }
 
 export interface UzHamyonPrototypeAppProps {
@@ -167,14 +179,18 @@ const DEMO_GOALS: Goal[] = [
     name: 'Noutbuk',
     target: 10000000,
     date: '',
+    saved: 3500000,
     contribs: [{ a: 3500000, d: '2026-10-20' }],
+    contribsLoaded: true,
   },
   {
     id: 'g2',
     name: 'Safar',
     target: 6000000,
     date: '2027-06-01',
+    saved: 1800000,
     contribs: [{ a: 1800000, d: '2026-10-25' }],
+    contribsLoaded: true,
   },
 ];
 
@@ -183,6 +199,15 @@ function formatNumber(n: number): string {
   const isNeg = n < 0;
   const absFormatted = Math.abs(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
   return isNeg ? `−${absFormatted}` : absFormatted;
+}
+
+/** 'YYYY-MM-DD HH:mm' in Tashkent time for an ISO timestamp. */
+function formatTashkentDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const t = new Date(d.getTime() + 5 * 60 * 60 * 1000); // Asia/Tashkent = UTC+5, no DST
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${t.getUTCFullYear()}-${p(t.getUTCMonth() + 1)}-${p(t.getUTCDate())} ${p(t.getUTCHours())}:${p(t.getUTCMinutes())}`;
 }
 
 function padTwo(n: number): string {
@@ -203,6 +228,7 @@ interface ApiTransactionRow {
   id: string;
   type: string;
   amount: number | string;
+  currency?: string;
   categories?: { name?: string };
   description?: string;
   transaction_date?: string;
@@ -221,6 +247,7 @@ function mapApiTransaction(t: ApiTransactionRow): Transaction {
       : 'Boshqa',
     desc: t.description || t.categories?.name || '',
     date: t.transaction_date || TODAY_DATE,
+    currency: t.currency || 'UZS',
   };
 }
 
@@ -370,6 +397,7 @@ export default function UzHamyonPrototypeApp({
   const [categories, setCategories] = useState<Category[]>([]);
   const [txError, setTxError] = useState<string | null>(null);
   const [isSavingTx, setIsSavingTx] = useState<boolean>(false);
+  const [isSavingContrib, setIsSavingContrib] = useState<boolean>(false);
   const [isSavingBudget, setIsSavingBudget] = useState<boolean>(false);
 
   // ── Transaction-based Available Months ──
@@ -635,12 +663,18 @@ export default function UzHamyonPrototypeApp({
                     target_amount?: number;
                     target_date?: string;
                     current_amount?: number;
+                    currency?: string;
+                    status?: string;
                   }) => ({
                     id: g.id,
                     name: g.name,
                     target: Number(g.target_amount) || 0,
                     date: g.target_date || '',
-                    contribs: [{ a: Number(g.current_amount) || 0, d: TODAY_DATE }],
+                    saved: Number(g.current_amount) || 0,
+                    currency: g.currency || 'UZS',
+                    status: g.status || 'in_progress',
+                    contribs: [],
+                    contribsLoaded: false,
                   }));
                   setGoals(mappedG);
                 } else {
@@ -786,55 +820,51 @@ export default function UzHamyonPrototypeApp({
     return transactions.filter((t) => t.date && t.date.startsWith(prefix));
   }, [transactions, year, month, availableMonths.length]);
 
+  // Totals are in so'm only: amounts in other currencies are never added in (#28).
+  const currentMonthUzsTransactions = useMemo(
+    () => currentMonthTransactions.filter((t) => normalizeCurrency(t.currency) === PRIMARY_CURRENCY),
+    [currentMonthTransactions]
+  );
+
   // Income / Expense sums for currently active month
   const monthIncome = useMemo(() => {
-    return currentMonthTransactions
+    return currentMonthUzsTransactions
       .filter((t) => t.type === 'in')
       .reduce((sum, t) => sum + t.amount, 0);
-  }, [currentMonthTransactions]);
+  }, [currentMonthUzsTransactions]);
 
   const monthExpense = useMemo(() => {
-    return currentMonthTransactions
+    return currentMonthUzsTransactions
       .filter((t) => t.type === 'ex')
       .reduce((sum, t) => sum + t.amount, 0);
-  }, [currentMonthTransactions]);
+  }, [currentMonthUzsTransactions]);
 
-  const totalLifetimeIncome = useMemo(() => {
-    return transactions
-      .filter((t) => t.type === 'in')
-      .reduce((sum, t) => sum + t.amount, 0);
-  }, [transactions]);
+  // Shared balance formula (#27): income − expense − goal savings, per currency.
+  const balanceSummary = useMemo(
+    () =>
+      computeBalances(
+        transactions,
+        (goals || []).map((g) => ({ current_amount: g.saved, currency: g.currency }))
+      ),
+    [transactions, goals]
+  );
 
-  const totalLifetimeExpense = useMemo(() => {
-    return transactions
-      .filter((t) => t.type === 'ex')
-      .reduce((sum, t) => sum + t.amount, 0);
-  }, [transactions]);
+  // Savings set aside in so'm goals
+  const totalGoalsSaved = balanceSummary.primary.goalSavings;
 
-  // Goals savings: total actual amount contributed across all active/completed goals
-  const totalGoalsSaved = useMemo(() => {
-    return (goals || []).reduce((sum, g) => {
-      const saved = (g.contribs || []).reduce((s, c) => s + (Number(c.a) || 0), 0);
-      return sum + Math.max(0, saved);
-    }, 0);
-  }, [goals]);
-
-  // How much free cash user has right now (all income minus all expense minus savings allocated to goals)
-  // If user has more xarajat & goal savings than daromad, this becomes negative, like a real card
-  const currentBalance = useMemo(() => {
-    return totalLifetimeIncome - totalLifetimeExpense - totalGoalsSaved;
-  }, [totalLifetimeIncome, totalLifetimeExpense, totalGoalsSaved]);
+  // Free cash in so'm right now; can be negative, like a real card
+  const currentBalance = balanceSummary.primary.balance;
 
   // Expenses grouped by category for active month
   const categoryExpenses = useMemo(() => {
     const byCat: Record<string, number> = {};
-    currentMonthTransactions
+    currentMonthUzsTransactions
       .filter((t) => t.type === 'ex')
       .forEach((t) => {
         byCat[t.cat] = (byCat[t.cat] || 0) + t.amount;
       });
     return byCat;
-  }, [currentMonthTransactions]);
+  }, [currentMonthUzsTransactions]);
 
   // Top spending category
   const topExpenseCategory = useMemo(() => {
@@ -864,7 +894,7 @@ export default function UzHamyonPrototypeApp({
       .map((i) => {
         const lo = i * 7 + 1;
         const hi = Math.min((i + 1) * 7, daysInCurrentMonth);
-        const inWeekTxs = currentMonthTransactions.filter((t) => {
+        const inWeekTxs = currentMonthUzsTransactions.filter((t) => {
           const d = parseInt(t.date.slice(8), 10);
           return d >= lo && d <= hi;
         });
@@ -891,7 +921,7 @@ export default function UzHamyonPrototypeApp({
       activeW,
       selectedWeekData: weeks[activeW] || { lo: 1, hi: 1, iN: 0, eN: 0 },
     };
-  }, [daysInCurrentMonth, currentMonthTransactions, selectedWeek]);
+  }, [daysInCurrentMonth, currentMonthUzsTransactions, selectedWeek]);
 
   // Recent transactions sorted newest-first by actual transaction date.
   // The id tie-breaker keeps same-day rows in a stable order on every render.
@@ -947,10 +977,13 @@ export default function UzHamyonPrototypeApp({
   }, [budgets, categoryExpenses]);
 
   // Goals summary
-  const getGoalSaved = (g: Goal) => (g.contribs || []).reduce((sum, c) => sum + c.a, 0);
+  const getGoalSaved = (g: Goal) => Number(g.saved) || 0;
 
+  // So'm goals only; goals in other currencies are not added to this total (#28).
   const totalSavedAcrossGoals = useMemo(() => {
-    return goals.reduce((sum, g) => sum + getGoalSaved(g), 0);
+    return goals
+      .filter((g) => normalizeCurrency(g.currency) === PRIMARY_CURRENCY)
+      .reduce((sum, g) => sum + getGoalSaved(g), 0);
   }, [goals]);
 
   const goalsList = useMemo(() => {
@@ -1308,7 +1341,7 @@ export default function UzHamyonPrototypeApp({
       }).catch(console.error);
     } else {
       const tempId = 'g' + Date.now();
-      const newG: Goal = { id: tempId, name, target, date, contribs: [] };
+      const newG: Goal = { id: tempId, name, target, date, saved: 0, currency: 'UZS', status: 'in_progress', contribs: [], contribsLoaded: true };
       setGoals((prev) => [...prev, newG]);
       triggerToast('Maqsad qo‘shildi');
       fetch('/api/goals', {
@@ -1339,32 +1372,100 @@ export default function UzHamyonPrototypeApp({
 
   const handleSaveContribution = async () => {
     const contribAmt = parseNumber(formData.contrib);
-    if (contribAmt <= 0 || !activeGoalId) return;
+    if (contribAmt <= 0 || !activeGoalId || isSavingContrib) return;
 
-    setGoals((prev) =>
-      prev.map((g) =>
-        g.id === activeGoalId
-          ? {
-              ...g,
-              contribs: [...g.contribs, { a: contribAmt, d: TODAY_DATE }],
-            }
-          : g
-      )
-    );
-    triggerToast('Hissa qo‘shildi');
-    setActiveSheet('detail');
-    setFormData({});
+    // Public demo preview (no session): keep it local.
+    if (!isAuthenticated) {
+      setGoals((prev) =>
+        prev.map((g) =>
+          g.id === activeGoalId
+            ? { ...g, saved: g.saved + contribAmt, contribs: [{ a: contribAmt, d: TODAY_DATE }, ...g.contribs] }
+            : g
+        )
+      );
+      triggerToast('Hissa qo‘shildi');
+      setActiveSheet('detail');
+      setFormData({});
+      return;
+    }
 
-    const token = await getAuthToken();
-    const authHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (token) authHeaders['Authorization'] = `Bearer ${token}`;
+    setIsSavingContrib(true);
+    try {
+      const token = await getAuthToken();
+      const authHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) authHeaders['Authorization'] = `Bearer ${token}`;
 
-    fetch(`/api/goals/${activeGoalId}/contributions`, {
-      method: 'POST',
-      headers: authHeaders,
-      body: JSON.stringify({ amount: contribAmt }),
-    }).catch(console.error);
+      const res = await fetch(`/api/goals/${activeGoalId}/contributions`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ amount: contribAmt }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.error) {
+        throw new Error(typeof data?.error === 'string' ? data.error : 'Hissani saqlab bo‘lmadi');
+      }
+
+      const savedNow = Number(data?.goal?.current_amount);
+      const goalId = activeGoalId;
+      setGoals((prev) =>
+        prev.map((g) =>
+          g.id === goalId
+            ? {
+                ...g,
+                saved: Number.isFinite(savedNow) ? savedNow : g.saved + contribAmt,
+                status: data?.goal?.status || g.status,
+                contribsLoaded: false, // reload the real history on next open
+              }
+            : g
+        )
+      );
+      invalidateAllFinancialCaches();
+      triggerToast(data?.goal?.status === 'completed' ? '🎉 Maqsadga yetdingiz!' : 'Hissa qo‘shildi');
+      setActiveSheet('detail');
+      setFormData({});
+      void loadGoalContributions(goalId);
+    } catch (err) {
+      console.error('Goal contribution failed:', err);
+      triggerToast(err instanceof Error && err.message ? err.message : 'Hissani saqlab bo‘lmadi');
+    } finally {
+      setIsSavingContrib(false);
+    }
   };
+
+  // Loads the real contribution history of one goal (newest first).
+  const loadGoalContributions = useCallback(
+    async (goalId: string) => {
+      if (!isAuthenticated || !goalId || goalId.startsWith('g')) return;
+      try {
+        const token = await getAuthToken();
+        const headers: Record<string, string> = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`/api/goals/${goalId}/contributions`, { headers });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!Array.isArray(data?.contributions)) return;
+        const contribs: Contribution[] = data.contributions.map(
+          (c: { amount: number; created_at: string; note?: string | null; source?: string }) => ({
+            a: Number(c.amount) || 0,
+            d: c.created_at ? formatTashkentDate(c.created_at) : '',
+            note: c.note ?? null,
+            source: c.source,
+          })
+        );
+        setGoals((prev) => prev.map((g) => (g.id === goalId ? { ...g, contribs, contribsLoaded: true } : g)));
+      } catch (err) {
+        console.error('Failed to load goal contributions:', err);
+      }
+    },
+    [isAuthenticated, getAuthToken]
+  );
+
+  // Load the real history when a goal's detail sheet opens.
+  useEffect(() => {
+    if (activeSheet !== 'detail' || !activeGoalId) return;
+    const g = goals.find((x) => x.id === activeGoalId);
+    if (g && !g.contribsLoaded) void loadGoalContributions(activeGoalId);
+  }, [activeSheet, activeGoalId, goals, loadGoalContributions]);
 
   const handleConfirmDelete = async () => {
     if (!confirmConfig) return;
@@ -1435,7 +1536,7 @@ export default function UzHamyonPrototypeApp({
 
   const isSaveBudgetDisabled = isSavingBudget || parseNumber(formData.limit) <= 0 || !formData.cat;
   const isSaveGoalDisabled = parseNumber(formData.target) <= 0 || !(formData.name || '').trim();
-  const isSaveContribDisabled = parseNumber(formData.contrib) <= 0;
+  const isSaveContribDisabled = parseNumber(formData.contrib) <= 0 || isSavingContrib;
 
   return (
     <div className="uz-app-wrapper pb-24 lg:pb-8">
@@ -1688,6 +1789,11 @@ export default function UzHamyonPrototypeApp({
                   </span>
                 </div>
                 <div style={{ fontSize: '13px', color: '#C9E8B0' }}>Boshlang&apos;ich sanadan beri</div>
+                {balanceSummary.otherCurrencies.map((cur) => (
+                  <div key={cur} className="num" style={{ fontSize: '13px', color: '#C9E8B0', marginTop: '2px' }}>
+                    {cur} hisobi alohida: {formatNumber(balanceSummary.byCurrency[cur].balance)} {cur === 'USD' ? '$' : cur}
+                  </div>
+                ))}
 
                 <div className="grid grid-cols-2 gap-3 sm:gap-4 mt-5">
                   <div
@@ -1891,7 +1997,7 @@ export default function UzHamyonPrototypeApp({
                         </div>
                         <div className="am" style={{ color: t.type === 'in' ? '#26834A' : '#D64D4D' }}>
                           {t.type === 'in' ? '+' : '−'}
-                          {formatNumber(t.amount)} so&apos;m
+                          {formatNumber(t.amount)} {normalizeCurrency(t.currency) === 'USD' ? '$' : 'so‘m'}
                         </div>
                       </button>
                     ))
@@ -2145,7 +2251,7 @@ export default function UzHamyonPrototypeApp({
                       </div>
                       <div className="am" style={{ color: t.type === 'in' ? '#26834A' : '#D64D4D' }}>
                         {t.type === 'in' ? '+' : '−'}
-                        {formatNumber(t.amount)} so&apos;m
+                        {formatNumber(t.amount)} {normalizeCurrency(t.currency) === 'USD' ? '$' : 'so‘m'}
                       </div>
                     </button>
                   );
@@ -3381,7 +3487,9 @@ export default function UzHamyonPrototypeApp({
 
                 <div style={{ marginTop: '10px' }}>
                   <b style={{ fontSize: '14px' }}>Hissalar tarixi:</b>
-                  {(!activeGoal.contribs || activeGoal.contribs.length === 0) ? (
+                  {!activeGoal.contribsLoaded ? (
+                    <div className="empty">Yuklanmoqda...</div>
+                  ) : (!activeGoal.contribs || activeGoal.contribs.length === 0) ? (
                     <div className="empty">Hozircha hissa qo&apos;shilmagan.</div>
                   ) : (
                     activeGoal.contribs.map((c, i) => (
@@ -3390,13 +3498,22 @@ export default function UzHamyonPrototypeApp({
                         style={{
                           display: 'flex',
                           justifyContent: 'space-between',
+                          gap: '12px',
                           padding: '8px 0',
                           borderBottom: '1px solid #E8EBE5',
                         }}
                       >
-                        <span className="mt">{c.d}</span>
-                        <span className="num" style={{ fontWeight: 600, color: '#26834A' }}>
-                          +{formatNumber(c.a)} so&apos;m
+                        <span className="mt" style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span>{c.d}</span>
+                          {(c.source === 'initial_balance' || c.note) && (
+                            <span style={{ fontSize: '12px', color: '#697168' }}>
+                              {c.source === 'initial_balance' ? 'Boshlang‘ich qoldiq' : c.note}
+                            </span>
+                          )}
+                        </span>
+                        <span className="num" style={{ fontWeight: 600, color: c.a < 0 ? '#DC2626' : '#26834A', whiteSpace: 'nowrap' }}>
+                          {c.a < 0 ? '−' : '+'}{formatNumber(Math.abs(c.a))}{' '}
+                          {normalizeCurrency(activeGoal.currency) === 'USD' ? '$' : 'so‘m'}
                         </span>
                       </div>
                     ))

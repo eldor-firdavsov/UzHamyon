@@ -7,6 +7,7 @@ export interface HydratedTransaction {
   cat: string;
   desc: string;
   date: string;
+  currency?: string;
 }
 
 export interface HydratedBudget {
@@ -20,7 +21,13 @@ export interface HydratedGoal {
   name: string;
   target: number;
   date: string;
-  contribs: Array<{ a: number; d: string }>;
+  /** financial_goals.current_amount — the real saved amount. */
+  saved: number;
+  currency?: string;
+  status?: string;
+  /** Loaded on demand from /api/goals/:id/contributions. */
+  contribs: Array<{ a: number; d: string; note?: string | null; source?: string }>;
+  contribsLoaded?: boolean;
 }
 
 export interface DashboardHydrationData {
@@ -40,7 +47,7 @@ export async function getDashboardHydrationData(
   const [txRes, budgetsRes, goalsRes] = await Promise.all([
     supabase
       .from('transactions')
-      .select('id, type, amount, description, transaction_date, categories(name)')
+      .select('id, type, amount, currency, description, transaction_date, categories(name)')
       .eq('user_id', userId)
       .order('transaction_date', { ascending: false })
       .order('created_at', { ascending: false })
@@ -52,7 +59,7 @@ export async function getDashboardHydrationData(
       .eq('user_id', userId),
     supabase
       .from('financial_goals')
-      .select('id, name, target_amount, target_date, current_amount')
+      .select('id, name, target_amount, target_date, current_amount, currency, status')
       .eq('user_id', userId),
   ]);
 
@@ -73,7 +80,7 @@ export async function getDashboardHydrationData(
         const [adminTx, adminBudgets, adminGoals] = await Promise.all([
           adminClient
             .from('transactions')
-            .select('id, type, amount, description, transaction_date, categories(name)')
+            .select('id, type, amount, currency, description, transaction_date, categories(name)')
             .eq('user_id', userId)
             .order('transaction_date', { ascending: false })
             .order('created_at', { ascending: false })
@@ -85,7 +92,7 @@ export async function getDashboardHydrationData(
             .eq('user_id', userId),
           adminClient
             .from('financial_goals')
-            .select('id, name, target_amount, target_date, current_amount')
+            .select('id, name, target_amount, target_date, current_amount, currency, status')
             .eq('user_id', userId),
         ]);
         if (adminTx.data && adminTx.data.length > 0) {
@@ -112,6 +119,7 @@ export async function getDashboardHydrationData(
       (t.type === 'income' ? 'Boshqa daromad' : 'Boshqa'),
     desc: t.description || '',
     date: t.transaction_date || '',
+    currency: t.currency || 'UZS',
   }));
 
   const initialBudgets: HydratedBudget[] = rawBudgets.map((b: any) => ({
@@ -127,7 +135,11 @@ export async function getDashboardHydrationData(
     name: g.name,
     target: Number(g.target_amount) || 0,
     date: g.target_date || '',
-    contribs: [{ a: Number(g.current_amount) || 0, d: '' }],
+    saved: Number(g.current_amount) || 0,
+    currency: g.currency || 'UZS',
+    status: g.status || 'in_progress',
+    contribs: [],
+    contribsLoaded: false,
   }));
 
   return { initialTransactions, initialBudgets, initialGoals };
