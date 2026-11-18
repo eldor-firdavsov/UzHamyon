@@ -250,8 +250,8 @@ erDiagram
 2. Header `x-telegram-bot-api-secret-token` must match `TELEGRAM_WEBHOOK_SECRET`, else `401`. In production a missing secret also means `401` (`src/lib/telegram/requestAuth.ts`).
 3. `claimWebhookUpdate(update_id)` inserts a `processing` row in `telegram_webhook_updates`. Duplicate → reply `200 {skipped}`. Stale `processing` rows (> 60 s) and `failed` rows can be re-claimed. If the table is missing it uses an in-memory map.
 4. Reply `200` immediately; inside `after()` run `handleTelegramUpdate(update)` then mark `completed` (or `failed` with the error).
-5. `handleTelegramUpdate` (`src/lib/telegram/bot.ts:320`) handles **only** `callback_query` and `message.text`. Voice, photo, sticker, edited messages etc. are silently ignored.
-6. For every text message it first fires (not awaited) `sendChatAction('typing')` and `setChatMenuButton(chat_id)` (the "UzHamyon" Mini App button on the left of the input).
+5. `handleTelegramUpdate` (`src/lib/telegram/bot.ts`) handles **only** `callback_query` and `message.text`. Voice, photo, sticker, edited messages etc. are silently ignored. Since 1D: non-private chats are ignored, except a command addressed to the bot, which gets one short "faqat shaxsiy chatda" note.
+6. For every text message it first fires (not awaited) `sendChatAction('typing')`. Since 1D `setChatMenuButton` runs only on `/start`; the default button for all chats is set by `scripts/set_webhook.mjs`. All Bot API calls go through `callBotApi()` (`src/lib/telegram/botApi.ts`), which logs every `ok:false`.
 
 ### 4.1 Identity: Telegram user → Supabase user
 
@@ -262,7 +262,7 @@ erDiagram
 - `signInWithPassword`; if it fails and the user exists → admin resets the password and signs in again; if the user does not exist → `signUp` and insert a `profiles` row (`onboarding_completed=false`, `financial_start_date=today`, `onboarding_data.telegram_id`, `language_code`).
 - Returns a user **JWT**; the bot builds an anon-key client with `Authorization: Bearer <jwt>`, so **all bot DB writes go through RLS as that user**.
 
-This runs on **every** incoming message and on every button press.
+Since 1D the bot keeps the JWT in an in-memory cache per server instance (`src/lib/telegram/sessionCache.ts`, max 1 000 users) and reuses it until 5 minutes before it expires, so most messages skip `signInWithPassword`. A user deleted/locked in Supabase keeps bot access for at most the token's remaining life (≤ 1 h). The Mini App login always signs in fresh. Finding an existing user (password resync) uses profiles → RPC `get_auth_user_id_by_email` (014) → paged `listUsers`.
 
 The Mini App uses the same function via `POST /api/auth/telegram` after verifying `initData` (HMAC with `WebAppData`, max age 24 h), then writes Supabase cookies (`SameSite=None; Secure`) and an extra `sb-access-token` cookie.
 
@@ -376,8 +376,9 @@ There are three separate calculators:
 ### 4.8 Reminders, scheduled jobs, notifications
 
 - **Daily reminder**: Vercel cron `0 15 * * *` UTC (20:00 Tashkent) → `GET /api/telegram/reminders?trigger=true` → `broadcastDailyTransactionReminders()`:
-  - Recipients = every `profiles` row whose email is `tg_<id>@…` or whose `onboarding_data.telegram_id` is set (one query, no paging).
-  - For each: `setChatMenuButton`, then `sendMessage`: "Salom, **<name>**! 👋 Bugungi o'tkazmalarni ilovaga kiritishni unutmang yoki shunchaki bugungi o'tkazmalaringizni shu chatga yozib qo'ying! ✍️" + button "🚀 UzHamyon'ni ochish". 60 ms pause between users. Blocked users are counted but not marked anywhere.
+  - Since 1D the route answers at once and works in `after()` (`maxDuration = 60`). Recipients = `profiles` whose email is `tg_<id>@…` or whose `onboarding_data.telegram_id` is set, read in pages of 1 000 (keyset on `id`); with migration 014 also skipping `telegram_blocked_at` and users with `last_reminder_on = today` (Tashkent).
+  - `sendMessage`: "Salom, **<name>**! 👋 Bugungi o'tkazmalarni ilovaga kiritishni unutmang yoki shunchaki bugungi o'tkazmalaringizni shu chatga yozib qo'ying! ✍️" + button "🚀 UzHamyon'ni ochish". 25 users per second; `retry_after` respected; 403/blocked → `telegram_blocked_at` (cleared on `/start`); sent → `last_reminder_on`.
+  - 45 s budget per invocation; if users are left (and 014 is applied) the route calls itself with `continuation=N` (max 20). Goal deadline notices run only in the first invocation (max 100).
   - Auth (since 1A): every GET/POST needs `Authorization: Bearer $CRON_SECRET`; in production a missing secret rejects everything. Only outside production with no secret are requests allowed.
 - `GET /api/telegram/reminders` **without** `trigger` (authenticated) returns only the schedule and the recipient **count**.
 - Local alternatives: `scripts/send_transaction_reminders.mjs` (one-off) and `scripts/schedule_daily_reminders.mjs` (long-running `setTimeout` loop at 20:00 Tashkent).
@@ -386,7 +387,7 @@ There are three separate calculators:
 ### 4.9 Free questions and chat in Telegram (financial_query / casual_chat)
 
 **Since 1B:** if the extraction fails (AI down or the 25 s budget is spent) the bot replies "⏳ Kechirasiz, hozir xabaringizni tahlil qila olmadim…" and stops. If Gemini says `financial_query` or `casual_chat`, the bot calls `askFinancialAdvisor(text, undefined, userClient, { channel: 'telegram', budget })`, which **skips steps 3–5 below** (no regex engine, no "ha" lookup, no second extraction) and only answers (step 6). The steps below describe the **web** advisor:
-1. Creates a **new** `ai_conversations` row for every Telegram message (no conversation id is kept).
+1. Since 1D, Telegram reuses one `ai_conversations` row per user (`channel = 'telegram'`, migration 014); without 014 it creates a new row per message as before.
 2. Saves the user message in `ai_messages`.
 3. Runs `processFinancialIntent()` (old regex engine): "bu oy … sarfladim" → sum of this month's expenses; "oxirgi xarajatni bekor qil" → proposes deleting the last expense; "naqd pul bor" → asks "existing money or income?"; "ishlab topdim" → proposes income; "sarfladim/ishlatdim/sotib oldim" + amount → proposes expense. These proposals live only inside that one-message conversation, so **they cannot be confirmed from Telegram** (§7).
 4. Checks the latest pending action for "ha"/"bekor" (without Telegram id).
@@ -640,7 +641,7 @@ Items marked ✅ are fixed on the named branch/commit (not deployed yet unless s
 6. ✅ *(`7a99dac`: `escapeHtml()` in `src/lib/telegram/html.ts` for every dynamic value)* **Medium — HTML injection / broken messages.** Messages use `parse_mode: 'HTML'`, but `firstName` (`/start`, reminders), Gemini's `summaryUzbek`, the advisor answer and DB error texts are inserted without escaping. A name or description with `<` or `&` makes Telegram reject the message (the bot then sends nothing and does not notice because `ok:false` is not checked) — or lets a user inject formatting/links.
 7. ✅ *(`6da221a`)* **Low — Webhook returns `String(err)` to the caller** (`webhook/route.ts:74`).
 8. ✅ *(`4be61ee`: fallbacks only outside production)* **Low — Hard-coded Supabase URL and anon key** in `src/lib/supabase/config.ts` (public by design, but it pins the project and makes env mistakes silent).
-9. ⏸ *(skipped in 1A: `src/lib/supabase/client.ts` writes/clears this cookie with `document.cookie`; HttpOnly would make those writes fail silently and leave stale tokens. Needs a server endpoint first — planned with 1D.)* **Low — `sb-access-token` cookie is not `HttpOnly`** (`api/auth/telegram/route.ts:74`).
+9. ⏸ *(still open: `src/lib/supabase/client.ts` writes/clears this cookie with `document.cookie`; HttpOnly needs a small server endpoint first. Proposed in 1D, not approved yet.)* **Low — `sb-access-token` cookie is not `HttpOnly`** (`api/auth/telegram/route.ts:74`).
 10. **Info — No real secrets found in git.** The `NEXT_PUBLIC_GEMINI_API_KEY` / `NEXT_PUBLIC_TELEGRAM_BOT_TOKEN` references are tests that assert those variables do *not* exist.
 
 ### Bugs and edge cases in the AI / confirmation flow
@@ -674,13 +675,13 @@ Items marked ✅ are fixed on the named branch/commit (not deployed yet unless s
 
 ### Reliability / scale
 
-34. **Medium — Supabase sign-in on every message and every button.** `signInWithPassword` per update (all from Vercel IPs) can hit Supabase Auth rate limits as users grow, and adds latency.
-35. **Medium — `auth.admin.listUsers()` reads only the first page** (`telegram/auth.ts:199, 246`), so the "existing user" recovery fails once there are more users than one page.
-36. **Medium — Reminders do not scale.** One query without paging (PostgREST max rows, default 1000), a sequential loop with 60 ms pause, and no `maxDuration` on the route → long broadcasts can time out half-way; users who blocked the bot are retried every day. Reminders also go to users who never finished onboarding.
-37. **Low — Telegram API errors are not checked** in `sendTelegramMessage`/`editTelegramMessageText` (only network errors are logged).
-38. **Low — Every message calls `setChatMenuButton`** (an extra Bot API call each time).
-39. **Low — The bot works in group chats** too (no `chat.type` check).
-40. **Low — `ai_conversations` grows by one row per Telegram question.**
+34. ✅ *(fix/1d-reliability `5f85af0`: in-memory JWT cache, option A)* **Medium — Supabase sign-in on every message and every button.** `signInWithPassword` per update (all from Vercel IPs) can hit Supabase Auth rate limits as users grow, and adds latency.
+35. ✅ *(`f478770`, `fea0356`)* **Medium — `auth.admin.listUsers()` reads only the first page** (`telegram/auth.ts:199, 246`), so the "existing user" recovery fails once there are more users than one page.
+36. ✅ *(`7c613be`, `fea0356`; onboarding filter not changed)* **Medium — Reminders do not scale.** One query without paging (PostgREST max rows, default 1000), a sequential loop with 60 ms pause, and no `maxDuration` on the route → long broadcasts can time out half-way; users who blocked the bot are retried every day. Reminders also go to users who never finished onboarding.
+37. ✅ *(`5f85af0`: `callBotApi`)* **Low — Telegram API errors are not checked** in `sendTelegramMessage`/`editTelegramMessageText` (only network errors are logged).
+38. ✅ *(`5f85af0`, `7c613be`)* **Low — Every message calls `setChatMenuButton`** (an extra Bot API call each time).
+39. ✅ *(`5f85af0`)* **Low — The bot works in group chats** too (no `chat.type` check).
+40. ✅ *(`90c5763`, `fea0356`)* **Low — `ai_conversations` grows by one row per Telegram question.**
 
 ### Duplicated logic / cleanup
 
