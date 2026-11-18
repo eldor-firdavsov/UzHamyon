@@ -66,8 +66,15 @@ export async function proxy(request: NextRequest) {
 
   if (user) {
     // 3. Attach cryptographically signed tamper-proof token
-    const signedToken = signInternalAuth(user.id, user.email || '', user.user_metadata);
-    requestHeaders.set(INTERNAL_AUTH_HEADER, signedToken);
+    // If INTERNAL_AUTH_SECRET is missing in production, signing throws. We then skip the
+    // header (server components fall back to a normal Supabase getUser) and log loudly,
+    // instead of taking every page down.
+    try {
+      const signedToken = signInternalAuth(user.id, user.email || '', user.user_metadata);
+      requestHeaders.set(INTERNAL_AUTH_HEADER, signedToken);
+    } catch (err) {
+      console.error('[proxy] Internal auth signing disabled:', err instanceof Error ? err.message : 'unknown error');
+    }
 
     const nextResponse = NextResponse.next({
       request: {

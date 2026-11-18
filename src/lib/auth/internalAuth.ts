@@ -14,19 +14,30 @@ import crypto from 'node:crypto';
  */
 
 /**
- * Internal signing secret. Never ship a hardcoded fallback: a known secret
- * would let an attacker forge the identity forwarded between proxy and server.
+ * Internal signing secret. Never ship a hardcoded fallback and never reuse a
+ * third-party API key: a known secret would let an attacker forge the identity
+ * forwarded between proxy and server.
+ *
+ * Production: INTERNAL_AUTH_SECRET is required.
+ * Development only: if missing, a stable dev secret is used so that proxy.ts and
+ * server components (which may live in different module instances) agree.
  */
+const DEV_ONLY_INTERNAL_SECRET = 'uzhamyon-dev-only-internal-auth-secret';
+let warnedDevFallback = false;
+
 function getInternalSecret(): string {
-  const secret =
-    process.env.INTERNAL_AUTH_SECRET ||
-    process.env.OPENROUTER_API_KEY ||
-    process.env.AI_API_KEY ||
-    process.env.GEMINI_API_KEY;
-  if (!secret) {
+  const secret = process.env.INTERNAL_AUTH_SECRET?.trim();
+  if (secret) return secret;
+
+  if (process.env.NODE_ENV === 'production') {
     throw new Error('INTERNAL_AUTH_SECRET muhit o‘zgaruvchisi sozlanmagan');
   }
-  return secret;
+
+  if (!warnedDevFallback) {
+    warnedDevFallback = true;
+    console.warn('[internalAuth] INTERNAL_AUTH_SECRET is not set; using a development-only secret.');
+  }
+  return DEV_ONLY_INTERNAL_SECRET;
 }
 
 export const INTERNAL_AUTH_HEADER = 'x-internal-auth';

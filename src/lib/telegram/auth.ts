@@ -132,8 +132,13 @@ import {
  * Derives a deterministic internal email and secure password for a Telegram user.
  * This guarantees the user has a permanent, stable Supabase auth identity without exposing credentials.
  */
-function deriveTelegramCredentials(telegramId: number) {
-  const serviceKey = getSupabaseServiceRoleKey() || 'uzhamyon_telegram_auth_salt_2026';
+export function deriveTelegramCredentials(telegramId: number) {
+  // IMPORTANT: this formula must never change, or every Telegram user loses access.
+  // There is deliberately no fallback salt: without the service role key we refuse to derive.
+  const serviceKey = getSupabaseServiceRoleKey();
+  if (!serviceKey) {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY muhit o‘zgaruvchisi sozlanmagan');
+  }
   const botToken = getTelegramBotToken();
   
   const internalEmail = `tg_${telegramId}@telegram.uzhamyon.uz`;
