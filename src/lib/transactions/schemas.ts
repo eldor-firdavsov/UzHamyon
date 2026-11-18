@@ -85,7 +85,7 @@ export const createTransactionSchema = z.object({
     .optional()
     .nullable()
     .transform((val) => (val === '' || val === undefined ? null : val)),
-  source: z.enum(['manual', 'csv', 'excel', 'recurring']).default('manual'),
+  source: z.enum(['manual', 'csv', 'excel', 'recurring', 'telegram_ai', 'telegram_voice']).default('manual'),
 });
 
 export const updateTransactionSchema = createTransactionSchema.partial();

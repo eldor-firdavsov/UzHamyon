@@ -10,6 +10,7 @@ import type {
   TransactionFilterInput,
 } from './schemas.ts';
 import type { TransactionWithCategory } from '../../types/database.ts';
+import { tashkentToIso } from '../time/tashkent.ts';
 
 export interface ServiceResult<T> {
   data: T | null;
@@ -105,14 +106,30 @@ export async function createTransaction(
     };
 
     if (validData.transaction_time) {
-      insertPayload.created_at = `${validData.transaction_date}T${validData.transaction_time.slice(0, 5)}:00Z`;
+      // The entered time is Tashkent wall-clock time (UTC+5), not UTC.
+      insertPayload.created_at = tashkentToIso(validData.transaction_date, validData.transaction_time);
     }
 
-    const { data: created, error: insertError } = await supabase
+    let { data: created, error: insertError } = await supabase
       .from('transactions')
       .insert(insertPayload)
       .select('*, categories(id, name, type, icon, color)')
       .single();
+
+    // Migration 012 adds 'telegram_ai' / 'telegram_voice' to the source CHECK constraint.
+    // If it is not applied yet, save the row as 'manual' instead of losing it.
+    if (
+      insertError &&
+      insertPayload.source !== 'manual' &&
+      String(insertError.message || '').includes('source')
+    ) {
+      console.warn('[transactions] source check failed (migration 012 not applied?); retrying as manual');
+      ({ data: created, error: insertError } = await supabase
+        .from('transactions')
+        .insert({ ...insertPayload, source: 'manual' })
+        .select('*, categories(id, name, type, icon, color)')
+        .single());
+    }
 
     if (insertError) {
       return {
@@ -398,7 +415,7 @@ export async function updateTransaction(
       updatePayload.transaction_date = validData.transaction_date;
     if (validData.transaction_time !== undefined && validData.transaction_time !== null) {
       const baseDate = validData.transaction_date || existing.transaction_date;
-      updatePayload.created_at = `${baseDate}T${validData.transaction_time.slice(0, 5)}:00Z`;
+      updatePayload.created_at = tashkentToIso(baseDate, validData.transaction_time);
     }
     if (validData.category_id !== undefined) updatePayload.category_id = validData.category_id;
     if (validData.merchant !== undefined) updatePayload.merchant = validData.merchant;
