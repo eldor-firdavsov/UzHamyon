@@ -78,6 +78,33 @@ export interface GeminiCallOptions {
   allowOpenRouter?: boolean;
   /** Extra parts appended after the text part (e.g. inlineData audio). */
   extraParts?: Array<Record<string, unknown>>;
+  /**
+   * Ask Gemini 3.x models for low "thinking" (default true). Per the Gemini docs "low" is
+   * "fewest tokens, lowest latency"; gemini-3.8-flash otherwise thinks at "medium".
+   */
+  lowLatency?: boolean;
+}
+
+/**
+ * Models that rejected thinkingConfig (400) — never send it to them again in this process.
+ */
+const thinkingUnsupported = new Set<string>();
+
+/** True for models where we send thinkingConfig.thinkingLevel = LOW (explicit gemini-3.* names only). */
+export function shouldSendLowThinking(model: string): boolean {
+  return /^gemini-3(\.\d+)?-/.test(model) && !thinkingUnsupported.has(model);
+}
+
+/** Request body for one model: adds thinkingConfig only where it is supported. */
+export function bodyForModel(
+  body: Record<string, unknown>,
+  model: string,
+  lowLatency: boolean
+): Record<string, unknown> {
+  if (!lowLatency || !shouldSendLowThinking(model)) return body;
+  const generationConfig = { ...((body.generationConfig as Record<string, unknown>) || {}) };
+  generationConfig.thinkingConfig = { thinkingLevel: 'LOW' };
+  return { ...body, generationConfig };
 }
 
 /** Model try-order for one call. */
@@ -143,6 +170,8 @@ export async function callGeminiApi(
         throw new AiBudgetExceededError();
       }
       const attemptTimeout = budget ? budget.timeoutFor(timeoutMs) : timeoutMs;
+      const requestBody = bodyForModel(body, model, options.lowLatency !== false);
+      const startedAt = Date.now();
       try {
         const response = await fetch(endpoint, {
           method: 'POST',
@@ -150,7 +179,7 @@ export async function callGeminiApi(
             'Content-Type': 'application/json',
             'X-goog-api-key': apiKey as string,
           },
-          body: JSON.stringify(body),
+          body: JSON.stringify(requestBody),
           signal: AbortSignal.timeout(attemptTimeout),
         });
 
@@ -159,12 +188,17 @@ export async function callGeminiApi(
           const candidate = data.candidates?.[0];
           const parts = candidate?.content?.parts;
 
-          // Extract text from parts array (filter out non-text parts)
+          // Extract text from parts array (skip non-text and thought-summary parts)
           const text = Array.isArray(parts)
-            ? parts.map((p: { text?: string }) => p.text || '').join('').trim()
+            ? parts
+                .filter((p: { thought?: boolean }) => !p.thought)
+                .map((p: { text?: string }) => p.text || '')
+                .join('')
+                .trim()
             : '';
 
           if (text) {
+            console.log(`[perf] gemini model=${model} ms=${Date.now() - startedAt}`);
             return {
               text,
               model: data.modelVersion || model,
@@ -176,6 +210,14 @@ export async function callGeminiApi(
         const status = response.status;
         const errorData = await response.json().catch(() => ({}));
         const errorMsg = errorData?.error?.message || `HTTP ${status}`;
+
+        // thinkingConfig not accepted by this model: remember and retry once without it.
+        if (status === 400 && requestBody !== body && /thinking/i.test(errorMsg)) {
+          thinkingUnsupported.add(model);
+          lastError = new Error(`Model ${model} thinkingConfig qabul qilmadi: ${errorMsg}`);
+          if (attempt === 1) continue;
+          break;
+        }
 
         // If model not found / retired (404), mark disabled and skip immediately
         if (status === 404) {
@@ -353,6 +395,8 @@ export async function generateGeminiJson<T = unknown>(
     generationConfig: {
       responseMimeType: 'application/json',
       temperature: 0.1,
+      // Enough for 10 actions + summary + transcript; keeps a runaway answer short.
+      maxOutputTokens: 2048,
     },
   };
 
