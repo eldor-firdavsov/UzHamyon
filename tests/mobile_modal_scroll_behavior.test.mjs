@@ -20,28 +20,6 @@ describe('Mobile Swipe & Scroll Behavior in UzHamyon Transaction Forms', () => {
     assert.ok(fileContent.includes("lockCount"), 'Must handle multiple concurrent modals via ref counter');
   });
 
-  test('2. TransactionModal has overscroll containment, touch-pan-y, and pinned header/footer', () => {
-    const fileContent = fs.readFileSync(
-      path.join(rootDir, 'src/components/transactions/TransactionModal.tsx'),
-      'utf8'
-    );
-
-    // Verify scroll lock integration
-    assert.ok(fileContent.includes('useModalScrollLock(props.isOpen)'), 'Must call useModalScrollLock');
-
-    // Verify backdrop touch containment
-    assert.ok(fileContent.includes('overscroll-contain'), 'Backdrop must contain overscroll');
-    assert.ok(fileContent.includes('touch-pan-y'), 'Backdrop must constrain gestures to pan-y');
-
-    // Verify modal container bounds (dynamic viewport height dvh)
-    assert.ok(fileContent.includes('max-h-[90dvh]'), 'Modal must respect dynamic mobile viewport height');
-    assert.ok(fileContent.includes('overflow-hidden'), 'Outer modal container must prevent outer scroll leaks');
-
-    // Verify pinned header and action buttons
-    assert.ok(fileContent.includes('shrink-0'), 'Header and footer must have shrink-0 to remain visible');
-    assert.ok(fileContent.includes('overflow-y-auto'), 'Form body must be independently scrollable');
-  });
-
   test('3. FastTransactionModal has overscroll containment, touch-pan-y, and pinned header/footer', () => {
     const fileContent = fs.readFileSync(
       path.join(rootDir, 'src/components/transactions/FastTransactionModal.tsx'),
@@ -61,19 +39,6 @@ describe('Mobile Swipe & Scroll Behavior in UzHamyon Transaction Forms', () => {
     assert.ok(fileContent.includes('overflow-y-auto'), 'Form body must scroll independently');
   });
 
-  test('4. AddTransactionModal (Prototype) has scroll lock and overscroll containment', () => {
-    const fileContent = fs.readFileSync(
-      path.join(rootDir, 'src/prototype/components/AddTransactionModal.tsx'),
-      'utf8'
-    );
-
-    assert.ok(fileContent.includes('useModalScrollLock(isOpen)'), 'Must call useModalScrollLock');
-    assert.ok(fileContent.includes('overscroll-contain'), 'Must contain overscroll');
-    assert.ok(fileContent.includes('touch-pan-y'), 'Must constrain touch to pan-y');
-    assert.ok(fileContent.includes('max-h-[90dvh]'), 'Must use dvh units for mobile keyboards');
-    assert.ok(fileContent.includes('shrink-0'), 'Header and buttons must be pinned with shrink-0');
-  });
-
   test('5. Prototype CSS (.ov, .sh, .sh.fx, .fxb) enforces overscroll containment & touch-pan-y', () => {
     const cssContent = fs.readFileSync(
       path.join(rootDir, 'src/app/prototype/prototype.css'),
@@ -87,13 +52,12 @@ describe('Mobile Swipe & Scroll Behavior in UzHamyon Transaction Forms', () => {
   });
 
   test('6. Form inputs and pickers do not have broad preventDefault touch handlers', () => {
-    const txModal = fs.readFileSync(path.join(rootDir, 'src/components/transactions/TransactionModal.tsx'), 'utf8');
+    // (TransactionModal / AddTransactionModal were unused and removed in 1E.)
     const fastModal = fs.readFileSync(path.join(rootDir, 'src/components/transactions/FastTransactionModal.tsx'), 'utf8');
 
     // Check that onTouchStart or onTouchMove do not call preventDefault on inputs
-    assert.ok(!txModal.includes('onTouchMove={(e) => e.preventDefault()}'), 'Must not block touchmove on form');
     assert.ok(!fastModal.includes('onTouchMove={(e) => e.preventDefault()}'), 'Must not block touchmove on form');
-    assert.ok(!txModal.includes('onTouchStart={(e) => e.preventDefault()}'), 'Must not block touchstart on form');
+    assert.ok(!fastModal.includes('onTouchStart={(e) => e.preventDefault()}'), 'Must not block touchstart on form');
   });
 
   test('7. No global touch-action: none is defined in global styles', () => {
