@@ -13,6 +13,7 @@ import type {
 import type { FinancialGoal } from '../../types/database.ts';
 import { todayTashkent } from '../time/tashkent.ts';
 import { nextGoalStatus } from './matchGoal.ts';
+import { formatMoney } from '../formatters/money.ts';
 
 export interface ServiceResult<T> {
   data: T | null;
@@ -26,12 +27,7 @@ async function resolveClient(providedClient?: SupabaseClient): Promise<SupabaseC
   return await createClient();
 }
 
-function formatUzMoney(amount: number, currency: string = 'UZS'): string {
-  if (currency === 'UZS') {
-    return `${new Intl.NumberFormat('uz-UZ', { maximumFractionDigits: 0 }).format(Math.round(amount)).replace(/[\u00a0\u202f]/g, ' ')} soʻm`;
-  }
-  return `${amount >= 1000 ? amount.toLocaleString('en-US') : amount.toFixed(2)} ${currency}`;
-}
+
 
 /**
  * Computes remaining calendar months until target date
@@ -150,7 +146,7 @@ async function computeGoalProgress(
       feasibilityStatus = 'unlikely';
       monthlyNeeded = remaining;
       explanation = goal.currency === 'USD'
-        ? `"${goal.name}": The target date for this goal has already passed (Needed: ${formatUzMoney(remaining, goal.currency)}).`
+        ? `"${goal.name}": The target date for this goal has already passed (Needed: ${formatMoney(remaining, goal.currency)}).`
         : 'Belgilangan muddat o‘tib ketgan. Yangi muddat belgilash kerak.';
     } else {
       monthlyNeeded = Math.round((remaining / monthsRemaining) * 100) / 100;
@@ -162,18 +158,18 @@ async function computeGoalProgress(
       if (avgMonthlyNet >= monthlyNeeded) {
         feasibilityStatus = 'feasible';
         explanation = goal.currency === 'USD'
-          ? `"${goal.name}": Based on your monthly net savings of ${formatUzMoney(avgMonthlyNet, goal.currency)}/mo, you are on track to save ${formatUzMoney(monthlyNeeded, goal.currency)}/mo needed by ${goal.target_date}.`
-          : `Maqsadga yetish uchun oyiga ${formatUzMoney(monthlyNeeded, goal.currency)} yig‘ing. Oylik erkin mablag‘ingiz (${formatUzMoney(avgMonthlyNet, goal.currency)}) yetarli.`;
+          ? `"${goal.name}": Based on your monthly net savings of ${formatMoney(avgMonthlyNet, goal.currency)}/mo, you are on track to save ${formatMoney(monthlyNeeded, goal.currency)}/mo needed by ${goal.target_date}.`
+          : `Maqsadga yetish uchun oyiga ${formatMoney(monthlyNeeded, goal.currency)} yig‘ing. Oylik erkin mablag‘ingiz (${formatMoney(avgMonthlyNet, goal.currency)}) yetarli.`;
       } else if (avgMonthlyNet > 0 && monthlyNeeded <= avgMonthlyNet * 1.5) {
         feasibilityStatus = 'challenging';
         explanation = goal.currency === 'USD'
-          ? `"${goal.name}": You need ${formatUzMoney(monthlyNeeded, goal.currency)}/mo, but your average savings is ${formatUzMoney(avgMonthlyNet, goal.currency)}/mo. Consider extending your target date or trimming discretionary spending.`
-          : `Oyiga ${formatUzMoney(monthlyNeeded, goal.currency)} jamg‘arish kerak. Xarajatlarni optimallashtirish tavsiya etiladi.`;
+          ? `"${goal.name}": You need ${formatMoney(monthlyNeeded, goal.currency)}/mo, but your average savings is ${formatMoney(avgMonthlyNet, goal.currency)}/mo. Consider extending your target date or trimming discretionary spending.`
+          : `Oyiga ${formatMoney(monthlyNeeded, goal.currency)} jamg‘arish kerak. Xarajatlarni optimallashtirish tavsiya etiladi.`;
       } else {
         feasibilityStatus = 'unlikely';
         explanation = goal.currency === 'USD'
-          ? `"${goal.name}": You need ${formatUzMoney(monthlyNeeded, goal.currency)}/mo, but your current net cashflow is insufficient (${formatUzMoney(avgMonthlyNet, goal.currency)}/mo). Consider extending your target date.`
-          : `Hozirgi jamg‘arish sur’ati bilan muddatni uzaytirish yoki xarajatlarni kamaytirish kerak (Oyiga ${formatUzMoney(monthlyNeeded, goal.currency)} kerak, erkin mablag‘: ${formatUzMoney(avgMonthlyNet, goal.currency)}).`;
+          ? `"${goal.name}": You need ${formatMoney(monthlyNeeded, goal.currency)}/mo, but your current net cashflow is insufficient (${formatMoney(avgMonthlyNet, goal.currency)}/mo). Consider extending your target date.`
+          : `Hozirgi jamg‘arish sur’ati bilan muddatni uzaytirish yoki xarajatlarni kamaytirish kerak (Oyiga ${formatMoney(monthlyNeeded, goal.currency)} kerak, erkin mablag‘: ${formatMoney(avgMonthlyNet, goal.currency)}).`;
       }
     }
   }

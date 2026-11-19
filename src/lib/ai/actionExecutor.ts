@@ -22,6 +22,7 @@ import {
   markPendingActionFailed,
   type PendingActionRecord,
 } from './pendingActionStore.ts';
+import { formatMoney } from '../formatters/money.ts';
 
 export interface ExecutionResult {
   success: boolean;
@@ -34,12 +35,7 @@ export interface ExecutionResult {
   }>;
 }
 
-function formatUzbekMoney(amount: number, curr = 'UZS'): string {
-  if (curr === 'USD') {
-    return `${amount >= 1000 ? amount.toLocaleString('en-US') : amount} dollar`;
-  }
-  return `${new Intl.NumberFormat('uz-UZ', { maximumFractionDigits: 0 }).format(Math.round(amount)).replace(/[\u00a0\u202f]/g, ' ')} so‘m`;
-}
+
 
 /**
  * Resolves a category ID from Supabase based on name and transaction type
@@ -230,7 +226,7 @@ export async function executePendingActionRecord(
             createdTransactionIds.push(txRes.data.id);
           }
           const typeLabel = txType === 'income' ? 'daromad' : 'xarajat';
-          successDescriptions.push(`${item.description} (${formatUzbekMoney(item.amount, item.currency)} ${typeLabel})`);
+          successDescriptions.push(`${item.description} (${formatMoney(item.amount, item.currency)} ${typeLabel})`);
         }
       } else if (item.actionType === 'create_goal') {
         const goalRes = await createGoal(
@@ -261,7 +257,7 @@ export async function executePendingActionRecord(
           if (goalRes.data.id) {
             createdGoalIds.push(goalRes.data.id);
           }
-          successDescriptions.push(`«${item.goalName}» jamg‘arma maqsadi (${formatUzbekMoney(item.targetAmount || item.amount, item.currency)})`);
+          successDescriptions.push(`«${item.goalName}» jamg‘arma maqsadi (${formatMoney(item.targetAmount || item.amount, item.currency)})`);
         }
       } else if (item.actionType === 'update_goal') {
         const goal = await resolveUserGoal(item.goalName, record.userId, supabase);
@@ -297,7 +293,7 @@ export async function executePendingActionRecord(
             success: true,
             data: updateRes.data,
           });
-          successDescriptions.push(`«${goal.name}» maqsadi yangilandi (yangi summa: ${formatUzbekMoney(item.targetAmount || item.amount, item.currency)})`);
+          successDescriptions.push(`«${goal.name}» maqsadi yangilandi (yangi summa: ${formatMoney(item.targetAmount || item.amount, item.currency)})`);
         }
       } else if (item.actionType === 'contribute_goal') {
         const goal = await resolveUserGoal(item.goalName, record.userId, supabase);
@@ -344,7 +340,7 @@ export async function executePendingActionRecord(
             data: contribRes.data,
           });
           const newTotal = (contribRes.data as { current_amount?: number })?.current_amount ?? (Number(goal.current_amount) + item.amount);
-          successDescriptions.push(`«${goal.name}» maqsadiga ${formatUzbekMoney(item.amount, item.currency)} qo‘shildi (Hozirda jami: ${formatUzbekMoney(newTotal, item.currency)})`);
+          successDescriptions.push(`«${goal.name}» maqsadiga ${formatMoney(item.amount, item.currency)} qo‘shildi (Hozirda jami: ${formatMoney(newTotal, item.currency)})`);
         }
       }
     } catch (itemErr: unknown) {

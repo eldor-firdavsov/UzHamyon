@@ -16,6 +16,7 @@ import {
   TOO_MANY_ACTIONS_MESSAGE,
   AMOUNT_TOO_LARGE_MESSAGE,
 } from './limits.ts';
+import { formatMoney } from '../formatters/money.ts';
 
 export type FinancialIntentType =
   | 'action_proposal'
@@ -96,12 +97,7 @@ interface RawGeminiOutput {
   transcript?: string;
 }
 
-function formatUzbekMoney(amount: number, curr = 'UZS'): string {
-  if (curr === 'USD') {
-    return `${amount >= 1000 ? amount.toLocaleString('en-US') : amount} dollar`;
-  }
-  return `${new Intl.NumberFormat('uz-UZ', { maximumFractionDigits: 0 }).format(Math.round(amount)).replace(/[\u00a0\u202f]/g, ' ')} so‘m`;
-}
+
 
 /**
  * Builds the system instruction for Gemini action extraction
@@ -371,18 +367,18 @@ export async function extractFinancialActions(
       if (sanitizedActions.length === 1) {
         const a = sanitizedActions[0];
         if (a.actionType === 'create_transaction') {
-          summaryUzbek = `${formatUzbekMoney(a.amount, a.currency)} miqdorida ${a.transactionType === 'income' ? 'daromadni' : 'xarajatni'} («${a.description}») qayd etishni tasdiqlaysizmi?`;
+          summaryUzbek = `${formatMoney(a.amount, a.currency)} miqdorida ${a.transactionType === 'income' ? 'daromadni' : 'xarajatni'} («${a.description}») qayd etishni tasdiqlaysizmi?`;
         } else if (a.actionType === 'create_goal') {
-          summaryUzbek = `«${a.goalName}» uchun ${formatUzbekMoney(a.targetAmount || a.amount, a.currency)} jamg‘arma maqsadini yaratishni tasdiqlaysizmi?`;
+          summaryUzbek = `«${a.goalName}» uchun ${formatMoney(a.targetAmount || a.amount, a.currency)} jamg‘arma maqsadini yaratishni tasdiqlaysizmi?`;
         } else if (a.actionType === 'update_goal') {
-          summaryUzbek = `«${a.goalName}» maqsadi miqdorini ${formatUzbekMoney(a.targetAmount || a.amount, a.currency)}ga o‘zgartirishni tasdiqlaysizmi?`;
+          summaryUzbek = `«${a.goalName}» maqsadi miqdorini ${formatMoney(a.targetAmount || a.amount, a.currency)}ga o‘zgartirishni tasdiqlaysizmi?`;
         } else if (a.actionType === 'contribute_goal') {
-          summaryUzbek = `«${a.goalName || 'Jamg‘arma'}» maqsadiga ${formatUzbekMoney(a.amount, a.currency)} qo‘shishni tasdiqlaysizmi?`;
+          summaryUzbek = `«${a.goalName || 'Jamg‘arma'}» maqsadiga ${formatMoney(a.amount, a.currency)} qo‘shishni tasdiqlaysizmi?`;
         }
       } else if (sanitizedActions.length > 1) {
         const lines = sanitizedActions.map((a, i) => {
           const typeText = a.transactionType === 'income' ? 'Daromad' : 'Xarajat';
-          return `${i + 1}. ${a.description} (${typeText}): ${formatUzbekMoney(a.amount, a.currency)}`;
+          return `${i + 1}. ${a.description} (${typeText}): ${formatMoney(a.amount, a.currency)}`;
         });
         summaryUzbek = `Quyidagi ${sanitizedActions.length} ta operatsiyani qayd etishni tasdiqlaysizmi?\n\n` + lines.join('\n');
       }
