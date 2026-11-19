@@ -6,8 +6,6 @@
  * matching (Uzbek Latin/Cyrillic, Russian, English) with AI fallbacks.
  */
 
-import { matchCategoryRow } from './catalog.ts';
-
 export interface CategoryPrediction {
   category: string;
   confidence: number;
@@ -227,16 +225,4 @@ export function predictCategoryFromTitle(
     confidence: 0.6,
     isAiAuto: true,
   };
-}
-
-/**
- * Matches a predicted (Uzbek) category name to a database category row.
- * Exact name or the Uzbek → system mapping only (see categories/catalog.ts).
- * Unknown → undefined, so the transaction is saved without a category ("Boshqa").
- */
-export function matchPredictedToDbCategory<T extends { id: string; name: string }>(
-  predictedName: string,
-  categories: T[]
-): T | undefined {
-  return matchCategoryRow(predictedName, categories);
 }

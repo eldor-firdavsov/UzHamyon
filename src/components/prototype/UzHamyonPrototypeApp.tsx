@@ -6,10 +6,8 @@ import MobileNavBar from '@/components/navigation/MobileNavBar';
 import SlidingSegmentedNav from '@/prototype/components/SlidingSegmentedNav';
 import UzHamyonLogo from '@/components/brand/UzHamyonLogo';
 import CategoryIcon, { getCategoryMeta } from '@/components/categories/CategoryIcon';
-import {
-  predictCategoryFromTitle,
-  matchPredictedToDbCategory,
-} from '@/lib/categories/predictCategory';
+import { predictCategoryFromTitle } from '@/lib/categories/predictCategory';
+import { matchCategoryRow } from '@/lib/categories/catalog';
 import { formatNumberWithGaps } from '@/lib/formatters/numberGaps';
 import { useModalScrollLock } from '@/lib/ui/useModalScrollLock';
 import type { Category } from '@/types/database';
@@ -1137,7 +1135,7 @@ export default function UzHamyonPrototypeApp({
     try {
       const targetType = type === 'in' ? 'income' : 'expense';
       const typedCategories = categories.filter((c) => c.type === targetType);
-      const matched = matchPredictedToDbCategory(cat, typedCategories);
+      const matched = matchCategoryRow(cat, typedCategories);
 
       const payload: Record<string, unknown> = {
         description: desc,

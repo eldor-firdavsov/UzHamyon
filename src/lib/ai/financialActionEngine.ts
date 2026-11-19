@@ -1,6 +1,10 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { createTransaction, deleteTransaction } from '../transactions/service.ts';
 import { todayTashkent, yesterdayTashkent, monthRangeTashkent } from '../time/tashkent.ts';
+import { formatMoney } from '../formatters/money.ts';
+import { matchCategoryRow } from '../categories/catalog.ts';
+import { findUserGoal } from '../goals/matchGoal.ts';
+import { contributeToGoal } from '../goals/service.ts';
 
 export interface PendingAction {
   action_id: string;
@@ -52,16 +56,7 @@ function cleanText(text: string): string {
     .trim();
 }
 
-function formatCurrencyAmount(amount: number | string | undefined, curr = 'UZS'): string {
-  const num = Number(amount) || 0;
-  if (curr === 'USD') {
-    return `${num >= 1000 ? num.toLocaleString('en-US') : num} dollar`;
-  }
-  if (curr === 'UZS' || !curr) {
-    return `${new Intl.NumberFormat('uz-UZ', { maximumFractionDigits: 0 }).format(Math.round(num)).replace(/[\u00a0\u202f]/g, ' ')} soʻm`;
-  }
-  return `${num >= 1000 ? num.toLocaleString('en-US') : num.toFixed(2)} ${curr}`;
-}
+
 
 /**
  * Extracts amount and currency from text
@@ -131,18 +126,11 @@ async function findCategoryId(
 ): Promise<string | null> {
   const { data: categories } = await supabase
     .from('categories')
-    .select('id, name')
+    .select('id, name, type')
     .eq('type', type);
 
-  if (!categories || categories.length === 0) return null;
-
-  const direct = categories.find((c) => c.name.toLowerCase() === categoryName.toLowerCase());
-  if (direct) return direct.id;
-
-  const partial = categories.find((c) => c.name.toLowerCase().includes(categoryName.toLowerCase()));
-  if (partial) return partial.id;
-
-  return null;
+  // Same matcher as the rest of the app (#44): exact name or Uzbek→system mapping only.
+  return matchCategoryRow(categoryName, categories || [], type)?.id ?? null;
 }
 
 /**
@@ -231,7 +219,7 @@ export async function executePendingAction(
 
       return {
         success: true,
-        message: `${formatCurrencyAmount(amount, currency)} daromad muvaffaqiyatli saqlandi.`,
+        message: `${formatMoney(amount, currency)} daromad muvaffaqiyatli saqlandi.`,
         data: res.data,
       };
     }
@@ -256,7 +244,7 @@ export async function executePendingAction(
 
       return {
         success: true,
-        message: `${formatCurrencyAmount(amount, currency)} xarajat muvaffaqiyatli saqlandi.`,
+        message: `${formatMoney(amount, currency)} xarajat muvaffaqiyatli saqlandi.`,
         data: res.data,
       };
     }
@@ -274,7 +262,7 @@ export async function executePendingAction(
 
       return {
         success: true,
-        message: `Oxirgi xarajat (${description}, ${formatCurrencyAmount(Number(amount), currency)}) muvaffaqiyatli o‘chirildi va balansingiz yangilandi.`,
+        message: `Oxirgi xarajat (${description}, ${formatMoney(Number(amount), currency)}) muvaffaqiyatli o‘chirildi va balansingiz yangilandi.`,
         data: res.data,
       };
     }
@@ -300,14 +288,18 @@ export async function executePendingAction(
 
       return {
         success: true,
-        message: `${formatCurrencyAmount(amount, currency)} naqd pul balansi muvaffaqiyatli saqlandi.`,
+        message: `${formatMoney(amount, currency)} naqd pul balansi muvaffaqiyatli saqlandi.`,
         data: res.data,
       };
     }
 
     if (action.type === 'create_goal') {
       const { amount, target_amount, currency = 'UZS', goal_name = 'Jamg‘arma maqsadi', target_date } = action.params;
-      const targetAmt = target_amount || amount || 1000000;
+      const targetAmt = Number(target_amount || amount) || 0;
+      if (targetAmt <= 0) {
+        // Never assume a target amount (same rule as #20).
+        return { success: false, message: 'Maqsad uchun qancha summa yig‘moqchisiz? Iltimos, summani yozing.' };
+      }
       const defaultDate = target_date || monthRangeTashkent(Number(todayTashkent().slice(0, 4)) + 1, Number(todayTashkent().slice(5, 7))).start;
 
       const { data: userAuth } = await supabase.auth.getUser();
@@ -337,7 +329,7 @@ export async function executePendingAction(
 
       return {
         success: true,
-        message: `«${goal_name}» uchun ${formatCurrencyAmount(targetAmt, currency)}lik yangi jamg‘arma maqsadi muvaffaqiyatli yaratildi.`,
+        message: `«${goal_name}» uchun ${formatMoney(targetAmt, currency)}lik yangi jamg‘arma maqsadi muvaffaqiyatli yaratildi.`,
         data: newGoal,
       };
     }
@@ -359,27 +351,22 @@ export async function executePendingAction(
       if (!targetGoalId) {
         const { data: goals } = await supabase
           .from('financial_goals')
-          .select('id, name, target_amount, current_amount, status')
+          .select('id, name, status, updated_at')
           .eq('user_id', uid);
 
         if (!goals || goals.length === 0) {
           return { success: false, message: 'Sizda hozircha hech qanday jamg‘arma maqsadi mavjud emas. Avval yangi maqsad yarating.' };
         }
-
-        if (goal_name) {
-          const matched = goals.find((g) => g.name.toLowerCase().includes(goal_name.toLowerCase()));
-          if (matched) targetGoalId = matched.id;
-        }
-
+        // Shared goal-matching rule (#30, #44): never "the first goal".
+        targetGoalId = findUserGoal(goals, goal_name)?.id;
         if (!targetGoalId) {
-          const inProgress = goals.find((g) => g.status === 'in_progress');
-          targetGoalId = inProgress ? inProgress.id : goals[0].id;
+          return { success: false, message: `«${goal_name || ''}» nomli faol maqsad topilmadi. Avval maqsad yarating.` };
         }
       }
 
       const { data: existing } = await supabase
         .from('financial_goals')
-        .select('id, name, target_amount, current_amount, status')
+        .select('id, name, currency')
         .eq('id', targetGoalId)
         .eq('user_id', uid)
         .maybeSingle();
@@ -387,32 +374,22 @@ export async function executePendingAction(
       if (!existing) {
         return { success: false, message: 'Jamg‘arma maqsadi topilmadi.' };
       }
-
-      const current = Number(existing.current_amount) || 0;
-      const target = Number(existing.target_amount) || 0;
-      const newAmount = Math.max(0, Math.round((current + amount) * 100) / 100);
-      const newStatus = newAmount >= target ? 'completed' : 'in_progress';
-
-      const { data: updated, error: updateErr } = await supabase
-        .from('financial_goals')
-        .update({
-          current_amount: newAmount,
-          status: newStatus,
-        })
-        .eq('id', existing.id)
-        .eq('user_id', uid)
-        .select()
-        .single();
-
-      if (updateErr || !updated) {
-        return { success: false, message: `Jamg‘armaga mablag‘ qo‘shishda xatolik: ${updateErr?.message}.` };
+      if ((existing.currency || 'UZS') !== (currency || 'UZS')) {
+        return { success: false, message: `«${existing.name}» maqsadi ${existing.currency} valyutasida. Boshqa valyutadagi pulni qo‘shib bo‘lmaydi.` };
       }
 
-      const pct = target > 0 ? Math.min(100, Math.round((newAmount / target) * 100)) : 100;
+      // Same service as the Mini App: history row, cancelled stays cancelled, no negative totals.
+      const res = await contributeToGoal(existing.id, { amount }, supabase, 'manual');
+      if (res.error || !res.data) {
+        return { success: false, message: `Jamg‘armaga mablag‘ qo‘shishda xatolik: ${res.error || 'Noma’lum xato'}.` };
+      }
+
+      const newAmount = Number(res.data.current_amount) || 0;
+      const pct = Math.round(Number(res.data.percentage_completed) || 0);
       return {
         success: true,
-        message: `«${existing.name}» maqsadiga ${formatCurrencyAmount(amount, currency)} muvaffaqiyatli qo‘shildi! Hozirda to‘plandi: ${formatCurrencyAmount(newAmount, currency)} (${pct}% bajarildi).`,
-        data: updated,
+        message: `«${existing.name}» maqsadiga ${formatMoney(amount, currency)} muvaffaqiyatli qo‘shildi! Hozirda to‘plandi: ${formatMoney(newAmount, currency)} (${pct}% bajarildi).`,
+        data: res.data,
       };
     }
 
@@ -503,7 +480,7 @@ export async function processFinancialIntent(
         };
         return {
           handled: true,
-          answer: `${formatCurrencyAmount(pendingAction.params.amount, pendingAction.params.currency || 'UZS')} naqd pulni boshlang‘ich balans sifatida qayd etaymi? Tasdiqlaysizmi?`,
+          answer: `${formatMoney(pendingAction.params.amount, pendingAction.params.currency || 'UZS')} naqd pulni boshlang‘ich balans sifatida qayd etaymi? Tasdiqlaysizmi?`,
           pendingAction: nextAction,
         };
       }
@@ -544,7 +521,7 @@ export async function processFinancialIntent(
         };
         return {
           handled: true,
-          answer: `${formatCurrencyAmount(pendingAction.params.amount, pendingAction.params.currency || 'UZS')} daromadni bugungi sana bilan qayd etishni taklif qilaman. Tasdiqlaysizmi?`,
+          answer: `${formatMoney(pendingAction.params.amount, pendingAction.params.currency || 'UZS')} daromadni bugungi sana bilan qayd etishni taklif qilaman. Tasdiqlaysizmi?`,
           pendingAction: nextAction,
         };
       }
@@ -553,7 +530,7 @@ export async function processFinancialIntent(
       if (isConfirmation(userText)) {
         return {
           handled: true,
-          answer: `Ushbu ${formatCurrencyAmount(pendingAction.params.amount, pendingAction.params.currency || 'UZS')} avvaldan mavjud naqd balansingizmi yoki yangi daromadmi? Iltimos, aniqlashtiring (masalan: "mavjud balans" deb yozing).`,
+          answer: `Ushbu ${formatMoney(pendingAction.params.amount, pendingAction.params.currency || 'UZS')} avvaldan mavjud naqd balansingizmi yoki yangi daromadmi? Iltimos, aniqlashtiring (masalan: "mavjud balans" deb yozing).`,
           pendingAction,
         };
       }
@@ -613,7 +590,7 @@ export async function processFinancialIntent(
 
     return {
       handled: true,
-      answer: `${formatCurrencyAmount(amount, currency)} daromad tranzaksiyaga qo‘shildi.`,
+      answer: `${formatMoney(amount, currency)} daromad tranzaksiyaga qo‘shildi.`,
       actionResult: { success: true, type: 'create_income', data: txRes.data },
     };
   }
@@ -638,12 +615,18 @@ export async function processFinancialIntent(
     // Fetch existing goals to match
     const { data: userGoals } = await supabase
       .from('financial_goals')
-      .select('id, name, current_amount, target_amount')
+      .select('id, name, status, updated_at')
       .eq('user_id', userId);
 
-    let targetGoal = userGoals?.find((g) => g.name.toLowerCase().includes(goalName.toLowerCase()));
-    if (!targetGoal && userGoals && userGoals.length > 0) {
-      targetGoal = userGoals[0];
+    // Shared goal-matching rule (#30, #44): never fall back to the first goal.
+    const targetGoal = findUserGoal(userGoals || [], goalName);
+    if (!targetGoal) {
+      return {
+        handled: true,
+        answer: goalName
+          ? `«${goalName}» nomli faol maqsad topilmadi. Avval shu nomda maqsad yarating yoki nomini aniqroq yozing.`
+          : 'Qaysi maqsadga qo‘shmoqchisiz? Maqsad nomini yozing.',
+      };
     }
 
     const pendingAction: PendingAction = {
@@ -662,7 +645,7 @@ export async function processFinancialIntent(
 
     return {
       handled: true,
-      answer: `${targetDisplayName} maqsadiga ${formatCurrencyAmount(amount, currency)} qo‘shishni qayd etaymi? Tasdiqlaysizmi?`,
+      answer: `${targetDisplayName} maqsadiga ${formatMoney(amount, currency)} qo‘shishni qayd etaymi? Tasdiqlaysizmi?`,
       pendingAction,
     };
   }
@@ -700,7 +683,7 @@ export async function processFinancialIntent(
 
     return {
       handled: true,
-      answer: `«${goalName}» uchun ${formatCurrencyAmount(amount, currency)}lik yangi jamg‘arma maqsadi yaratilsinmi? Tasdiqlaysizmi?`,
+      answer: `«${goalName}» uchun ${formatMoney(amount, currency)}lik yangi jamg‘arma maqsadi yaratilsinmi? Tasdiqlaysizmi?`,
       pendingAction,
     };
   }
@@ -741,7 +724,7 @@ export async function processFinancialIntent(
 
     return {
       handled: true,
-      answer: `«${goalName}» olish uchun ${formatCurrencyAmount(amount, currency)}lik jamg‘arma maqsadini ochishni taklif qilaman. Tasdiqlaysizmi?`,
+      answer: `«${goalName}» olish uchun ${formatMoney(amount, currency)}lik jamg‘arma maqsadini ochishni taklif qilaman. Tasdiqlaysizmi?`,
       pendingAction,
     };
   }
@@ -776,7 +759,7 @@ export async function processFinancialIntent(
 
     return {
       handled: true,
-      answer: `Bu oyda jami ${formatCurrencyAmount(total, primaryCurr)} xarajat qilgansiz (bazasidan tekshirildi).`,
+      answer: `Bu oyda jami ${formatMoney(total, primaryCurr)} xarajat qilgansiz (bazasidan tekshirildi).`,
     };
   }
 
@@ -847,7 +830,7 @@ export async function processFinancialIntent(
 
     return {
       handled: true,
-      answer: `${formatCurrencyAmount(amount, currency)} naqd pulingiz borligini qayd etaymi? Bu avvaldan mavjud pulingizmi yoki yangi daromadmi?`,
+      answer: `${formatMoney(amount, currency)} naqd pulingiz borligini qayd etaymi? Bu avvaldan mavjud pulingizmi yoki yangi daromadmi?`,
       pendingAction,
     };
   }
@@ -885,7 +868,7 @@ export async function processFinancialIntent(
 
     return {
       handled: true,
-      answer: `${formatCurrencyAmount(amount, currency)} daromadni bugungi sana bilan qayd etishni taklif qilaman. Tasdiqlaysizmi?`,
+      answer: `${formatMoney(amount, currency)} daromadni bugungi sana bilan qayd etishni taklif qilaman. Tasdiqlaysizmi?`,
       pendingAction,
     };
   }
@@ -933,7 +916,7 @@ export async function processFinancialIntent(
 
     return {
       handled: true,
-      answer: `${dateLabel} ${uzbekCat} uchun ${formatCurrencyAmount(amount, currency)} xarajatni qayd etaymi? Tasdiqlaysizmi?`,
+      answer: `${dateLabel} ${uzbekCat} uchun ${formatMoney(amount, currency)} xarajatni qayd etaymi? Tasdiqlaysizmi?`,
       pendingAction,
     };
   }

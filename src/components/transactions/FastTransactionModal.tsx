@@ -7,7 +7,8 @@ import type { Category, TransactionType } from '@/types/database';
 import { cachedFetch, invalidateAllFinancialCaches, CACHE_TTL } from '@/lib/cache/clientCache';
 import { getCategoryDisplayName } from '@/lib/categories/schemas';
 import CategoryIcon from '@/components/categories/CategoryIcon';
-import { predictCategoryFromTitle, matchPredictedToDbCategory } from '@/lib/categories/predictCategory';
+import { predictCategoryFromTitle } from '@/lib/categories/predictCategory';
+import { matchCategoryRow } from '@/lib/categories/catalog';
 import {
   getNowLocalDateString,
   getNowLocalTimeString,
@@ -99,7 +100,7 @@ export default function FastTransactionModal({
 
   // AI prediction based on input title (with fallback to note)
   const predicted = predictCategoryFromTitle(title || note, targetType);
-  const matchedAutoCategory = matchPredictedToDbCategory(predicted.category, filteredCategories);
+  const matchedAutoCategory = matchCategoryRow(predicted.category, filteredCategories);
 
   // Derived effective category ID
   const isAutoCategory = chosenCategoryId === 'auto' || !chosenCategoryId;

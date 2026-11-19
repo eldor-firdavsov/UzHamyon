@@ -11,7 +11,6 @@ import {
   buildCategoryOptions, resolveCategoryOption, matchCategoryRow, attachCategoryIds, pickAllowedName,
   categoryNamesByType,
 } from '../src/lib/categories/catalog.ts';
-import { matchPredictedToDbCategory } from '../src/lib/categories/predictCategory.ts';
 import { AiBudget } from '../src/lib/ai/aiBudget.ts';
 import { isAmountWithinLimit, MAX_ACTIONS_PER_MESSAGE } from '../src/lib/ai/limits.ts';
 import { buildClaimableStatusFilter } from '../src/lib/ai/pendingActionStore.ts';
@@ -84,11 +83,11 @@ test('#14 attachCategoryIds stores id + DB name, drops unknown names', () => {
 test('#15 matcher never falls back to the first category and has no substring guessing', () => {
   const rows = SYSTEM_ROWS.filter((r) => r.type === 'expense');
   // No "Internet & Phone" row (migration 012 not applied) → no category, NOT Housing.
-  assert.equal(matchPredictedToDbCategory('Aloqa va Internet', rows), undefined);
-  assert.equal(matchPredictedToDbCategory('Nimadir', rows), undefined);
-  assert.equal(matchPredictedToDbCategory('Trans', rows), undefined);
-  assert.equal(matchPredictedToDbCategory('Uy-joy', rows)?.id, 'c-house');
-  assert.equal(matchPredictedToDbCategory('Transportation', rows)?.id, 'c-trans');
+  assert.equal(matchCategoryRow('Aloqa va Internet', rows), undefined);
+  assert.equal(matchCategoryRow('Nimadir', rows), undefined);
+  assert.equal(matchCategoryRow('Trans', rows), undefined);
+  assert.equal(matchCategoryRow('Uy-joy', rows)?.id, 'c-house');
+  assert.equal(matchCategoryRow('Transportation', rows)?.id, 'c-trans');
   assert.equal(matchCategoryRow("Ko‘ngilochar", [{ id: 'e', name: 'Entertainment', type: 'expense' }], 'expense')?.id, 'e');
 });
 
