@@ -37,6 +37,7 @@ import {
   VOICE_MESSAGES,
 } from './voice.ts';
 import type { ExtractionResult } from '../ai/actionExtractionEngine.ts';
+import { sourceFromStartCommand, recordSignupSource } from './signupSource.ts';
 import {
   isDeleteDataRequest,
   countUserData,
@@ -528,7 +529,15 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
     setTelegramChatMenuButton(chatId).catch(() => {});
     // A user who unblocked the bot usually presses Start: allow reminders again (#36).
     clearTelegramBlockedFlag(from.id).catch(() => {});
-    const isReturning = await isReturningTelegramUser(from.id);
+    // Make sure the account exists (new users are created here) and remember where they
+    // came from: t.me/uz_hamyonbot?start=<source>. Only the first source is ever stored.
+    const [isReturning, startAuth] = await Promise.all([
+      isReturningTelegramUser(from.id),
+      getTelegramUserSupabaseClient(from),
+    ]);
+    if (startAuth) {
+      await recordSignupSource(startAuth.userId, sourceFromStartCommand(text));
+    }
 
     if (isReturning) {
       const returningMsg = `<b>Qaytganingizdan xursandmiz, ${firstName}!</b>\n\nUzHamyon tayyor. Moliyaviy holatingizni davom ettiring.\n\n🎤 Ovozli xabar yuborishingiz ham mumkin — masalan: «bugun tushlikka 45 ming sarfladim».`;

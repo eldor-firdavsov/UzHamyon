@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyTelegramWebAppData, getOrCreateTelegramUser } from '@/lib/telegram/auth';
+import { recordSignupSource } from '@/lib/telegram/signupSource';
 import { createServerClient } from '@supabase/ssr';
 import { getSupabaseUrl, getSupabaseAnonKey } from '@/lib/supabase/config';
 
@@ -26,6 +27,11 @@ export async function POST(req: NextRequest) {
 
     // 2. Identify or create Supabase user
     const authResult = await getOrCreateTelegramUser(verification.user);
+
+    // A user whose very first contact is the Mini App (Phase 3A). Never overwrites.
+    if (authResult.isNewUser && authResult.user?.id) {
+      await recordSignupSource(authResult.user.id, 'miniapp');
+    }
 
     if (!authResult.success || !authResult.session) {
       return NextResponse.json(
