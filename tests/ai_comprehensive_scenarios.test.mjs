@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { createClient } from '@supabase/supabase-js';
 import { readEnv } from './helpers/env.mjs';
 import { askFinancialAdvisor } from '../src/lib/ai/advisorService.ts';
-import { generateAIContent } from '../src/lib/ai/aiClient.ts';
+import { generateAIContent } from '../src/lib/ai/geminiClient.ts';
 import { createTransaction } from '../src/lib/transactions/service.ts';
 import { createCategory } from '../src/lib/categories/service.ts';
 

@@ -18,7 +18,7 @@ try {
   console.warn('Could not load .env.local:', e.message);
 }
 
-import { generateAIContent } from '../src/lib/ai/aiClient.ts';
+import { generateAIContent } from '../src/lib/ai/geminiClient.ts';
 
 async function runTest() {
   console.log('--- 1. Testing OpenRouter Direct generateAIContent ---');

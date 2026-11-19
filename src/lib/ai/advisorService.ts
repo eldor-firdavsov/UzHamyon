@@ -1,9 +1,10 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { generateAIContent } from './aiClient.ts';
+import { generateAIContent } from './geminiClient.ts';
 import type { AiBudget } from './aiBudget.ts';
 import { computeBalances, normalizeCurrency, PRIMARY_CURRENCY } from '../finance/balance.ts';
 import type { AIConversation, AIMessage } from '../../types/database.ts';
 import { todayTashkent, addDaysToDate } from '../time/tashkent.ts';
+import { formatMoney } from '../formatters/money.ts';
 
 export interface ServiceResult<T> {
   data: T | null;
@@ -20,12 +21,7 @@ async function resolveClient(providedClient?: SupabaseClient): Promise<SupabaseC
 /**
  * Gathers verified, bounded financial facts for the authenticated user to ground AI answers
  */
-function formatUzMoney(amount: number, currency: string = 'UZS'): string {
-  if (currency === 'UZS') {
-    return `${new Intl.NumberFormat('uz-UZ', { maximumFractionDigits: 0 }).format(Math.round(amount)).replace(/[\u00a0\u202f]/g, ' ')} soʻm`;
-  }
-  return `${amount >= 1000 ? amount.toLocaleString('en-US') : amount.toFixed(2)} ${currency}`;
-}
+
 
 function computeMonthsRemaining(today: Date, targetDateStr: string): number {
   const parts = targetDateStr.split('-');
@@ -166,13 +162,13 @@ async function gatherUserFinancialContext(
   const lines: string[] = [];
   lines.push('=== FOYDALANUVCHINING ANIQ TASDIQLANGAN MOLIYAVIY FAKTLARI (VERIFIED CONTEXT) ===');
   lines.push(`- Asosiy hisob valyutasi: ${primaryCurrency} (boshqa valyutalar alohida, hech qachon qo‘shilmaydi)`);
-  lines.push(`- Joriy balans (daromad − xarajat − jamg‘armadagi pul): ${formatUzMoney(balances.primary.balance, primaryCurrency)}`);
-  lines.push(`- Jamg‘arma maqsadlarida saqlanayotgan pul: ${formatUzMoney(balances.primary.goalSavings, primaryCurrency)}`);
-  lines.push(`- Jami daromadlar (barcha): ${formatUzMoney(totalLifetimeIncome, primaryCurrency)}`);
-  lines.push(`- Jami xarajatlar (barcha): ${formatUzMoney(totalLifetimeExpense, primaryCurrency)}`);
+  lines.push(`- Joriy balans (daromad − xarajat − jamg‘armadagi pul): ${formatMoney(balances.primary.balance, primaryCurrency)}`);
+  lines.push(`- Jamg‘arma maqsadlarida saqlanayotgan pul: ${formatMoney(balances.primary.goalSavings, primaryCurrency)}`);
+  lines.push(`- Jami daromadlar (barcha): ${formatMoney(totalLifetimeIncome, primaryCurrency)}`);
+  lines.push(`- Jami xarajatlar (barcha): ${formatMoney(totalLifetimeExpense, primaryCurrency)}`);
   for (const cur of balances.otherCurrencies) {
     const b = balances.byCurrency[cur];
-    lines.push(`- ${cur} hisobi (alohida): balans ${formatUzMoney(b.balance, cur)}, daromad ${formatUzMoney(b.income, cur)}, xarajat ${formatUzMoney(b.expense, cur)}, jamg‘armada ${formatUzMoney(b.goalSavings, cur)}`);
+    lines.push(`- ${cur} hisobi (alohida): balans ${formatMoney(b.balance, cur)}, daromad ${formatMoney(b.income, cur)}, xarajat ${formatMoney(b.expense, cur)}, jamg‘armada ${formatMoney(b.goalSavings, cur)}`);
   }
   lines.push(`- Jami tranzaksiyalar soni: ${allTxs.length} ta`);
 
@@ -192,15 +188,15 @@ async function gatherUserFinancialContext(
     const monthName = `${mYear}-yil ${mUzName}`;
 
     lines.push(`\n--- ${monthName} oylik hisoboti (${m}) ---`);
-    lines.push(`  * Jami daromad: ${formatUzMoney(s.income, primaryCurrency)} (${s.incomeCount} ta tranzaksiya)`);
-    lines.push(`  * Jami xarajat: ${formatUzMoney(s.expense, primaryCurrency)} (${s.expenseCount} ta tranzaksiya)`);
-    lines.push(`  * Sof pul oqimi (Qoldiq / Net): ${formatUzMoney(s.income - s.expense, primaryCurrency)}`);
+    lines.push(`  * Jami daromad: ${formatMoney(s.income, primaryCurrency)} (${s.incomeCount} ta tranzaksiya)`);
+    lines.push(`  * Jami xarajat: ${formatMoney(s.expense, primaryCurrency)} (${s.expenseCount} ta tranzaksiya)`);
+    lines.push(`  * Sof pul oqimi (Qoldiq / Net): ${formatMoney(s.income - s.expense, primaryCurrency)}`);
 
     const sortedCats = Object.entries(s.categories).sort(([, a], [, b]) => b.sum - a.sum);
     lines.push(`  * Kategoriyalar bo'yicha xarajatlar (kamayish tartibida):`);
     for (const [cName, cData] of sortedCats) {
       const pct = s.expense > 0 ? ((cData.sum / s.expense) * 100).toFixed(1) : '0';
-      lines.push(`    - ${cName}: ${formatUzMoney(cData.sum, primaryCurrency)} (${cData.count} ta, ${pct}%)`);
+      lines.push(`    - ${cName}: ${formatMoney(cData.sum, primaryCurrency)} (${cData.count} ta, ${pct}%)`);
     }
 
     // Top individual transactions for this month
@@ -212,7 +208,7 @@ async function gatherUserFinancialContext(
       lines.push(`  * Eng katta individual xarajatlar:`);
       for (const tx of topMonthTxs) {
         const cat = Array.isArray(tx.categories) ? tx.categories[0] : tx.categories;
-        lines.push(`    - "${tx.description}" (${cat?.name || 'Boshqa'}): ${formatUzMoney(Number(tx.amount), tx.currency || primaryCurrency)} (Sana: ${tx.transaction_date})`);
+        lines.push(`    - "${tx.description}" (${cat?.name || 'Boshqa'}): ${formatMoney(Number(tx.amount), tx.currency || primaryCurrency)} (Sana: ${tx.transaction_date})`);
       }
     }
   }
@@ -227,9 +223,9 @@ async function gatherUserFinancialContext(
     const pctChange = prev.expense > 0 ? ((diffExpense / prev.expense) * 100).toFixed(1) : '0';
 
     lines.push(`\n--- Oylarni taqqoslash (${prevKey} vs ${latestKey}) ---`);
-    lines.push(`  * ${prevKey} xarajati: ${formatUzMoney(prev.expense, primaryCurrency)} (Daromad: ${formatUzMoney(prev.income, primaryCurrency)}, Qoldiq: ${formatUzMoney(prev.income - prev.expense, primaryCurrency)})`);
-    lines.push(`  * ${latestKey} xarajati: ${formatUzMoney(latest.expense, primaryCurrency)} (Daromad: ${formatUzMoney(latest.income, primaryCurrency)}, Qoldiq: ${formatUzMoney(latest.income - latest.expense, primaryCurrency)})`);
-    lines.push(`  * Farq: ${latestKey} oyida xarajatlar ${formatUzMoney(Math.abs(diffExpense), primaryCurrency)} ga (${Math.abs(Number(pctChange))}%) ${diffExpense <= 0 ? 'kamaygan (tejalgan)' : 'oshgan'}.`);
+    lines.push(`  * ${prevKey} xarajati: ${formatMoney(prev.expense, primaryCurrency)} (Daromad: ${formatMoney(prev.income, primaryCurrency)}, Qoldiq: ${formatMoney(prev.income - prev.expense, primaryCurrency)})`);
+    lines.push(`  * ${latestKey} xarajati: ${formatMoney(latest.expense, primaryCurrency)} (Daromad: ${formatMoney(latest.income, primaryCurrency)}, Qoldiq: ${formatMoney(latest.income - latest.expense, primaryCurrency)})`);
+    lines.push(`  * Farq: ${latestKey} oyida xarajatlar ${formatMoney(Math.abs(diffExpense), primaryCurrency)} ga (${Math.abs(Number(pctChange))}%) ${diffExpense <= 0 ? 'kamaygan (tejalgan)' : 'oshgan'}.`);
   }
 
   // Recurring small expenses summary
@@ -241,14 +237,14 @@ async function gatherUserFinancialContext(
       .slice(0, 3)
       .map(([m, c]) => `${m} (${c} marta)`)
       .join(', ');
-    lines.push(`  * ${catName}: Jami ${data.count} marta, umumiy ${formatUzMoney(data.total, primaryCurrency)}, o'rtacha ${formatUzMoney(avg, primaryCurrency)} / marta. Asosiy: ${topMerchants}`);
+    lines.push(`  * ${catName}: Jami ${data.count} marta, umumiy ${formatMoney(data.total, primaryCurrency)}, o'rtacha ${formatMoney(avg, primaryCurrency)} / marta. Asosiy: ${topMerchants}`);
   }
 
   // Active budgets & goals
   if (budgets.length > 0) {
     lines.push(`\n--- Faol Budjetlar ---`);
     for (const b of budgets) {
-      lines.push(`  * ${b.name}: ${formatUzMoney(Number(b.amount), b.currency || primaryCurrency)} (${b.period_type})`);
+      lines.push(`  * ${b.name}: ${formatMoney(Number(b.amount), b.currency || primaryCurrency)} (${b.period_type})`);
     }
   }
 
@@ -263,19 +259,19 @@ async function gatherUserFinancialContext(
       const remaining = Math.max(0, target - current);
       const pct = target > 0 ? ((current / target) * 100).toFixed(1) : '0';
       if (g.status === 'completed' || remaining === 0) {
-        lines.push(`  * ${g.name}: ${formatUzMoney(current, goalCurrency)} / ${formatUzMoney(target, goalCurrency)} (${pct}%) - Maqsad to‘liq bajarildi!`);
+        lines.push(`  * ${g.name}: ${formatMoney(current, goalCurrency)} / ${formatMoney(target, goalCurrency)} (${pct}%) - Maqsad to‘liq bajarildi!`);
       } else if (g.target_date && goalCurrency === primaryCurrency) {
         const months = computeMonthsRemaining(new Date(), g.target_date);
         const monthlyNeeded = months > 0 ? Math.round(remaining / months) : remaining;
         const isFeasible = avgMonthlyNet >= monthlyNeeded;
         lines.push(
-          `  * ${g.name}: ${formatUzMoney(current, goalCurrency)} / ${formatUzMoney(target, goalCurrency)} (${pct}% bajarildi, qolgan: ${formatUzMoney(remaining, goalCurrency)}, muddat: ${g.target_date}, qolgan oylar: ${months} oy, kerakli oylik: ${formatUzMoney(monthlyNeeded, goalCurrency)}/oy). ` +
+          `  * ${g.name}: ${formatMoney(current, goalCurrency)} / ${formatMoney(target, goalCurrency)} (${pct}% bajarildi, qolgan: ${formatMoney(remaining, goalCurrency)}, muddat: ${g.target_date}, qolgan oylar: ${months} oy, kerakli oylik: ${formatMoney(monthlyNeeded, goalCurrency)}/oy). ` +
           (isFeasible
-            ? `Amalga oshirish mumkin (Oylik erkin mablag‘: ${formatUzMoney(avgMonthlyNet, primaryCurrency)} >= ${formatUzMoney(monthlyNeeded, goalCurrency)}).`
-            : `Imkoniyat yetarli emas (Kerakli ${formatUzMoney(monthlyNeeded, goalCurrency)} > oylik erkin mablag‘ ${formatUzMoney(avgMonthlyNet, primaryCurrency)}). Muddatni uzaytirish yoki xarajatlarni kamaytirish tavsiya etiladi.`)
+            ? `Amalga oshirish mumkin (Oylik erkin mablag‘: ${formatMoney(avgMonthlyNet, primaryCurrency)} >= ${formatMoney(monthlyNeeded, goalCurrency)}).`
+            : `Imkoniyat yetarli emas (Kerakli ${formatMoney(monthlyNeeded, goalCurrency)} > oylik erkin mablag‘ ${formatMoney(avgMonthlyNet, primaryCurrency)}). Muddatni uzaytirish yoki xarajatlarni kamaytirish tavsiya etiladi.`)
         );
       } else {
-        lines.push(`  * ${g.name}: ${formatUzMoney(current, goalCurrency)} / ${formatUzMoney(target, goalCurrency)} (${pct}%, qolgan: ${formatUzMoney(remaining, goalCurrency)})`);
+        lines.push(`  * ${g.name}: ${formatMoney(current, goalCurrency)} / ${formatMoney(target, goalCurrency)} (${pct}%, qolgan: ${formatMoney(remaining, goalCurrency)})`);
       }
     }
   }
@@ -284,16 +280,16 @@ async function gatherUserFinancialContext(
     lines.push(`\n=== FOYDALANUVCHINING REJALASHTIRILGAN ONBOARDING MA’LUMOTLARI (PLANNING ESTIMATES) ===`);
     lines.push(`- DIQQAT: Ushbu raqamlar ro‘yxatdan o‘tishda rejalashtirish uchun kiritilgan baholashlar (taxminlar) bo‘lib, haqiqiy hisob balansi yoki tranzaksiya hisoblanmaydi.`);
     if (profile.declared_monthly_income !== null && profile.declared_monthly_income !== undefined) {
-      lines.push(`- Rejalashtirilgan oylik daromad (taxmin): ${formatUzMoney(Number(profile.declared_monthly_income), 'UZS')}`);
+      lines.push(`- Rejalashtirilgan oylik daromad (taxmin): ${formatMoney(Number(profile.declared_monthly_income), 'UZS')}`);
     }
     if (profile.declared_monthly_expenses !== null && profile.declared_monthly_expenses !== undefined) {
-      lines.push(`- Rejalashtirilgan oylik xarajat (taxmin): ${formatUzMoney(Number(profile.declared_monthly_expenses), 'UZS')}`);
+      lines.push(`- Rejalashtirilgan oylik xarajat (taxmin): ${formatMoney(Number(profile.declared_monthly_expenses), 'UZS')}`);
     }
     if (profile.target_expense_reduction_percent !== null && profile.target_expense_reduction_percent !== undefined) {
       lines.push(`- Xarajatlarni kamaytirish maqsadi: ${profile.target_expense_reduction_percent}%`);
     }
     if (profile.target_monthly_expenses !== null && profile.target_monthly_expenses !== undefined) {
-      lines.push(`- Maqsadli oylik xarajat (rejada): ${formatUzMoney(Number(profile.target_monthly_expenses), 'UZS')}`);
+      lines.push(`- Maqsadli oylik xarajat (rejada): ${formatMoney(Number(profile.target_monthly_expenses), 'UZS')}`);
     }
   }
 
@@ -336,7 +332,7 @@ async function gatherUserFinancialContext(
  */
 function buildVerifiedFallbackAnswer(question: string, facts: VerifiedFinancialFacts): string {
   const q = question.toLowerCase();
-  const money = (value: number) => formatUzMoney(value, facts.primaryCurrency);
+  const money = (value: number) => formatMoney(value, facts.primaryCurrency);
 
   if (facts.transactionCount === 0) {
     return 'Hozircha hisobingizda haqiqiy daromad yoki xarajat tranzaksiyalari yo‘q, shu sababli aniq moliyaviy raqamlar ko‘rsatib bo‘lmaydi. Tranzaksiya qo‘shganingizdan so‘ng tahlilni qayta so‘rashingiz mumkin.';

@@ -1,5 +1,8 @@
 /**
- * UzHamyon Google Gemini API Client
+ * UzHamyon AI client — the ONE client for Gemini and the OpenRouter fallback (#45).
+ *
+ * - generateGeminiJson(): structured JSON (action extraction, text and voice)
+ * - generateAIContent(): free text (AI advisor), never throws
  *
  * Direct server-side REST integration with Google Generative Language API.
  * Features:
@@ -11,12 +14,12 @@
 
 import { AiBudget, AiBudgetExceededError, MIN_USEFUL_REMAINING_MS } from './aiBudget.ts';
 
-function getGeminiApiKey(): string {
-  const key = process.env.GEMINI_API_KEY?.trim();
-  if (!key) {
-    throw new Error('GEMINI_API_KEY server muhitida sozlanmagan');
-  }
-  return key;
+function getGeminiApiKey(): string | undefined {
+  return process.env.GEMINI_API_KEY?.trim() || undefined;
+}
+
+function getOpenRouterKey(): string | undefined {
+  return (process.env.OPENROUTER_API_KEY || process.env.AI_API_KEY || '').trim() || undefined;
 }
 
 export function getConfiguredGeminiModel(): string {
@@ -25,16 +28,6 @@ export function getConfiguredGeminiModel(): string {
 
 export function getConfiguredGeminiFallbackModel(): string {
   return process.env.GEMINI_FALLBACK_MODEL?.trim() || 'gemini-3.7-flash';
-}
-
-export interface GeminiResponse {
-  text: string;
-  model: string;
-  usage?: {
-    promptTokens?: number;
-    candidatesTokens?: number;
-    totalTokens?: number;
-  };
 }
 
 /**
@@ -132,9 +125,12 @@ export async function callGeminiApi(
   // Deduplicate model candidates. When preferredModel is specified, try it first.
   // Otherwise prioritize ultra-fast low-latency models (gemini-flash-lite-latest / gemini-3.5-flash-lite)
   // to avoid hitting free-tier 20 req/day quota limits on gemini-3.8-flash.
-  const candidateModels = buildCandidateModels(preferredModel, primaryModel, fallbackModel, options.modelOrder);
+  // Without a Gemini key, go straight to the OpenRouter fallback (if configured).
+  const candidateModels = apiKey
+    ? buildCandidateModels(preferredModel, primaryModel, fallbackModel, options.modelOrder)
+    : [];
 
-  let lastError: Error | null = null;
+  let lastError: Error | null = apiKey ? null : new Error('GEMINI_API_KEY server muhitida sozlanmagan');
 
   for (const model of candidateModels) {
     if (isModelDisabled(model)) continue;
@@ -152,7 +148,7 @@ export async function callGeminiApi(
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-goog-api-key': apiKey,
+            'X-goog-api-key': apiKey as string,
           },
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(attemptTimeout),
@@ -224,7 +220,7 @@ export async function callGeminiApi(
   }
 
   // Final fallback to OpenRouter Gemini routing if Google direct is temporarily 503
-  const orKey = process.env.OPENROUTER_API_KEY || process.env.AI_API_KEY;
+  const orKey = getOpenRouterKey();
   if (orKey && options.allowOpenRouter !== false && (!budget || budget.canStart())) {
     try {
       const orRes = await callOpenRouterGemini(body, orKey, budget ? budget.timeoutFor(timeoutMs) : timeoutMs);
@@ -274,7 +270,7 @@ async function callOpenRouterGemini(
       'X-Title': 'UzHamyon AI Advisor',
     },
     body: JSON.stringify({
-      model: 'google/gemini-2.5-flash',
+      model: process.env.OPENROUTER_MODEL?.trim() || 'google/gemini-2.5-flash',
       messages,
       max_tokens: 1500,
       temperature: 0.1,
@@ -297,36 +293,44 @@ async function callOpenRouterGemini(
   return null;
 }
 
+export interface AIResponse {
+  text: string;
+  /** true = no AI answered; the caller should answer from verified facts instead. */
+  isFallback: boolean;
+  model: string;
+}
+
+const AI_FALLBACK_TEXT = 'Moliyaviy tahlil xizmati hozirda deterministik qoidalar rejimida ishlamoqda.';
+
 /**
- * Standard text content generation with optional system instruction
+ * Free-text generation (AI advisor): Gemini models, then OpenRouter. Never throws —
+ * on failure or a spent budget it returns isFallback: true.
  */
-export async function generateGeminiContent(
+export async function generateAIContent(
   prompt: string,
   systemInstruction?: string,
-  preferredModel?: string,
-  timeoutMs: number = 30000,
-  options: GeminiCallOptions = {}
-): Promise<GeminiResponse> {
-  const body: Record<string, unknown> = {
-    contents: [
-      {
-        role: 'user',
-        parts: [{ text: prompt }],
-      },
-    ],
-  };
-
-  if (systemInstruction) {
-    body.system_instruction = {
-      parts: [{ text: systemInstruction }],
-    };
+  timeoutMs: number = 25000,
+  options: { budget?: AiBudget } = {}
+): Promise<AIResponse> {
+  if (!getGeminiApiKey() && !getOpenRouterKey()) {
+    return { text: 'AI API kaliti server muhitida sozlanmagan.', isFallback: true, model: 'deterministic_fallback' };
   }
 
-  const result = await callGeminiApi(body, preferredModel, timeoutMs, options);
-  return {
-    text: result.text,
-    model: result.model,
+  const body: Record<string, unknown> = {
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.2, maxOutputTokens: 1500 },
   };
+  if (systemInstruction) {
+    body.system_instruction = { parts: [{ text: systemInstruction }] };
+  }
+
+  try {
+    const result = await callGeminiApi(body, undefined, timeoutMs, { budget: options.budget });
+    return { text: result.text, isFallback: false, model: result.model };
+  } catch (err) {
+    console.warn('[ai] All AI providers failed:', err instanceof Error ? err.message : err);
+    return { text: AI_FALLBACK_TEXT, isFallback: true, model: 'deterministic_fallback' };
+  }
 }
 
 /**
@@ -378,5 +382,3 @@ export async function generateGeminiJson<T = unknown>(
   }
 }
 
-// Backward compatibility shim for legacy callers
-export { generateGeminiContent as generateAIContent };
