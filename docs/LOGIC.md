@@ -250,7 +250,7 @@ erDiagram
 2. Header `x-telegram-bot-api-secret-token` must match `TELEGRAM_WEBHOOK_SECRET`, else `401`. In production a missing secret also means `401` (`src/lib/telegram/requestAuth.ts`).
 3. `claimWebhookUpdate(update_id)` inserts a `processing` row in `telegram_webhook_updates`. Duplicate → reply `200 {skipped}`. Stale `processing` rows (> 60 s) and `failed` rows can be re-claimed. If the table is missing it uses an in-memory map.
 4. Reply `200` immediately; inside `after()` run `handleTelegramUpdate(update)` then mark `completed` (or `failed` with the error).
-5. `handleTelegramUpdate` (`src/lib/telegram/bot.ts`) handles **only** `callback_query` and `message.text`. Voice, photo, sticker, edited messages etc. are silently ignored. Since 1D: non-private chats are ignored, except a command addressed to the bot, which gets one short "faqat shaxsiy chatda" note.
+5. `handleTelegramUpdate` (`src/lib/telegram/bot.ts`) handles `callback_query`, `message.text` and (since Phase 2) `message.voice` / `message.audio` (§4.12); `video_note` gets a short "not supported yet" note. Photo, sticker, edited messages etc. are silently ignored. Since 1D: non-private chats are ignored, except a command addressed to the bot, which gets one short "faqat shaxsiy chatda" note.
 6. For every text message it first fires (not awaited) `sendChatAction('typing')`. Since 1D `setChatMenuButton` runs only on `/start`; the default button for all chats is set by `scripts/set_webhook.mjs`. All Bot API calls go through `callBotApi()` (`src/lib/telegram/botApi.ts`), which logs every `ok:false`.
 
 ### 4.1 Identity: Telegram user → Supabase user
@@ -408,6 +408,23 @@ The bot sends the answer text, HTML-escaped (casual chat also gets the Mini App 
 - **AI insights** (`/insights`, `insightsService.ts`): generates insight cards into `insights`.
 - **AI advisor chat** (`/advisor`, `POST /api/ai/advisor`): same `askFinancialAdvisor` as §4.9 but with a real conversation id, so multi-turn confirmation works there.
 - **Email login/register** (`/login`, `/register`) for non-Telegram users.
+
+### 4.12 Voice messages (Phase 2, branch `feature/voice-transactions`)
+
+Trigger: `message.voice` (OGG/Opus voice note) or `message.audio` (audio file) in a private chat.
+
+1. `validateAudioMeta()` (`src/lib/telegram/voice.ts`) **before** downloading: duration ≤ 60 s (`VOICE_MAX_SECONDS`), size ≤ 10 MB (Bot API download limit 20 MB), MIME type one of Gemini's listed audio types (voice → `audio/ogg`). Otherwise a friendly Uzbek message.
+2. `getFile` → download into memory → base64. Nothing is written to disk or the DB.
+3. `processFinancialMessage()` — the **same** flow as text: sign in (cached) → user's categories → **one** `extractFinancialActions('', { audio, categories, budget })` call.
+   - Gemini request: the same system prompt + a voice note (word-for-word `transcript`, Uzbek/Russian/mixed, "45 ming", "yarim million") + part `{ inlineData: { mimeType: 'audio/ogg', data: <base64> } }`, `responseMimeType: application/json`.
+   - Model order: `GEMINI_MODEL` first, then the fallback list (decision Q3). **OpenRouter is never used for audio** (text-only). Budget 25 s, 15 s per call.
+   - The same validation (category whitelist, limits) runs on the result; `transcript` is returned too.
+4. Reply: every voice reply starts with "🎤 Siz aytdingiz: «<transcript>»" (escaped). `action_proposal` → pending action with `source: 'telegram_voice'` + ✅/❌ (same confirm path); `clarification` → question; `financial_query` / `casual_chat` → advisor answers the transcript.
+5. AI failure, empty transcript or failed download → "Ovozli xabarni tushunib bo‘lmadi, iltimos yozib yuboring."
+
+Privacy note: spoken card/phone numbers cannot be masked before sending (text is masked by `sanitizeUserInputForAi`); the audio goes to Gemini as-is and is not stored by UzHamyon.
+
+Gemini docs check (2026-11-18): the docs now show audio only for the newer Interactions API; for `generateContent` the reference documents `Part.inlineData {mimeType, data}`, lists `audio/ogg` and `audio/opus`, and a 20 MB inline request limit; 32 tokens per second of audio. Audio + JSON mode is not shown explicitly — the first live voice message confirms it (errors are logged with Gemini's message).
 
 ---
 
