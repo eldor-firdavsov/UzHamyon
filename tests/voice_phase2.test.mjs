@@ -133,6 +133,7 @@ test('voice message → transcript preview with ✅/❌ and source telegram_voic
   });
 
   const sent = [];
+  const edits = [];
   let savedActions;
   await withFetch(async (url, init) => {
     const u = String(url);
@@ -140,7 +141,8 @@ test('voice message → transcript preview with ✅/❌ and source telegram_voic
     if (u.endsWith('/sendChatAction')) return json({ ok: true, result: true });
     if (u.endsWith('/getFile')) return json({ ok: true, result: { file_path: 'voice/a.oga', file_size: 10 } });
     if (u.includes('/file/bot')) return new Response(Buffer.from('OggS-voice'));
-    if (u.endsWith('/sendMessage')) { sent.push(body); return json({ ok: true, result: { message_id: 1 } }); }
+    if (u.endsWith('/sendMessage')) { sent.push(body); return json({ ok: true, result: { message_id: 77 } }); }
+    if (u.endsWith('/editMessageText')) { edits.push(body); return json({ ok: true, result: { message_id: body.message_id } }); }
     if (u.includes('/rest/v1/categories')) {
       return json([{ id: 'c-dining', name: 'Dining Out', type: 'expense', is_system: true, user_id: null }]);
     }
@@ -172,8 +174,13 @@ test('voice message → transcript preview with ✅/❌ and source telegram_voic
     });
   });
 
-  const preview = sent.find((m) => m.reply_markup?.inline_keyboard);
-  assert.ok(preview, 'preview with buttons was sent');
+  // Instant placeholder first, then the SAME message is edited into the preview (#perf).
+  assert.equal(sent.length, 1);
+  assert.match(sent[0].text, /tinglanmoqda/);
+  assert.equal(sent[0].reply_markup, undefined);
+  const preview = edits.find((m) => m.reply_markup?.inline_keyboard);
+  assert.ok(preview, 'placeholder was edited into the preview with buttons');
+  assert.equal(preview.message_id, 77);
   assert.match(preview.text, /^🎤 <i>Siz aytdingiz:<\/i> «tushlikka 45 ming &lt;sarfladim&gt;»/);
   assert.match(preview.text, /Tushlik: 45 000 so‘m/);
   assert.match(preview.reply_markup.inline_keyboard[0][0].callback_data, /^act_confirm:/);

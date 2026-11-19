@@ -20,7 +20,14 @@ import { AiBudget, TELEGRAM_AI_BUDGET_MS } from '../ai/aiBudget.ts';
 
 /** Per-call Gemini timeout for audio requests. */
 export const VOICE_PER_CALL_TIMEOUT_MS = 15_000;
-import { loadCategoryOptions, categoryNamesByType, attachCategoryIds } from '../categories/catalog.ts';
+/** Per-call Gemini timeout for text: a hanging model fails fast and the next one answers. */
+export const TEXT_PER_CALL_TIMEOUT_MS = 8_000;
+import {
+  loadCategoryOptions,
+  categoryNamesByType,
+  attachCategoryIds,
+  type CategoryOption,
+} from '../categories/catalog.ts';
 import { notifyCompletedGoals } from '../goals/notifications.ts';
 import {
   type TelegramAudioLike,
@@ -30,6 +37,17 @@ import {
   VOICE_MESSAGES,
 } from './voice.ts';
 import type { ExtractionResult } from '../ai/actionExtractionEngine.ts';
+import {
+  isDeleteDataRequest,
+  countUserData,
+  buildDeletionPrompt,
+  buildDeletionKeyboard,
+  verifyDeletionToken,
+  deleteTelegramAccount,
+  DELETE_CALLBACK_PREFIX,
+  DELETE_CANCEL_CALLBACK,
+  DELETION_MESSAGES,
+} from './accountDeletion.ts';
 
 /** Shown when the AI could not answer in time or is unavailable (#21). */
 export const AI_RETRY_MESSAGE =
@@ -348,6 +366,36 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
     // Financial actions only in private chats (#39).
     if (message.chat.type !== 'private') return;
 
+    // "Delete my data" confirmation (signed, 5 minutes, this user only).
+    if (data === DELETE_CANCEL_CALLBACK) {
+      await editTelegramMessageText(message.chat.id, message.message_id, DELETION_MESSAGES.cancelled);
+      return;
+    }
+    if (data.startsWith(DELETE_CALLBACK_PREFIX)) {
+      const verdict = verifyDeletionToken(data.slice(DELETE_CALLBACK_PREFIX.length), from.id);
+      if (verdict !== 'ok') {
+        await editTelegramMessageText(
+          message.chat.id,
+          message.message_id,
+          verdict === 'expired' ? DELETION_MESSAGES.expired : DELETION_MESSAGES.invalid
+        );
+        return;
+      }
+      await editTelegramMessageText(message.chat.id, message.message_id, DELETION_MESSAGES.deleting);
+      const result = await deleteTelegramAccount(from.id);
+      forgetTelegramUserCaches(from.id);
+      if (result.ok) {
+        console.log(`[AccountDeletion] Telegram user ${from.id} deleted their data`);
+        await editTelegramMessageText(message.chat.id, message.message_id, DELETION_MESSAGES.done);
+      } else if (result.reason === 'not_found') {
+        await editTelegramMessageText(message.chat.id, message.message_id, DELETION_MESSAGES.notFound);
+      } else {
+        console.error(`[AccountDeletion] failed for Telegram user ${from.id}:`, result.detail);
+        await editTelegramMessageText(message.chat.id, message.message_id, DELETION_MESSAGES.failed);
+      }
+      return;
+    }
+
     if (data.startsWith('act_confirm:')) {
       const actionId = data.replace('act_confirm:', '');
       const chatId = message.chat.id;
@@ -463,8 +511,8 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
     return;
   }
 
-  // One AI time budget for everything this update does (#21).
-  const budget = new AiBudget();
+  // One AI time budget for everything this update does (#21); text calls get 8 s each.
+  const budget = new AiBudget(TELEGRAM_AI_BUDGET_MS, TEXT_PER_CALL_TIMEOUT_MS);
 
   const chatId = message.chat.id;
   const from = message.from;
@@ -501,7 +549,7 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
 
   // 2.3 Slash command: /help
   if (text === '/help') {
-    const helpMsg = `<b>UzHamyon — shaxsiy moliyaviy yordamchingiz.</b>\n\n<b>Mavjud buyruqlar:</b>\n/start — UzHamyonni boshlash\n/app — Ilovani ochish\n/help — Yordam ma’lumotlari\n/about — UzHamyon haqida\n\nShuningdek, tabiiy tilda xabar yozishingiz mumkin:\n• <i>«Bugun tushlikka 45 000 so'm ishlatdim»</i>\n• <i>«Oylik maoshim 5 000 000 so'm tushdi»</i>\n• <i>«Mashina uchun 50 mln maqsad yarat»</i>\n• <i>«Bu oy qancha pul sarfladim?»</i>\n\n🎤 Ovozli xabar yuborishingiz ham mumkin (60 soniyagacha): o‘zbekcha, ruscha yoki aralash gapiring — masalan, «bugun tushlikka 45 ming, taksiga 15 ming».`;
+    const helpMsg = `<b>UzHamyon — shaxsiy moliyaviy yordamchingiz.</b>\n\n<b>Mavjud buyruqlar:</b>\n/start — UzHamyonni boshlash\n/app — Ilovani ochish\n/help — Yordam ma’lumotlari\n/about — UzHamyon haqida\n/delete — Barcha ma’lumotlarimni o‘chirish\n\nShuningdek, tabiiy tilda xabar yozishingiz mumkin:\n• <i>«Bugun tushlikka 45 000 so'm ishlatdim»</i>\n• <i>«Oylik maoshim 5 000 000 so'm tushdi»</i>\n• <i>«Mashina uchun 50 mln maqsad yarat»</i>\n• <i>«Bu oy qancha pul sarfladim?»</i>\n\n🎤 Ovozli xabar yuborishingiz ham mumkin (60 soniyagacha): o‘zbekcha, ruscha yoki aralash gapiring — masalan, «bugun tushlikka 45 ming, taksiga 15 ming».`;
     await sendTelegramMessage(chatId, helpMsg, 'Ilovani ochish', MINIAPP_URL);
     return;
   }
@@ -513,7 +561,19 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
     return;
   }
 
-  // 2.5 Natural Language Financial Message Processing
+  // 2.5 "Delete my data": show what will be deleted and ask for confirmation.
+  if (isDeleteDataRequest(text)) {
+    const userAuth = await getTelegramUserSupabaseClient(from);
+    if (!userAuth) {
+      await sendTelegramMessage(chatId, DELETION_MESSAGES.notFound);
+      return;
+    }
+    const counts = await countUserData(userAuth.client, userAuth.userId);
+    await sendTelegramInlineButtons(chatId, buildDeletionPrompt(counts), buildDeletionKeyboard(from.id));
+    return;
+  }
+
+  // 2.6 Natural Language Financial Message Processing
   const isSimpleConfirmation = isUserConfirmation(text);
   const isSimpleCancellation = isUserCancellation(text);
 
@@ -567,44 +627,136 @@ interface FinancialMessageInput {
   text?: string;
   /** Voice message: inline audio for Gemini. */
   audio?: { mimeType: string; base64: string };
+  /** "⏳" message sent right away; the final answer replaces it. */
+  placeholderMessageId?: number;
+}
+
+/** Per-user category list, cached next to the session so most messages skip the DB query. */
+const CATEGORY_CACHE_TTL_MS = 10 * 60 * 1000;
+const categoryCache = new Map<number, { options: CategoryOption[]; expiresAt: number }>();
+
+function getCachedCategories(telegramId: number): CategoryOption[] | undefined {
+  const hit = categoryCache.get(telegramId);
+  if (!hit) return undefined;
+  if (hit.expiresAt <= Date.now()) {
+    categoryCache.delete(telegramId);
+    return undefined;
+  }
+  return hit.options;
+}
+
+function setCachedCategories(telegramId: number, options: CategoryOption[]): void {
+  if (!options.length) return;
+  categoryCache.delete(telegramId);
+  categoryCache.set(telegramId, { options, expiresAt: Date.now() + CATEGORY_CACHE_TTL_MS });
+  while (categoryCache.size > 1000) {
+    const oldest = categoryCache.keys().next().value;
+    if (oldest === undefined) break;
+    categoryCache.delete(oldest);
+  }
+}
+
+export function forgetTelegramUserCaches(telegramId: number): void {
+  categoryCache.delete(telegramId);
+  telegramSessionCache.delete(telegramId);
+}
+
+/** Sends the instant "⏳" reply; returns its message id (or undefined if it failed). */
+async function sendPlaceholder(chatId: number, text: string): Promise<number | undefined> {
+  const res = await sendTelegramMessage(chatId, text);
+  const id = (res?.result as { message_id?: number } | undefined)?.message_id;
+  return typeof id === 'number' ? id : undefined;
 }
 
 /**
- * The ONE financial message flow for text and voice: sign in → user's categories →
- * exactly one extraction (same validation) → pending action + ✅/❌, clarification,
- * or the advisor.
+ * Final answer: edits the "⏳" placeholder in place (same message, no extra notification).
+ * If the edit is not possible, sends a new message and removes the placeholder.
+ */
+async function deliver(
+  chatId: number,
+  placeholderMessageId: number | undefined,
+  text: string,
+  options: {
+    keyboard?: Array<Array<{ text: string; callback_data?: string; web_app?: { url: string } }>>;
+    webApp?: { text: string; url: string };
+  } = {}
+): Promise<void> {
+  const keyboard =
+    options.keyboard ?? (options.webApp ? [[{ text: options.webApp.text, web_app: { url: options.webApp.url } }]] : undefined);
+  if (placeholderMessageId) {
+    const edited = await editTelegramMessageText(chatId, placeholderMessageId, text, keyboard);
+    if (edited?.ok) return;
+    callBotApi('deleteMessage', { chat_id: chatId, message_id: placeholderMessageId }).catch(() => {});
+  }
+  if (options.keyboard) {
+    await sendTelegramInlineButtons(chatId, text, options.keyboard);
+  } else {
+    await sendTelegramMessage(chatId, text, options.webApp?.text, options.webApp?.url);
+  }
+}
+
+/**
+ * The ONE financial message flow for text and voice:
+ * instant "⏳" reply → (sign in ∥ Gemini extraction) → user's categories → the same
+ * validation → pending action + ✅/❌ (nothing is saved before ✅), clarification, or advisor.
  */
 async function processFinancialMessage(input: FinancialMessageInput): Promise<void> {
   const { chatId, from, firstName, budget } = input;
   const isVoice = Boolean(input.audio);
+  const t0 = Date.now();
 
-  // Sign in first so the AI gets the user's real category list (#14).
-  const userAuth = await getTelegramUserSupabaseClient(from);
+  // 1. Instant feedback (well under a second): the answer will replace this message.
+  const placeholderId =
+    input.placeholderMessageId ?? (await sendPlaceholder(chatId, '⏳ Tekshirilmoqda...'));
 
-  if (!userAuth) {
-    const defaultMsg = `Assalomu alaykum, ${firstName}!\n\nUzHamyon ilovasi orqali hisobingizni ochish uchun quyidagi tugmani bosing:`;
-    await sendTelegramMessage(chatId, defaultMsg, "UzHamyon'ni ochish", MINIAPP_URL);
-    return;
-  }
-
-  const categoryOptions = await loadCategoryOptions(userAuth.client);
-
-  // Exactly ONE extraction per message (#21), within the shared time budget.
-  const extracted: ExtractionResult = await extractFinancialActions(input.text || '', {
-    categories: categoryOptions.length ? categoryNamesByType(categoryOptions) : undefined,
+  // 2. Sign-in and the AI call run in parallel. The AI gets the user's cached category
+  //    list, or the standard Uzbek list on a cold cache (custom names are matched after).
+  const cachedCategories = getCachedCategories(from.id);
+  let tAuth = 0;
+  const authPromise = getTelegramUserSupabaseClient(from).then((r) => {
+    tAuth = Date.now() - t0;
+    return r;
+  });
+  const extractionPromise: Promise<ExtractionResult> = extractFinancialActions(input.text || '', {
+    categories: cachedCategories ? categoryNamesByType(cachedCategories) : undefined,
     budget,
     audio: input.audio,
   });
 
+  const userAuth = await authPromise;
+  if (!userAuth) {
+    const defaultMsg = `Assalomu alaykum, ${firstName}!\n\nUzHamyon ilovasi orqali hisobingizni ochish uchun quyidagi tugmani bosing:`;
+    await deliver(chatId, placeholderId, defaultMsg, { webApp: { text: "UzHamyon'ni ochish", url: MINIAPP_URL } });
+    return;
+  }
+
+  const categoriesPromise = cachedCategories
+    ? Promise.resolve(cachedCategories)
+    : loadCategoryOptions(userAuth.client).then((opts) => {
+        setCachedCategories(from.id, opts);
+        return opts;
+      });
+
+  const [extracted, categoryOptions] = await Promise.all([extractionPromise, categoriesPromise]);
+  const tAi = Date.now() - t0;
+
+  const finish = (outcome: string) =>
+    console.log(
+      `[perf] ${isVoice ? 'voice' : 'text'} outcome=${outcome} auth=${tAuth}ms ai+categories=${tAi}ms ` +
+        `total=${Date.now() - t0}ms cachedCategories=${Boolean(cachedCategories)}`
+    );
+
   if (extracted.error) {
     // The AI was unavailable or out of time: do not guess.
-    await sendTelegramMessage(chatId, isVoice ? VOICE_MESSAGES.notUnderstood : AI_RETRY_MESSAGE);
+    await deliver(chatId, placeholderId, isVoice ? VOICE_MESSAGES.notUnderstood : AI_RETRY_MESSAGE);
+    finish(extracted.error);
     return;
   }
 
   const transcript = (extracted.transcript || '').trim();
   if (isVoice && !transcript) {
-    await sendTelegramMessage(chatId, VOICE_MESSAGES.notUnderstood);
+    await deliver(chatId, placeholderId, VOICE_MESSAGES.notUnderstood);
+    finish('empty_transcript');
     return;
   }
   // "🎤 Siz aytdingiz: …" before every voice reply (escaped).
@@ -632,21 +784,23 @@ async function processFinancialMessage(input: FinancialMessageInput): Promise<vo
       const errMsg = saveRes.migrationMissing
         ? '⚠️ Tizimda yangilanishlar bajarilmoqda. Iltimos, keyinroq qayta urinib ko‘ring.'
         : '⚠️ Amalni saqlab bo‘lmadi. Iltimos, birozdan so‘ng qayta urinib ko‘ring.';
-      await sendTelegramMessage(chatId, errMsg);
+      await deliver(chatId, placeholderId, errMsg);
+      finish('save_failed');
       return;
     }
 
-    await sendTelegramInlineButtons(
-      chatId,
-      voicePrefix + escapeHtml(extracted.summaryUzbek),
-      buildConfirmKeyboard(saveRes.record.actionId)
-    );
+    // The confirmation (preview + ✅/❌) — nothing is written to transactions before ✅.
+    await deliver(chatId, placeholderId, voicePrefix + escapeHtml(extracted.summaryUzbek), {
+      keyboard: buildConfirmKeyboard(saveRes.record.actionId),
+    });
+    finish('proposal');
     return;
   }
 
   if (extracted.intent === 'clarification') {
     const q = extracted.clarificationQuestion || 'Iltimos, summani yoki boshqa tafsilotlarni aniqlashtirib yozing.';
-    await sendTelegramMessage(chatId, voicePrefix + escapeHtml(q));
+    await deliver(chatId, placeholderId, voicePrefix + escapeHtml(q));
+    finish('clarification');
     return;
   }
 
@@ -656,17 +810,19 @@ async function processFinancialMessage(input: FinancialMessageInput): Promise<vo
     const reply = advisorRes.data?.answer
       ? escapeHtml(advisorRes.data.answer)
       : 'Moliyaviy ma’lumotlarni tahlil qilishda xatolik yuz berdi.';
-    await sendTelegramMessage(chatId, voicePrefix + reply);
+    await deliver(chatId, placeholderId, voicePrefix + reply);
+    finish('query');
     return;
   }
 
   const reply = advisorRes.data?.answer
     ? escapeHtml(advisorRes.data.answer)
     : `Assalomu alaykum, ${firstName}! Sizga qanday yordam bera olaman?`;
-  await sendTelegramMessage(chatId, voicePrefix + reply, 'Ilovani ochish', MINIAPP_URL);
+  await deliver(chatId, placeholderId, voicePrefix + reply, { webApp: { text: 'Ilovani ochish', url: MINIAPP_URL } });
+  finish('chat');
 }
 
-/** Voice / audio: check limits, download into memory, then the shared flow. */
+/** Voice / audio: check limits, instant "🎤" reply, download into memory, then the shared flow. */
 async function handleVoiceMessage(
   chatId: number,
   from: { id: number; first_name?: string; last_name?: string; username?: string },
@@ -679,13 +835,13 @@ async function handleVoiceMessage(
     return;
   }
 
-  sendTelegramChatAction(chatId, 'typing').catch(() => {});
+  const placeholderId = await sendPlaceholder(chatId, '🎤 Ovozli xabar tinglanmoqda...');
   // Audio requests are slower than text: allow up to 15 s per Gemini call, 25 s in total.
   const budget = new AiBudget(TELEGRAM_AI_BUDGET_MS, VOICE_PER_CALL_TIMEOUT_MS);
 
   const file = await downloadTelegramFileBase64(media.file_id);
   if (!file) {
-    await sendTelegramMessage(chatId, VOICE_MESSAGES.notUnderstood);
+    await deliver(chatId, placeholderId, VOICE_MESSAGES.notUnderstood);
     return;
   }
 
@@ -695,6 +851,7 @@ async function handleVoiceMessage(
     firstName: escapeHtml(from.first_name || 'aziz foydalanuvchi'),
     budget,
     audio: { mimeType: check.mimeType, base64: file.base64 },
+    placeholderMessageId: placeholderId,
   });
 }
 
