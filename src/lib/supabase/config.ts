@@ -17,22 +17,13 @@ function readNextPublicUrl(): string | undefined {
   try {
     return process.env.NEXT_PUBLIC_SUPABASE_URL || undefined;
   } catch {
-    return undefined; // `process` is not defined (e.g. Vite browser bundle)
+    return undefined; // `process` is not defined
   }
 }
 
 function readNextPublicAnonKey(): string | undefined {
   try {
     return process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function readViteEnv(name: string): string | undefined {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return ((import.meta as any).env?.[name] as string | undefined) || undefined;
   } catch {
     return undefined;
   }
@@ -47,8 +38,7 @@ function isProductionBuild(): boolean {
 }
 
 export function getSupabaseUrl(): string {
-  const value =
-    readNextPublicUrl() || readViteEnv('VITE_SUPABASE_URL') || readViteEnv('NEXT_PUBLIC_SUPABASE_URL');
+  const value = readNextPublicUrl();
   if (value) return value;
   if (isProductionBuild()) {
     throw new Error('NEXT_PUBLIC_SUPABASE_URL muhit o‘zgaruvchisi sozlanmagan');
@@ -57,10 +47,7 @@ export function getSupabaseUrl(): string {
 }
 
 export function getSupabaseAnonKey(): string {
-  const value =
-    readNextPublicAnonKey() ||
-    readViteEnv('VITE_SUPABASE_ANON_KEY') ||
-    readViteEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
+  const value = readNextPublicAnonKey();
   if (value) return value;
   if (isProductionBuild()) {
     throw new Error('NEXT_PUBLIC_SUPABASE_ANON_KEY muhit o‘zgaruvchisi sozlanmagan');

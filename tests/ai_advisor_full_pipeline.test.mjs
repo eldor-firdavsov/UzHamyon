@@ -44,8 +44,8 @@ describe(
       return await fetch(BASE_URL + path, { ...options, headers });
     } catch (err) {
       if (err?.cause?.code === 'ECONNREFUSED' || err?.message?.includes('fetch failed')) {
-        const { default: app } = await import('../server/server.ts');
-        return await app.request(path, { ...options, headers });
+        // The old Hono fallback server was removed (1E). Run the Next.js app instead.
+        throw new Error(`Next.js server not reachable at ${BASE_URL}. Start it with "npm run dev" first.`);
       }
       throw err;
     }
