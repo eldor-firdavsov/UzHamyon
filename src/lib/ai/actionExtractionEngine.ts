@@ -56,6 +56,8 @@ export interface ExtractionResult {
    * "financial_query": the user's message was not understood.
    */
   error?: 'ai_unavailable' | 'budget_exceeded';
+  /** Voice input only: what the user said, word for word (from Gemini). */
+  transcript?: string;
 }
 
 export interface ExtractionOptions {
@@ -67,6 +69,11 @@ export interface ExtractionOptions {
   budget?: AiBudget;
   /** Clock override for tests. */
   now?: Date;
+  /**
+   * Voice input (Phase 2): the audio is sent inline to Gemini together with the SAME
+   * system prompt; Gemini also returns a `transcript`. Then the same validation runs.
+   */
+  audio?: { mimeType: string; base64: string };
 }
 
 interface RawGeminiOutput {
@@ -86,6 +93,7 @@ interface RawGeminiOutput {
   }>;
   clarificationQuestion?: string | null;
   summaryUzbek?: string;
+  transcript?: string;
 }
 
 function formatUzbekMoney(amount: number, curr = 'UZS'): string {
@@ -193,7 +201,7 @@ export async function extractFinancialActions(
     income: options.categories?.income?.length ? options.categories.income : defaultCategoryNames('income'),
   };
   const trimmed = userText.trim();
-  if (!trimmed) {
+  if (!trimmed && !options.audio) {
     return {
       intent: 'casual_chat',
       actions: [],
@@ -211,7 +219,12 @@ export async function extractFinancialActions(
     allowedCategories
   );
 
-  let fullPrompt = `FOYDALANUVCHI XABARI: "${sanitizedText}"`;
+  let fullPrompt = options.audio
+    ? `FOYDALANUVCHI OVOZLI XABAR YUBORDI (audio ilova qilingan).
+1. Avval "transcript" maydoniga aytilgan gaplarni so'zma-so'z, aytilgan tilda yozing (o'zbek, rus yoki aralash bo'lishi mumkin). Hech narsa qo'shmang va o'zgartirmang. Gap tushunarsiz bo'lsa: "transcript": "".
+2. Keyin xuddi matnli xabar kabi tahlil qiling va yuqoridagi JSON sxemasiga "transcript": string maydonini qo'shib qaytaring.
+3. Summalar: "45 ming" = 45000, "1.5 million" / "bir yarim million" = 1500000, "yarim million" = 500000, "sorok pyat tisyach" = 45000.`
+    : `FOYDALANUVCHI XABARI: "${sanitizedText}"`;
   if (userFinancialContextText) {
     fullPrompt += `\n\nFOYDALANUVCHINING MAVJUD MA'LUMOTLARI:\n${sanitizeUserInputForAi(userFinancialContextText)}`;
   }
@@ -222,9 +235,20 @@ export async function extractFinancialActions(
       systemPrompt,
       undefined,
       budget ? budget.perCallMs : 30000,
-      { budget }
+      options.audio
+        ? {
+            budget,
+            // Voice: GEMINI_MODEL first (decision Q3); OpenRouter is text-only, so never for audio.
+            modelOrder: 'primary',
+            allowOpenRouter: false,
+            extraParts: [{ inlineData: { mimeType: options.audio.mimeType, data: options.audio.base64 } }],
+          }
+        : { budget }
     );
     const parsed = geminiRes.data;
+    const transcript = options.audio
+      ? (typeof parsed.transcript === 'string' ? parsed.transcript.trim().slice(0, 1000) : '')
+      : undefined;
 
     let intent: FinancialIntentType = 'casual_chat';
     if (parsed.intent === 'action_proposal') intent = 'action_proposal';
@@ -238,6 +262,7 @@ export async function extractFinancialActions(
       return {
         intent: 'clarification',
         actions: [],
+        transcript,
         clarificationQuestion: TOO_MANY_ACTIONS_MESSAGE,
         summaryUzbek: TOO_MANY_ACTIONS_MESSAGE,
       };
@@ -326,6 +351,7 @@ export async function extractFinancialActions(
       return {
         intent: 'clarification',
         actions: [],
+        transcript,
         clarificationQuestion: AMOUNT_TOO_LARGE_MESSAGE,
         summaryUzbek: AMOUNT_TOO_LARGE_MESSAGE,
       };
@@ -366,6 +392,7 @@ export async function extractFinancialActions(
       intent,
       actions: sanitizedActions,
       clarificationQuestion: parsed.clarificationQuestion || undefined,
+      transcript,
       summaryUzbek: summaryUzbek || 'Iltimos, ma’lumotingizni tasdiqlang.',
     };
   } catch (err: unknown) {

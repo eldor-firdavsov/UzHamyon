@@ -73,6 +73,46 @@ export function _resetDisabledModels(): void {
 export interface GeminiCallOptions {
   /** Shared time budget for the whole Telegram update. */
   budget?: AiBudget;
+  /**
+   * 'cheap' (default): lite models first (text extraction, decision Q3).
+   * 'primary': GEMINI_MODEL first, then the fallback list (voice, Phase 2).
+   */
+  modelOrder?: 'cheap' | 'primary';
+  /**
+   * OpenRouter fallback is text-only. Set false when the request carries audio/media,
+   * otherwise it would answer without the media.
+   */
+  allowOpenRouter?: boolean;
+  /** Extra parts appended after the text part (e.g. inlineData audio). */
+  extraParts?: Array<Record<string, unknown>>;
+}
+
+/** Model try-order for one call. */
+export function buildCandidateModels(
+  preferredModel: string | undefined,
+  primaryModel: string,
+  fallbackModel: string,
+  modelOrder: 'cheap' | 'primary' = 'cheap'
+): string[] {
+  if (modelOrder === 'primary') {
+    return Array.from(
+      new Set([
+        preferredModel || primaryModel,
+        primaryModel,
+        fallbackModel,
+        'gemini-flash-latest',
+        'gemini-flash-lite-latest',
+        'gemini-3.5-flash-lite',
+      ])
+    );
+  }
+  return Array.from(
+    new Set(
+      preferredModel
+        ? [preferredModel, 'gemini-flash-lite-latest', 'gemini-3.5-flash-lite', primaryModel, fallbackModel]
+        : ['gemini-flash-lite-latest', 'gemini-3.5-flash-lite', 'gemini-flash-latest', primaryModel, fallbackModel]
+    )
+  );
 }
 
 /**
@@ -92,19 +132,7 @@ export async function callGeminiApi(
   // Deduplicate model candidates. When preferredModel is specified, try it first.
   // Otherwise prioritize ultra-fast low-latency models (gemini-flash-lite-latest / gemini-3.5-flash-lite)
   // to avoid hitting free-tier 20 req/day quota limits on gemini-3.8-flash.
-  const candidateModels = Array.from(
-    new Set(
-      preferredModel
-        ? [preferredModel, 'gemini-flash-lite-latest', 'gemini-3.5-flash-lite', primaryModel, fallbackModel]
-        : [
-            'gemini-flash-lite-latest',
-            'gemini-3.5-flash-lite',
-            'gemini-flash-latest',
-            primaryModel,
-            fallbackModel,
-          ]
-    )
-  );
+  const candidateModels = buildCandidateModels(preferredModel, primaryModel, fallbackModel, options.modelOrder);
 
   let lastError: Error | null = null;
 
@@ -197,7 +225,7 @@ export async function callGeminiApi(
 
   // Final fallback to OpenRouter Gemini routing if Google direct is temporarily 503
   const orKey = process.env.OPENROUTER_API_KEY || process.env.AI_API_KEY;
-  if (orKey && (!budget || budget.canStart())) {
+  if (orKey && options.allowOpenRouter !== false && (!budget || budget.canStart())) {
     try {
       const orRes = await callOpenRouterGemini(body, orKey, budget ? budget.timeoutFor(timeoutMs) : timeoutMs);
       if (orRes) return orRes;
@@ -315,7 +343,7 @@ export async function generateGeminiJson<T = unknown>(
     contents: [
       {
         role: 'user',
-        parts: [{ text: prompt }],
+        parts: [{ text: prompt }, ...(options.extraParts || [])],
       },
     ],
     generationConfig: {
