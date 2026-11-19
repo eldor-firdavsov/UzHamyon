@@ -423,6 +423,21 @@ Privacy note: spoken card/phone numbers cannot be masked before sending (text is
 
 Gemini docs check (2026-11-18): the docs now show audio only for the newer Interactions API; for `generateContent` the reference documents `Part.inlineData {mimeType, data}`, lists `audio/ogg` and `audio/opus`, and a 20 MB inline request limit; 32 tokens per second of audio. Audio + JSON mode is not shown explicitly — the first live voice message confirms it (errors are logged with Gemini's message).
 
+### 4.13 Fast replies (branch `perf/fast-bot-replies`)
+
+- Every financial text/voice message gets an instant "⏳ Tekshirilmoqda..." (voice: "🎤 Ovozli xabar tinglanmoqda...") reply; the final answer **edits that same message** (preview + ✅/❌, clarification or advisor answer). Nothing is saved before ✅.
+- Sign-in (cached JWT) and the Gemini call run in parallel; the user's category list is cached 10 min per instance (cold cache: standard Uzbek list, custom names matched afterwards).
+- Gemini: `thinkingConfig.thinkingLevel = "LOW"` is sent only to explicit `gemini-3.*` models (docs: `gemini-3.8-flash` thinks at "medium" by default); a model that rejects it is retried once without it and remembered. Text calls: 8 s per model; voice: 15 s; 25 s total. Extraction `maxOutputTokens` 2048.
+- Logs: `[perf] gemini model=… ms=…` per call and `[perf] text|voice outcome=… auth=…ms ai+categories=…ms total=…ms` per message.
+
+### 4.14 Delete my data
+
+`/delete` (or "ma’lumotlarimni o‘chir") → the bot shows real counts (transactions, goals, budgets, own categories) and **[🗑 Ha, hammasini o‘chirish] [❌ Bekor qilish]**. The confirm button carries a token signed with `INTERNAL_AUTH_SECRET`, valid 5 minutes and only for that Telegram user (`src/lib/telegram/accountDeletion.ts`). Confirm → "⏳ O‘chirilmoqda..." → `auth.admin.deleteUser` (all finance tables and the profile go via `ON DELETE CASCADE`) → cached session/categories cleared → "✅ Barcha ma’lumotlaringiz o‘chirildi… /start". A later `/start` creates a new empty account. Other server instances may keep the old cached JWT for ≤ 1 h; writes with it fail (the user no longer exists).
+
+### 4.15 Signup source (Phase 3A, migration 015)
+
+`t.me/uz_hamyonbot?start=<source>` → `/start <source>`: the account is created if needed and `profiles.signup_source` is set **only if empty** (`[a-z0-9_]{1,32}`, otherwise `direct`; first contact via the Mini App → `miniapp`; users before tracking → `before_tracking`). Report: `select * from admin_new_users_by_source_daily;` in the Supabase SQL editor (view not exposed to the API). The landing page will live on a separate domain (not in this app).
+
 ---
 
 ## 5. The AI transaction flow in full detail
