@@ -19,7 +19,7 @@
 | Validation | `zod` 4 schemas in `src/lib/*/schemas.ts`. |
 | How the bot receives updates | **Production: webhook** — `POST /api/telegram/webhook` (`src/app/api/telegram/webhook/route.ts`). It answers `200` at once and processes the update in the background with Next's `after()`. **Development: long polling** — `npm run telegram:bot` runs `server/telegramBot.ts` → `runTelegramPolling()` (`getUpdates`, 20 s timeout). The code never calls `setWebhook`; the webhook URL must have been registered by hand. |
 | Deployment | **Vercel** (`vercel.json` cron, `after()`, `maxDuration = 30` on the webhook and AI advisor routes). One cron: `GET /api/telegram/reminders?trigger=true` at `0 15 * * *` UTC = 20:00 Tashkent. |
-| Second (older) stack | `vite.config.ts` + `src/main.tsx`/`src/App.tsx` + `server/server.ts` (Hono API on port 3001) + a committed `dist/` build with `_redirects`. It re-uses the same `src/lib` services. Scripts: `dev:vite`, `dev:api`, `build:vite`. It looks unused in production (see Open questions). |
+| Second (older) stack | **Removed in 1E** (was `vite.config.ts`, `src/main.tsx`, `src/App.tsx`, `src/routes/*`, `server/server.ts` Hono API, committed `dist/`; confirmed not deployed). |
 
 ### Environment variables (names only)
 
@@ -72,14 +72,13 @@ src/
     onboarding/, settings/, (auth)/login, register           Onboarding wizard, profile, email login
   proxy.ts                          Next 16 middleware: strips spoofed headers, refreshes session, signs x-internal-auth
   components/prototype/UzHamyonPrototypeApp.tsx   The real UI (dashboard, add-transaction sheet, goals, budgets, analytics)
-  components/…                      Older/secondary components (GoalsManager, ContributeModal, FinanceCard, AIAdvisorChat, …)
+  components/…                      Secondary components still used by pages (navigation, onboarding, imports, insights, FastTransactionModal, …); 36 unused legacy ones removed in 1E
   lib/
     telegram/bot.ts                 ALL bot logic: Bot API helpers, handleTelegramUpdate(), polling runner
     telegram/auth.ts                initData verification; getOrCreateTelegramUser() (derived email/password → Supabase session)
     telegram/reminders.ts           Recipient list + reminder text + broadcast loop
     telegram/webhookIdempotency.ts  Claim/complete/fail rows in telegram_webhook_updates (memory fallback)
-    ai/geminiClient.ts              Gemini REST client: model fallback list, retries, JSON mode, OpenRouter fallback
-    ai/aiClient.ts                  Free-text AI client (Gemini → OpenRouter → fixed text) used by the advisor
+    ai/geminiClient.ts              The one AI client: Gemini model list, retries, JSON mode, audio parts, OpenRouter fallback; generateAIContent() for free text (1E)
     ai/actionExtractionEngine.ts    Text → Gemini JSON → validated list of actions + Uzbek preview (THE AI transaction parser)
     ai/pendingActionStore.ts        pending_ai_actions table: save/get/claim/cancel; "ha"/"bekor" word matchers
     ai/actionExecutor.ts            Runs a confirmed pending action (RPC first, app-level fallback with rollback)
@@ -96,11 +95,9 @@ src/
   types/database.ts                 TypeScript row types
 server/
   telegramBot.ts                    Local polling runner (loads .env.local)
-  server.ts                         Hono API for the Vite stack
 scripts/                            Reminder sender/scheduler, demo seeding, imports, screenshots, AI test scripts
 supabase/migrations/                001–006 = old teacher/student app tables; 007–011 = UzHamyon finance schema
 tests/                              node:test suites; `npm test` (unit-ish) and `npm run test:integration` (live Supabase)
-dist/                               Committed Vite build (older stack)
 docs/                               This file + older docs
 ```
 
@@ -702,15 +699,15 @@ Items marked ✅ are fixed on the named branch/commit (not deployed yet unless s
 
 ### Duplicated logic / cleanup
 
-41. Three intent parsers: Gemini extraction (`actionExtractionEngine`), the regex engine (`financialActionEngine`, with its own `executePendingAction`), and the advisor. Three different pending-action stores (DB table, `ai_messages.evidence_references`, in-memory test map).
-42. Three balance/analytics calculators (Mini App client-side, `analytics/service.ts`, `advisorService.ts`) with different formulas.
-43. `formatUzbekMoney` / `formatUzMoney` are copied in 4+ files with small differences (`so‘m` vs `soʻm`, USD format).
-44. Two goal-matching implementations (SQL in the RPC and TS `resolveUserGoal`), two category matchers.
-45. `geminiClient.generateGeminiContent` vs `aiClient.generateAIContent` (two clients, both exported as `generateAIContent`/`generateGeminiContent` aliases).
-46. Old teacher/student schema (migrations 001–006, `profiles.role`, `create_student_by_teacher`) still present; Telegram users are created with `role='teacher'`.
-47. Second stack (Vite + Hono + committed `dist/`) duplicates all API routes.
-48. Legacy components (`GoalsManager`, `ContributeModal`, `FinanceCard`, `TransactionsManager`, …) are not used by the live pages but are still maintained (the last goals commit edited them).
-49. `.env.local` is parsed by hand in `server/telegramBot.ts` and `server/server.ts` although `npm` scripts already pass `--env-file`.
+41. ⏸ *(plan: make the web advisor use the same extraction + `pending_ai_actions` + confirm flow as Telegram, then delete `financialActionEngine.ts`)* Three intent parsers: Gemini extraction (`actionExtractionEngine`), the regex engine (`financialActionEngine`, with its own `executePendingAction`), and the advisor. Three different pending-action stores (DB table, `ai_messages.evidence_references`, in-memory test map).
+42. ◐ *(balance shared since 1C; plan: one `computePeriodStats()` for monthly/category stats next to `computeBalances()`)* Three balance/analytics calculators (Mini App client-side, `analytics/service.ts`, `advisorService.ts`) with different formulas.
+43. ✅ *(fix/1e-cleanup `e22c40f`, `3c53769`, `077d344`: `src/lib/formatters/money.ts`; the SQL RPC still formats its own result lines as `45,000 UZS`)* `formatUzbekMoney` / `formatUzMoney` are copied in 4+ files with small differences (`so‘m` vs `soʻm`, USD format).
+44. ✅ *(`077d344`; also fixed the regex engine's 'first goal' fallback and 1 000 000 default)* Two goal-matching implementations (SQL in the RPC and TS `resolveUserGoal`), two category matchers.
+45. ✅ *(`3c53769`: one client; the extra gpt-4o-mini/deepseek fallback is gone)* `geminiClient.generateGeminiContent` vs `aiClient.generateAIContent` (two clients, both exported as `generateAIContent`/`generateGeminiContent` aliases).
+46. ⏸ *(plan: add `'user'` to the role enum, use it for new users, backfill carefully; tables kept per Q6)* Old teacher/student schema (migrations 001–006, `profiles.role`, `create_student_by_teacher`) still present; Telegram users are created with `role='teacher'`.
+47. ✅ *(`18b3dfb`, `722781d`)* Second stack (Vite + Hono + committed `dist/`) duplicates all API routes.
+48. ✅ *(`4136249`, `722781d`: 36 files + 3 unused dependencies)* Legacy components (`GoalsManager`, `ContributeModal`, `FinanceCard`, `TransactionsManager`, …) are not used by the live pages but are still maintained (the last goals commit edited them).
+49. ✅ *(`a4dd474`)* `.env.local` is parsed by hand in `server/telegramBot.ts` and `server/server.ts` although `npm` scripts already pass `--env-file`.
 
 ---
 
@@ -720,7 +717,7 @@ Items marked ✅ are fixed on the named branch/commit (not deployed yet unless s
 2. **Are `TELEGRAM_WEBHOOK_SECRET` and `CRON_SECRET` set in Vercel?** Problems #1 and #3 depend on it.
 3. **Which Gemini model do you consider "the" model?** The code tries `gemini-flash-lite-latest` first, then `gemini-3.5-flash-lite`, `gemini-flash-latest`, and only then `GEMINI_MODEL` (default `gemini-3.8-flash`). Is that order intended, or should `GEMINI_MODEL` be first? (This matters for Phase 2: audio support and quality differ between lite and non-lite models.) Is the API key on the free tier?
 4. **How was the webhook registered** (URL, `secret_token`, `allowed_updates`)? If `allowed_updates` was restricted, voice messages may not even reach the server.
-5. **Is the Vite/Hono stack and `dist/` still deployed anywhere**, or can it be ignored?
+5. ~~Is the Vite/Hono stack and `dist/` still deployed anywhere?~~ Answered: not deployed; removed in 1E.
 6. **Is the Supabase project shared with the old teacher/student app** (migrations 001–006)?
 7. **Should "jamg'arma" stay the same thing as goals**, or is a separate savings balance planned? Should contributions create transactions or a history table?
 8. **Is USD really supported?** There is no conversion; should the AI be allowed to create USD rows at all?
