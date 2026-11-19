@@ -16,9 +16,20 @@ import type { PendingActionRecord } from '../ai/pendingActionStore.ts';
 import { escapeHtml } from './html.ts';
 import { callBotApi, getBotToken } from './botApi.ts';
 import { telegramSessionCache, sessionExpiryMs } from './sessionCache.ts';
-import { AiBudget } from '../ai/aiBudget.ts';
+import { AiBudget, TELEGRAM_AI_BUDGET_MS } from '../ai/aiBudget.ts';
+
+/** Per-call Gemini timeout for audio requests. */
+export const VOICE_PER_CALL_TIMEOUT_MS = 15_000;
 import { loadCategoryOptions, categoryNamesByType, attachCategoryIds } from '../categories/catalog.ts';
 import { notifyCompletedGoals } from '../goals/notifications.ts';
+import {
+  type TelegramAudioLike,
+  validateAudioMeta,
+  rejectMessageFor,
+  downloadTelegramFileBase64,
+  VOICE_MESSAGES,
+} from './voice.ts';
+import type { ExtractionResult } from '../ai/actionExtractionEngine.ts';
 
 /** Shown when the AI could not answer in time or is unavailable (#21). */
 export const AI_RETRY_MESSAGE =
@@ -66,6 +77,9 @@ export interface TelegramUpdate {
     };
     date: number;
     text?: string;
+    voice?: TelegramAudioLike;
+    audio?: TelegramAudioLike & { title?: string; performer?: string; file_name?: string };
+    video_note?: { file_id: string; duration?: number; file_size?: number };
   };
   callback_query?: {
     id: string;
@@ -428,13 +442,23 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
 
   // ── 2. Handle Text Messages ──
   const message = update.message;
-  if (!message || !message.text || !message.from || typeof message.from.id !== 'number' || message.from.id <= 0) return;
+  if (!message || !message.from || typeof message.from.id !== 'number' || message.from.id <= 0) return;
 
   // Groups / channels: finance data must never be shown there (#39). Ignore everything
   // except a command addressed to the bot, which gets one short note.
   if (message.chat.type !== 'private') {
-    if (isCommandForThisBot(message.text)) {
+    if (message.text && isCommandForThisBot(message.text)) {
       await sendTelegramMessage(message.chat.id, GROUP_CHAT_NOTE);
+    }
+    return;
+  }
+
+  // ── Voice / audio messages (Phase 2): same extraction, validation and ✅/❌ flow ──
+  if (!message.text) {
+    if (message.voice || message.audio) {
+      await handleVoiceMessage(message.chat.id, message.from, (message.voice || message.audio)!, Boolean(message.voice));
+    } else if (message.video_note) {
+      await sendTelegramMessage(message.chat.id, VOICE_MESSAGES.videoNote);
     }
     return;
   }
@@ -459,10 +483,10 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
     const isReturning = await isReturningTelegramUser(from.id);
 
     if (isReturning) {
-      const returningMsg = `<b>Qaytganingizdan xursandmiz, ${firstName}!</b>\n\nUzHamyon tayyor. Moliyaviy holatingizni davom ettiring.`;
+      const returningMsg = `<b>Qaytganingizdan xursandmiz, ${firstName}!</b>\n\nUzHamyon tayyor. Moliyaviy holatingizni davom ettiring.\n\n🎤 Ovozli xabar yuborishingiz ham mumkin — masalan: «bugun tushlikka 45 ming sarfladim».`;
       await sendTelegramMessage(chatId, returningMsg, 'Ilovani ochish', MINIAPP_URL);
     } else {
-      const welcomeMsg = `<b>Assalomu alaykum, ${firstName}!</b>\n\nUzHamyon'ga xush kelibsiz!\n\nEndi daromad va xarajatlaringizni nazorat qilishingiz, pulingiz qayerga sarflanayotganini tushunishingiz va moliyaviy maqsadlaringiz sari harakat qilishingiz mumkin.\n\nUzHamyon sizga:\n• Daromad va xarajatlarni qayd etish\n• Moliyaviy holatingizni tahlil qilish\n• Jamg‘arma maqsadlarini belgilash\n• Qarzlaringizni nazorat qilish\n• AI yordamida moliyaviy qarorlar qabul qilishda yordam beradi\n\nBoshlash uchun quyidagi tugmani bosing.`;
+      const welcomeMsg = `<b>Assalomu alaykum, ${firstName}!</b>\n\nUzHamyon'ga xush kelibsiz!\n\nEndi daromad va xarajatlaringizni nazorat qilishingiz, pulingiz qayerga sarflanayotganini tushunishingiz va moliyaviy maqsadlaringiz sari harakat qilishingiz mumkin.\n\nUzHamyon sizga:\n• Daromad va xarajatlarni qayd etish\n• Moliyaviy holatingizni tahlil qilish\n• Jamg‘arma maqsadlarini belgilash\n• Qarzlaringizni nazorat qilish\n• AI yordamida moliyaviy qarorlar qabul qilishda yordam beradi\n\n✍️ Xarajatingizni shu chatga yozing yoki 🎤 ovozli xabar yuboring — UzHamyon o‘zi hisoblaydi.\n\nBoshlash uchun quyidagi tugmani bosing.`;
       await sendTelegramMessage(chatId, welcomeMsg, "UzHamyon'ni ochish", MINIAPP_URL);
     }
     return;
@@ -477,7 +501,7 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
 
   // 2.3 Slash command: /help
   if (text === '/help') {
-    const helpMsg = `<b>UzHamyon — shaxsiy moliyaviy yordamchingiz.</b>\n\n<b>Mavjud buyruqlar:</b>\n/start — UzHamyonni boshlash\n/app — Ilovani ochish\n/help — Yordam ma’lumotlari\n/about — UzHamyon haqida\n\nShuningdek, tabiiy tilda xabar yozishingiz mumkin:\n• <i>«Bugun tushlikka 45 000 so'm ishlatdim»</i>\n• <i>«Oylik maoshim 5 000 000 so'm tushdi»</i>\n• <i>«Mashina uchun 50 mln maqsad yarat»</i>\n• <i>«Bu oy qancha pul sarfladim?»</i>`;
+    const helpMsg = `<b>UzHamyon — shaxsiy moliyaviy yordamchingiz.</b>\n\n<b>Mavjud buyruqlar:</b>\n/start — UzHamyonni boshlash\n/app — Ilovani ochish\n/help — Yordam ma’lumotlari\n/about — UzHamyon haqida\n\nShuningdek, tabiiy tilda xabar yozishingiz mumkin:\n• <i>«Bugun tushlikka 45 000 so'm ishlatdim»</i>\n• <i>«Oylik maoshim 5 000 000 so'm tushdi»</i>\n• <i>«Mashina uchun 50 mln maqsad yarat»</i>\n• <i>«Bu oy qancha pul sarfladim?»</i>\n\n🎤 Ovozli xabar yuborishingiz ham mumkin (60 soniyagacha): o‘zbekcha, ruscha yoki aralash gapiring — masalan, «bugun tushlikka 45 ming, taksiga 15 ming».`;
     await sendTelegramMessage(chatId, helpMsg, 'Ilovani ochish', MINIAPP_URL);
     return;
   }
@@ -529,6 +553,31 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
     }
   }
 
+  await processFinancialMessage({ chatId, from, firstName, budget, text });
+}
+
+
+interface FinancialMessageInput {
+  chatId: number;
+  from: { id: number; first_name?: string; last_name?: string; username?: string };
+  /** Already HTML-escaped first name. */
+  firstName: string;
+  budget: AiBudget;
+  /** Text message. */
+  text?: string;
+  /** Voice message: inline audio for Gemini. */
+  audio?: { mimeType: string; base64: string };
+}
+
+/**
+ * The ONE financial message flow for text and voice: sign in → user's categories →
+ * exactly one extraction (same validation) → pending action + ✅/❌, clarification,
+ * or the advisor.
+ */
+async function processFinancialMessage(input: FinancialMessageInput): Promise<void> {
+  const { chatId, from, firstName, budget } = input;
+  const isVoice = Boolean(input.audio);
+
   // Sign in first so the AI gets the user's real category list (#14).
   const userAuth = await getTelegramUserSupabaseClient(from);
 
@@ -541,22 +590,30 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
   const categoryOptions = await loadCategoryOptions(userAuth.client);
 
   // Exactly ONE extraction per message (#21), within the shared time budget.
-  const extracted = await extractFinancialActions(text, {
+  const extracted: ExtractionResult = await extractFinancialActions(input.text || '', {
     categories: categoryOptions.length ? categoryNamesByType(categoryOptions) : undefined,
     budget,
+    audio: input.audio,
   });
 
   if (extracted.error) {
-    // The AI was unavailable or out of time: do not guess, ask the user to retry.
-    await sendTelegramMessage(chatId, AI_RETRY_MESSAGE);
+    // The AI was unavailable or out of time: do not guess.
+    await sendTelegramMessage(chatId, isVoice ? VOICE_MESSAGES.notUnderstood : AI_RETRY_MESSAGE);
     return;
   }
 
+  const transcript = (extracted.transcript || '').trim();
+  if (isVoice && !transcript) {
+    await sendTelegramMessage(chatId, VOICE_MESSAGES.notUnderstood);
+    return;
+  }
+  // "🎤 Siz aytdingiz: …" before every voice reply (escaped).
+  const voicePrefix = isVoice ? `🎤 <i>Siz aytdingiz:</i> «${escapeHtml(transcript)}»\n\n` : '';
+  const userText = isVoice ? transcript : input.text || '';
+
   if (extracted.intent === 'action_proposal' && extracted.actions.length > 0) {
-    const actions = attachCategoryIds(extracted.actions, categoryOptions).map((a) => ({
-      ...a,
-      source: a.source || 'telegram_ai',
-    }));
+    const source = isVoice ? 'telegram_voice' : 'telegram_ai';
+    const actions = attachCategoryIds(extracted.actions, categoryOptions).map((a) => ({ ...a, source }));
     const saveRes = await savePendingAction(
       userAuth.userId,
       actions,
@@ -579,37 +636,66 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
       return;
     }
 
-    const pending = saveRes.record;
-
     await sendTelegramInlineButtons(
       chatId,
-      escapeHtml(extracted.summaryUzbek),
-      buildConfirmKeyboard(pending.actionId)
+      voicePrefix + escapeHtml(extracted.summaryUzbek),
+      buildConfirmKeyboard(saveRes.record.actionId)
     );
     return;
   }
 
   if (extracted.intent === 'clarification') {
     const q = extracted.clarificationQuestion || 'Iltimos, summani yoki boshqa tafsilotlarni aniqlashtirib yozing.';
-    await sendTelegramMessage(chatId, escapeHtml(q));
+    await sendTelegramMessage(chatId, voicePrefix + escapeHtml(q));
     return;
   }
 
+  // financial_query / casual_chat → the advisor answers the (transcribed) text.
+  const advisorRes = await askFinancialAdvisor(userText, undefined, userAuth.client, { channel: 'telegram', budget });
   if (extracted.intent === 'financial_query') {
-    const advisorRes = await askFinancialAdvisor(text, undefined, userAuth.client, { channel: 'telegram', budget });
     const reply = advisorRes.data?.answer
       ? escapeHtml(advisorRes.data.answer)
       : 'Moliyaviy ma’lumotlarni tahlil qilishda xatolik yuz berdi.';
-    await sendTelegramMessage(chatId, reply);
+    await sendTelegramMessage(chatId, voicePrefix + reply);
     return;
   }
 
-  // Casual chat or general query fallback
-  const advisorRes = await askFinancialAdvisor(text, undefined, userAuth.client, { channel: 'telegram', budget });
   const reply = advisorRes.data?.answer
     ? escapeHtml(advisorRes.data.answer)
     : `Assalomu alaykum, ${firstName}! Sizga qanday yordam bera olaman?`;
-  await sendTelegramMessage(chatId, reply, 'Ilovani ochish', MINIAPP_URL);
+  await sendTelegramMessage(chatId, voicePrefix + reply, 'Ilovani ochish', MINIAPP_URL);
+}
+
+/** Voice / audio: check limits, download into memory, then the shared flow. */
+async function handleVoiceMessage(
+  chatId: number,
+  from: { id: number; first_name?: string; last_name?: string; username?: string },
+  media: TelegramAudioLike,
+  isVoice: boolean
+): Promise<void> {
+  const check = validateAudioMeta(media, isVoice);
+  if (!check.ok) {
+    await sendTelegramMessage(chatId, rejectMessageFor(check.reason));
+    return;
+  }
+
+  sendTelegramChatAction(chatId, 'typing').catch(() => {});
+  // Audio requests are slower than text: allow up to 15 s per Gemini call, 25 s in total.
+  const budget = new AiBudget(TELEGRAM_AI_BUDGET_MS, VOICE_PER_CALL_TIMEOUT_MS);
+
+  const file = await downloadTelegramFileBase64(media.file_id);
+  if (!file) {
+    await sendTelegramMessage(chatId, VOICE_MESSAGES.notUnderstood);
+    return;
+  }
+
+  await processFinancialMessage({
+    chatId,
+    from,
+    firstName: escapeHtml(from.first_name || 'aziz foydalanuvchi'),
+    budget,
+    audio: { mimeType: check.mimeType, base64: file.base64 },
+  });
 }
 
 /**
