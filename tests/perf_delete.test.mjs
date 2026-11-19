@@ -65,7 +65,7 @@ test('a model that rejects thinkingConfig is retried once without it', async () 
     }
     return geminiReply({ ok: 1 });
   }, async () => {
-    const res = await callGeminiApi({ contents: [], generationConfig: {} }, 'gemini-3.9-test', 5000, { modelOrder: 'primary' });
+    const res = await callGeminiApi({ contents: [], generationConfig: {} }, 'gemini-3.9-test', 5000, { modelOrder: 'cheap' });
     assert.equal(res.model, 'gemini-3.9-test');
   });
   assert.ok(bodies[0].generationConfig.thinkingConfig);

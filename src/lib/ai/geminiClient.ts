@@ -115,14 +115,18 @@ export function buildCandidateModels(
   modelOrder: 'cheap' | 'primary' = 'cheap'
 ): string[] {
   if (modelOrder === 'primary') {
+    // Used for audio. The big flash models (GEMINI_MODEL, fallback, flash-latest) were seen
+    // timing out / returning 503 "high demand" for 20 s+ while gemini-3.5-flash-lite answered
+    // audio in ~1 s (2026-11-19). So audio starts with the fast lite models too; the big
+    // models stay as later fallbacks.
     return Array.from(
       new Set([
+        'gemini-3.5-flash-lite',
+        'gemini-flash-lite-latest',
         preferredModel || primaryModel,
         primaryModel,
         fallbackModel,
         'gemini-flash-latest',
-        'gemini-flash-lite-latest',
-        'gemini-3.5-flash-lite',
       ])
     );
   }

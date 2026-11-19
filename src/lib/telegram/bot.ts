@@ -18,8 +18,8 @@ import { callBotApi, getBotToken } from './botApi.ts';
 import { telegramSessionCache, sessionExpiryMs } from './sessionCache.ts';
 import { AiBudget, TELEGRAM_AI_BUDGET_MS } from '../ai/aiBudget.ts';
 
-/** Per-call Gemini timeout for audio requests. */
-export const VOICE_PER_CALL_TIMEOUT_MS = 15_000;
+/** Per-call Gemini timeout for audio requests (one hanging model must not eat the whole budget). */
+export const VOICE_PER_CALL_TIMEOUT_MS = 8_000;
 /** Per-call Gemini timeout for text: a hanging model fails fast and the next one answers. */
 export const TEXT_PER_CALL_TIMEOUT_MS = 8_000;
 import {
@@ -845,7 +845,7 @@ async function handleVoiceMessage(
   }
 
   const placeholderId = await sendPlaceholder(chatId, '🎤 Ovozli xabar tinglanmoqda...');
-  // Audio requests are slower than text: allow up to 15 s per Gemini call, 25 s in total.
+  // Up to 8 s per Gemini call, 25 s in total.
   const budget = new AiBudget(TELEGRAM_AI_BUDGET_MS, VOICE_PER_CALL_TIMEOUT_MS);
 
   const file = await downloadTelegramFileBase64(media.file_id);

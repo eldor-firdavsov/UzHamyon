@@ -217,9 +217,12 @@ export async function extractFinancialActions(
 
   let fullPrompt = options.audio
     ? `FOYDALANUVCHI OVOZLI XABAR YUBORDI (audio ilova qilingan).
-1. Avval "transcript" maydoniga aytilgan gaplarni so'zma-so'z, aytilgan tilda yozing (o'zbek, rus yoki aralash bo'lishi mumkin). Hech narsa qo'shmang va o'zgartirmang. Gap tushunarsiz bo'lsa: "transcript": "".
-2. Keyin xuddi matnli xabar kabi tahlil qiling va yuqoridagi JSON sxemasiga "transcript": string maydonini qo'shib qaytaring.
-3. Summalar: "45 ming" = 45000, "1.5 million" / "bir yarim million" = 1500000, "yarim million" = 500000, "sorok pyat tisyach" = 45000.`
+ENG MUHIM QOIDA: faqat audioda HAQIQATAN eshitilgan inson nutqini yozing. Hech narsa o'ylab topmang.
+- Agar audioda aniq nutq bo'lmasa (sukut, shovqin, musiqa, signal) yoki so'zlarni aniq tushunib bo'lmasa: "transcript": "", "intent": "casual_chat", "actions": [].
+- Yuqoridagi tizim ko'rsatmasidagi misol gaplarni va misol summalarni HECH QACHON transcript sifatida yozmang.
+1. "transcript": aytilgan gaplarni so'zma-so'z, aytilgan tilda yozing (o'zbek, rus yoki aralash). Hech narsa qo'shmang va o'zgartirmang.
+2. Keyin faqat shu transcript asosida, xuddi matnli xabar kabi tahlil qiling va JSON sxemasiga "transcript": string maydonini qo'shib qaytaring.
+3. Summalarni so'z bilan aytilgan bo'lsa raqamga aylantiring: "N ming" = N × 1 000, "N million" = N × 1 000 000, "yarim million" = 500 000, ruscha "tisyach" = ming.`
     : `FOYDALANUVCHI XABARI: "${sanitizedText}"`;
   if (userFinancialContextText) {
     fullPrompt += `\n\nFOYDALANUVCHINING MAVJUD MA'LUMOTLARI:\n${sanitizeUserInputForAi(userFinancialContextText)}`;

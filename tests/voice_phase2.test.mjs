@@ -56,10 +56,9 @@ test('MIME types are mapped to the ones Gemini lists', () => {
 });
 
 // ── model order ──────────────────────────────────────────────────────────────
-test('Q3: voice tries GEMINI_MODEL first; text keeps the cheap order', () => {
+test('voice tries the fast lite models first, then GEMINI_MODEL; text keeps the cheap order', () => {
   const voice = buildCandidateModels(undefined, 'gemini-primary-test', 'gemini-fallback', 'primary');
-  assert.equal(voice[0], 'gemini-primary-test');
-  assert.equal(voice[1], 'gemini-fallback');
+  assert.deepEqual(voice.slice(0, 4), ['gemini-3.5-flash-lite', 'gemini-flash-lite-latest', 'gemini-primary-test', 'gemini-fallback']);
   const text = buildCandidateModels(undefined, 'gemini-primary-test', 'gemini-fallback', 'cheap');
   assert.equal(text[0], 'gemini-flash-lite-latest');
 });
@@ -102,7 +101,7 @@ test('audio goes inline with the same prompt; transcript returned; same validati
     assert.equal(res.actions.length, 2);
     assert.equal(res.actions[1].categoryName, undefined); // not in the allowed list
   });
-  assert.match(request.url, /models\/gemini-primary-test:generateContent$/);
+  assert.match(request.url, /models\/gemini-3\.5-flash-lite:generateContent$/);
   const parts = request.body.contents[0].parts;
   assert.match(parts[0].text, /OVOZLI XABAR/);
   assert.deepEqual(parts[1], { inlineData: { mimeType: 'audio/ogg', data: 'AAAA' } });
