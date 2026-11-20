@@ -32,7 +32,7 @@ export default async function TransactionsPage() {
   const displayName = profileName || metaName || (cleanEmailName ? cleanEmailName.charAt(0).toUpperCase() + cleanEmailName.slice(1).toLowerCase() : 'Foydalanuvchi');
 
   // Server-side hydration data with resilient admin fallback for cold-start Telegram WebView
-  const { initialTransactions, initialBudgets, initialGoals } = await getDashboardHydrationData(
+  const { initialTransactions, initialBudgets, initialGoals, initialStreak } = await getDashboardHydrationData(
     supabase,
     user.id
   );
@@ -45,6 +45,7 @@ export default async function TransactionsPage() {
       initialTransactions={initialTransactions}
       initialBudgets={initialBudgets}
       initialGoals={initialGoals}
+      initialStreak={initialStreak}
     />
   );
 }

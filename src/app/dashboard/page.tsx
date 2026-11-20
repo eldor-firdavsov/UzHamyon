@@ -39,7 +39,7 @@ export default async function DashboardPage() {
 
   // Server-side hydration data for instant zero-lag SSR
   // Server-side hydration data with resilient admin fallback for cold-start Telegram WebView
-  const { initialTransactions, initialBudgets, initialGoals } = await getDashboardHydrationData(
+  const { initialTransactions, initialBudgets, initialGoals, initialStreak } = await getDashboardHydrationData(
     supabase,
     user.id
   );
@@ -52,6 +52,7 @@ export default async function DashboardPage() {
       initialTransactions={initialTransactions}
       initialBudgets={initialBudgets}
       initialGoals={initialGoals}
+      initialStreak={initialStreak}
     />
   );
 }

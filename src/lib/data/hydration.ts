@@ -1,4 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
+import { getStreakForUser } from '@/lib/streak/service';
+import type { StreakSummary } from '@/lib/streak/compute';
 
 export interface HydratedTransaction {
   id: string;
@@ -34,6 +36,8 @@ export interface DashboardHydrationData {
   initialTransactions: HydratedTransaction[];
   initialBudgets: HydratedBudget[];
   initialGoals: HydratedGoal[];
+  /** Logging streak; null when it could not be loaded (the client fetches it then). */
+  initialStreak: StreakSummary | null;
 }
 
 /**
@@ -44,7 +48,7 @@ export async function getDashboardHydrationData(
   supabase: SupabaseClient,
   userId: string
 ): Promise<DashboardHydrationData> {
-  const [txRes, budgetsRes, goalsRes] = await Promise.all([
+  const [txRes, budgetsRes, goalsRes, initialStreak] = await Promise.all([
     supabase
       .from('transactions')
       .select('id, type, amount, currency, description, transaction_date, categories(name)')
@@ -61,6 +65,10 @@ export async function getDashboardHydrationData(
       .from('financial_goals')
       .select('id, name, target_amount, target_date, current_amount, currency, status')
       .eq('user_id', userId),
+    getStreakForUser(supabase, userId).catch((err) => {
+      console.error('[hydration] streak failed:', err);
+      return null;
+    }),
   ]);
 
   let rawTransactions = txRes.data || [];
@@ -142,5 +150,5 @@ export async function getDashboardHydrationData(
     contribsLoaded: false,
   }));
 
-  return { initialTransactions, initialBudgets, initialGoals };
+  return { initialTransactions, initialBudgets, initialGoals, initialStreak };
 }

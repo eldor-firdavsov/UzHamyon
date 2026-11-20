@@ -3,6 +3,16 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import '@/app/prototype/prototype.css';
 import MobileNavBar from '@/components/navigation/MobileNavBar';
+import QuickAddSheet, { type QuickAddInput } from '@/components/transactions/QuickAddSheet';
+import StreakCelebration from '@/components/streak/StreakCelebration';
+import DailyNudge, { markNudgeShown, shouldShowNudgeToday } from '@/components/streak/DailyNudge';
+import { StreakChip } from '@/components/streak/StreakParts';
+import HomeMobile from '@/components/mobile/HomeMobile';
+import ActivityMobile from '@/components/mobile/ActivityMobile';
+import TahlilMobile from '@/components/mobile/TahlilMobile';
+import ProfileSheetBody from '@/components/mobile/ProfileSheetBody';
+import AiChat from '@/components/mobile/AiChat';
+import { computeStreak, type StreakSummary } from '@/lib/streak/compute';
 import SlidingSegmentedNav from '@/prototype/components/SlidingSegmentedNav';
 import UzHamyonLogo from '@/components/brand/UzHamyonLogo';
 import CategoryIcon, { getCategoryMeta } from '@/components/categories/CategoryIcon';
@@ -100,6 +110,8 @@ export interface UzHamyonPrototypeAppProps {
   initialTransactions?: Transaction[];
   initialBudgets?: Budget[];
   initialGoals?: Goal[];
+  /** Logging streak from the server (null/undefined → fetched on the client). */
+  initialStreak?: StreakSummary | null;
   initialSheet?: SheetType;
   allowDemoFallback?: boolean;
   syncBrowserUrl?: boolean;
@@ -107,6 +119,7 @@ export interface UzHamyonPrototypeAppProps {
 
 // ── Constants from Specification ──
 const MIN_ALLOWED_DATE = '2020-01-01';
+const MOBILE_TITLES: Record<TabType, string> = { dash: 'Bugun', act: 'Faoliyat', tahlil: 'Tahlil', ai: 'AI' };
 const TODAY_DATE = getNowLocalDateString();
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -358,6 +371,7 @@ export default function UzHamyonPrototypeApp({
   initialTransactions,
   initialBudgets,
   initialGoals,
+  initialStreak = null,
   initialSheet = null,
   allowDemoFallback = false,
   syncBrowserUrl = true,
@@ -436,6 +450,11 @@ export default function UzHamyonPrototypeApp({
 
   // ── Modal Sheet & Form State ──
   const [activeSheet, setActiveSheet] = useState<SheetType>(initialSheet);
+  // ── Phase 1: streak, daily nudge, quick add ──
+  const [streak, setStreak] = useState<StreakSummary | null>(initialStreak);
+  const [celebration, setCelebration] = useState<{ from: number; streak: StreakSummary } | null>(null);
+  const [quickOpen, setQuickOpen] = useState<boolean>(false);
+  const [nudgeOpen, setNudgeOpen] = useState<boolean>(false);
   useModalScrollLock(Boolean(activeSheet));
   const [editId, setEditId] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -472,7 +491,7 @@ export default function UzHamyonPrototypeApp({
             ? '/transactions'
             : newTab === 'tahlil'
             ? '/analytics'
-            : '/advisor';
+            : '/ai';
 
         const params = new URLSearchParams(window.location.search);
         if (availableMonths.length > 0) {
@@ -499,6 +518,7 @@ export default function UzHamyonPrototypeApp({
       const p = window.location.pathname;
       if (p.startsWith('/transactions')) setTab('act');
       else if (p.startsWith('/analytics')) setTab('tahlil');
+      else if (p.startsWith('/ai')) setTab('ai');
       else if (p.startsWith('/dashboard') || p === '/') setTab('dash');
       else setTab('dash');
     };
@@ -512,7 +532,7 @@ export default function UzHamyonPrototypeApp({
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const qTab = params.get('tab') as TabType;
-      if (qTab && ['dash', 'act', 'tahlil'].includes(qTab)) {
+      if (qTab && ['dash', 'act', 'tahlil', 'ai'].includes(qTab)) {
         setTab(qTab);
       }
       const qSub = params.get('sub') as SubTabType;
@@ -824,6 +844,16 @@ export default function UzHamyonPrototypeApp({
     [currentMonthTransactions]
   );
 
+  // Last month's so'm spending, for the change badge on the phone Tahlil ring.
+  const prevMonthExpense = useMemo(() => {
+    const pm = month === 1 ? 12 : month - 1;
+    const py = month === 1 ? year - 1 : year;
+    const prefix = `${py}-${padTwo(pm)}`;
+    return transactions
+      .filter((t) => t.type === 'ex' && t.date?.startsWith(prefix) && normalizeCurrency(t.currency) === PRIMARY_CURRENCY)
+      .reduce((sum, t) => sum + t.amount, 0);
+  }, [transactions, year, month]);
+
   // Income / Expense sums for currently active month
   const monthIncome = useMemo(() => {
     return currentMonthUzsTransactions
@@ -1027,6 +1057,11 @@ export default function UzHamyonPrototypeApp({
     return groups;
   }, [sortedTransactions, searchQuery, activityFilter, month]);
 
+  const activityRows = useMemo(
+    () => filteredActivityGroups.filter((g) => !g.isHead).map((g) => g.tx!),
+    [filteredActivityGroups],
+  );
+
   const handleLogout = async () => {
     try {
       const { createClient } = await import('@/lib/supabase/client');
@@ -1038,19 +1073,82 @@ export default function UzHamyonPrototypeApp({
     }
   };
 
+  // ── Streak ──
+  const loadStreak = async (localTransactions?: Transaction[]): Promise<StreakSummary | null> => {
+    if (!isAuthenticated) {
+      // Demo preview: derive from the local rows (nothing is stored).
+      const local = computeStreak((localTransactions ?? transactions).map((t) => t.date), getNowLocalDateString());
+      setStreak(local);
+      return local;
+    }
+    try {
+      const token = await getAuthToken();
+      const res = await fetch('/api/streak', {
+        cache: 'no-store',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!res.ok) return null;
+      const next = (await res.json()) as StreakSummary;
+      setStreak(next);
+      return next;
+    } catch (err) {
+      console.error('Streak load failed:', err);
+      return null;
+    }
+  };
+
+  /** After a NEW transaction: celebrate when it is the first log of the day. */
+  const afterNewTransaction = async (localTransactions?: Transaction[]) => {
+    const before = streak;
+    const after = await loadStreak(localTransactions);
+    if (after && after.todayDone && before && !before.todayDone) {
+      setCelebration({ from: before.current, streak: after });
+    }
+  };
+
+  // Streak on first load: routes without server hydration (/ai, /advisor, /prototype) fetch it here.
+  useEffect(() => {
+    if (loading || streak) return;
+    void loadStreak();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, isAuthenticated]);
+
+  // Daily nudge: first open of the day with nothing logged yet (phones only, once per day).
+  const nudgeCheckedRef = useRef(false);
+  useEffect(() => {
+    if (!streak || nudgeCheckedRef.current) return;
+    nudgeCheckedRef.current = true;
+    if (streak.todayDone || activeSheet) return;
+    if (window.matchMedia('(min-width: 1024px)').matches) return;
+    const today = getNowLocalDateString();
+    if (!shouldShowNudgeToday(today)) return;
+    markNudgeShown(today);
+    window.setTimeout(() => setNudgeOpen(true), 600);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [streak]);
+
   // ── Sheet Actions & Handlers ──
+  /** + button: one-tap quick add (favourites, recents, keypad). */
   const handleOpenAddTx = () => {
+    setNudgeOpen(false);
+    setTxError(null);
+    setQuickOpen(true);
+  };
+
+  /** Quick add → full form for date, time or category changes. */
+  const handleOpenFullTxForm = (input?: QuickAddInput) => {
     setEditId(null);
     setTxError(null);
     setShowDatePicker(false);
     setShowCategoryPicker(false);
+    setQuickOpen(false);
     setFormData({
-      type: 'ex',
-      amount: '',
-      cat: 'Auto',
-      desc: '',
-      date: getNowLocalDateString(),
-      time: getNowLocalTimeString(),
+      type: input?.type ?? 'ex',
+      amount: input?.amount ? formatNumberWithGaps(input.amount) : '',
+      cat: input?.cat ?? 'Auto',
+      desc: input?.desc ?? '',
+      date: input?.date ?? getNowLocalDateString(),
+      time: input?.time ?? getNowLocalTimeString(),
     });
     setActiveSheet('tx');
   };
@@ -1071,62 +1169,72 @@ export default function UzHamyonPrototypeApp({
     setActiveSheet('tx');
   };
 
-  const handleSaveTx = async () => {
-    if (txSaveInFlightRef.current) return;
+  /**
+   * Saves the full form, or the quick-add input when given. Resolves true only
+   * after the database confirmed the write.
+   */
+  const handleSaveTx = async (quick?: QuickAddInput): Promise<boolean> => {
+    if (txSaveInFlightRef.current) return false;
 
     setTxError(null);
 
-    const amt = parseNumber(formData.amount);
-    const date = formData.date || getNowLocalDateString();
-    const time = formData.time || getNowLocalTimeString();
-    const desc = (formData.desc || '').trim();
-    const type = (formData.type || 'ex') as 'in' | 'ex';
+    const fd: Record<string, string> = quick ? { ...quick } : formData;
+    const isNew = quick ? true : !editId;
+    const targetEditId = quick ? null : editId;
+    const amt = parseNumber(fd.amount);
+    const date = fd.date || getNowLocalDateString();
+    const time = fd.time || getNowLocalTimeString();
+    const desc = (fd.desc || '').trim();
+    const type = (fd.type || 'ex') as 'in' | 'ex';
 
     if (amt <= 0) {
       setTxError('Iltimos, to‘g‘ri summa kiriting.');
-      return;
+      return false;
     }
     if (!desc) {
       setTxError('Iltimos, tranzaksiya nomini kiriting.');
-      return;
+      return false;
     }
     if (!date || !isValidCalendarDate(date)) {
       setTxError('Iltimos, to‘g‘ri sanani tanlang (YYYY-MM-DD).');
-      return;
+      return false;
     }
     if (time && !isValidTimeString(time)) {
       setTxError('Iltimos, to‘g‘ri vaqtni kiriting (HH:mm).');
-      return;
+      return false;
     }
 
     // If Auto is selected, AI dynamically resolves category from title/description
     const predicted = predictCategoryFromTitle(desc, type);
     const cat =
-      !formData.cat || formData.cat === 'Auto' || formData.cat === 'Boshqa'
+      !fd.cat || fd.cat === 'Auto' || fd.cat === 'Boshqa'
         ? predicted.category
-        : formData.cat;
+        : fd.cat;
 
     // Public demo preview (no session): keep interactions local and never
     // pretend the row was written to the database.
     if (!isAuthenticated) {
-      if (editId) {
+      if (targetEditId) {
         setTransactions((prev) =>
-          prev.map((t) => (t.id === editId ? { ...t, type, amount: amt, cat, desc, date, time } : t))
+          prev.map((t) => (t.id === targetEditId ? { ...t, type, amount: amt, cat, desc, date, time } : t))
         );
       } else {
-        setTransactions((prev) => [
-          ...prev,
+        const nextRows = [
+          ...transactions,
           { id: `demo-${Date.now()}`, type, amount: amt, cat, desc, date, time },
-        ]);
+        ];
+        setTransactions(nextRows);
         setYear(parseInt(date.slice(0, 4), 10));
         setMonth(parseInt(date.slice(5, 7), 10));
+        void afterNewTransaction(nextRows);
       }
       setShowDatePicker(false);
       setShowCategoryPicker(false);
       setActiveSheet(null);
+      setQuickOpen(false);
       setFormData({});
       setEditId(null);
-      return;
+      return true;
     }
 
     txSaveInFlightRef.current = true;
@@ -1154,9 +1262,9 @@ export default function UzHamyonPrototypeApp({
       if (token) authHeaders['Authorization'] = `Bearer ${token}`;
 
       const res = await fetch(
-        editId ? `/api/transactions/${editId}` : '/api/transactions',
+        targetEditId ? `/api/transactions/${targetEditId}` : '/api/transactions',
         {
-          method: editId ? 'PUT' : 'POST',
+          method: targetEditId ? 'PUT' : 'POST',
           headers: authHeaders,
           body: JSON.stringify(payload),
         }
@@ -1182,30 +1290,34 @@ export default function UzHamyonPrototypeApp({
         if (saved?.id) {
           const mapped = mapApiTransaction(saved);
           setTransactions((prev) =>
-            editId
-              ? prev.map((t) => (t.id === editId ? mapped : t))
+            targetEditId
+              ? prev.map((t) => (t.id === targetEditId ? mapped : t))
               : [mapped, ...prev]
           );
         }
       }
       invalidateAllFinancialCaches();
 
-      if (!editId) {
+      if (isNew) {
         setYear(parseInt(date.slice(0, 4), 10));
         setMonth(parseInt(date.slice(5, 7), 10));
       }
-      triggerToast(editId ? 'Tranzaksiya yangilandi' : 'Tranzaksiya qo‘shildi');
+      triggerToast(isNew ? 'Tranzaksiya qo‘shildi' : 'Tranzaksiya yangilandi');
       setShowDatePicker(false);
       setShowCategoryPicker(false);
       setActiveSheet(null);
+      setQuickOpen(false);
       setFormData({});
       setEditId(null);
+      if (isNew) void afterNewTransaction();
+      return true;
     } catch (err) {
       // Keep the sheet open with the user's input intact.
       console.error('Transaction save failed:', err);
       setTxError(
         toUzbekTxError(err instanceof Error ? err.message : undefined, 'save')
       );
+      return false;
     } finally {
       txSaveInFlightRef.current = false;
       setIsSavingTx(false);
@@ -1602,6 +1714,20 @@ export default function UzHamyonPrototypeApp({
               <ChartNoAxesCombined className={`h-4 w-4 ${tab === 'tahlil' ? 'text-[#059669]' : 'text-[#71717A]'}`} />
               <span>Tahlil</span>
             </button>
+
+            <button
+              type="button"
+              id="nav-ai-link"
+              className={`inline-flex items-center gap-2 px-3.5 py-1.5 text-sm rounded-full transition-all cursor-pointer ${
+                tab === 'ai'
+                  ? 'bg-white text-[#18181B] font-medium shadow-xs'
+                  : 'text-[#52525B] hover:text-[#18181B] font-normal'
+              }`}
+              onClick={() => switchTab('ai')}
+            >
+              <Sparkles className={`h-4 w-4 ${tab === 'ai' ? 'text-[#059669]' : 'text-[#71717A]'}`} />
+              <span>AI</span>
+            </button>
           </nav>
 
           {/* Right Actions: Month Switcher next to Tranzaksiya CTA + Profile Pill */}
@@ -1684,49 +1810,32 @@ export default function UzHamyonPrototypeApp({
           MOBILE REAL TOPBAR (< 1024px)
          ══════════════════════════════════════════════════════════ */}
       <div className="uz-mobile-topbar">
-        <div className="flex items-center gap-2.5">
-          <UzHamyonLogo variant="icon" size="sm" />
-          <span className="font-semibold text-lg text-[#18181B] tracking-tight">
-            UzHamyon
-          </span>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <button
+            type="button"
+            aria-label="Profil"
+            onClick={() => setActiveSheet('user')}
+            className="h-9 w-9 shrink-0 rounded-full bg-[#163300] text-[#9FE870] flex items-center justify-center font-bold text-[15px] cursor-pointer"
+          >
+            {userName.trim() ? userName.trim()[0].toUpperCase() : <User className="h-4 w-4" />}
+          </button>
+          <span className="uz-m-title">{MOBILE_TITLES[tab]}</span>
         </div>
         <div className="flex items-center gap-2">
-          {/* Quick Month Switcher for Mobile & Tablet */}
-          <div className="inline-flex items-center bg-white border border-[#E5E7EB] rounded-full p-0.5 shadow-2xs">
-            <button
-              type="button"
-              aria-label="Oldingi oy"
-              disabled={noPrev}
-              onClick={() => handleNavigateMonth(-1)}
-              className="h-7 w-7 rounded-full flex items-center justify-center text-[#71717A] hover:text-[#18181B] disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSheet('month')}
-              className="px-2 py-0.5 text-xs font-medium text-[#18181B] whitespace-nowrap cursor-pointer"
-            >
-              {availableMonths.length === 0 ? "Oylar mavjud emas" : `${monthLabel} ${year}`}
-            </button>
-            <button
-              type="button"
-              aria-label="Keyingi oy"
-              disabled={noNext}
-              onClick={() => handleNavigateMonth(1)}
-              className="h-7 w-7 rounded-full flex items-center justify-center text-[#71717A] hover:text-[#18181B] disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
-            >
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
-          </div>
-
-          {/* User profile avatar */}
-          <div
-            className="h-8 w-8 rounded-full bg-[#ECFDF5] text-[#059669] flex items-center justify-center font-medium text-xs shrink-0 border border-[#D1FAE5] cursor-pointer"
-            onClick={() => setActiveSheet('user')}
-          >
-            <User className="h-4 w-4" />
-          </div>
+          {(tab === 'act' || tab === 'tahlil') && availableMonths.length > 0 && (
+            <div className="uz-m-month">
+              <button type="button" aria-label="Oldingi oy" disabled={noPrev} onClick={() => handleNavigateMonth(-1)}>
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <button type="button" className="uz-m-month-label" onClick={() => setActiveSheet('month')}>
+                {monthLabel.slice(0, 3)}
+              </button>
+              <button type="button" aria-label="Keyingi oy" disabled={noNext} onClick={() => handleNavigateMonth(1)}>
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+          {streak && <StreakChip streak={streak} onClick={handleOpenAddTx} />}
         </div>
       </div>
 
@@ -1736,7 +1845,21 @@ export default function UzHamyonPrototypeApp({
       <main className="uz-main-container">
         {/* ── TAB 1: DASHBOARD ── */}
         {tab === 'dash' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <HomeMobile
+            balance={currentBalance}
+            monthIncome={monthIncome}
+            monthExpense={monthExpense}
+            streak={streak}
+            recent={sortedTransactions.slice(0, 4)}
+            today={getNowLocalDateString()}
+            loading={loading}
+            onOpenTx={(t) => handleOpenEditTx(t as Transaction)}
+            onSeeAll={() => switchTab('act')}
+            onAdd={handleOpenAddTx}
+          />
+        )}
+        {tab === 'dash' && (
+          <div className="hidden lg:flex" style={{ flexDirection: 'column', gap: '24px' }}>
             {/* Hero Financial Card */}
             <div
               className="finance-card"
@@ -2110,7 +2233,21 @@ export default function UzHamyonPrototypeApp({
 
         {/* ── TAB 2: FAOLIYAT (ACTIVITY) ── */}
         {tab === 'act' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <ActivityMobile
+            rows={activityRows}
+            hasAny={transactions.length > 0}
+            today={getNowLocalDateString()}
+            loading={loading}
+            query={searchQuery}
+            filter={activityFilter}
+            onQuery={setSearchQuery}
+            onFilter={setActivityFilter}
+            onOpenTx={(t) => handleOpenEditTx(t as Transaction)}
+            onAdd={handleOpenAddTx}
+          />
+        )}
+        {tab === 'act' && (
+          <div className="hidden lg:flex" style={{ flexDirection: 'column', gap: '20px' }}>
             <span className="sr-only">Faoliyat Kategoriyalar Import</span>
             {/* Header & Controls Row */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -2260,8 +2397,43 @@ export default function UzHamyonPrototypeApp({
         )}
 
         {/* ── TAB 3: TAHLIL (ANALYTICS & GOALS) ── */}
+        {tab === 'ai' && (
+          <AiChat
+            isAuthenticated={isAuthenticated}
+            getAuthToken={getAuthToken}
+            onAnswered={() => {
+              void refreshTransactionsFromServer();
+            }}
+          />
+        )}
         {tab === 'tahlil' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <TahlilMobile
+            byCategory={categoryExpenses}
+            monthExpense={monthExpense}
+            prevMonthExpense={prevMonthExpense}
+            budgets={budgets.map((b) => ({
+              id: b.id,
+              cat: b.cat,
+              limit: b.limit,
+              spent: typeof b.spent === 'number' ? b.spent : categoryExpenses[b.cat] || 0,
+            }))}
+            goals={goals
+              .filter((g) => normalizeCurrency(g.currency) === PRIMARY_CURRENCY)
+              .map((g) => ({ id: g.id, name: g.name, target: g.target, saved: getGoalSaved(g) }))}
+            onAddBudget={handleOpenAddBudget}
+            onOpenBudget={(id) => {
+              const found = budgets.find((b) => b.id === id);
+              if (found) handleOpenEditBudget(found);
+            }}
+            onAddGoal={handleOpenAddGoal}
+            onOpenGoal={(id) => {
+              setActiveGoalId(id);
+              setActiveSheet('detail');
+            }}
+          />
+        )}
+        {tab === 'tahlil' && (
+          <div className="hidden lg:flex" style={{ flexDirection: 'column', gap: '24px' }}>
             <span className="sr-only">Tahlil Budjetlar Jamg‘arma maqsadlari</span>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
@@ -2589,12 +2761,39 @@ export default function UzHamyonPrototypeApp({
          ══════════════════════════════════════════════════════════ */}
       <MobileNavBar
         onOpenAddTransaction={handleOpenAddTx}
+        highlightAdd={nudgeOpen}
         activeTab={tab}
         className="lg:hidden"
         onTabChange={(newTab) => {
           switchTab(newTab, newTab === 'tahlil' ? 'an' : undefined);
         }}
       />
+
+      {nudgeOpen && (
+        <DailyNudge onAccept={handleOpenAddTx} onDismiss={() => setNudgeOpen(false)} />
+      )}
+
+      {quickOpen && (
+        <QuickAddSheet
+          transactions={transactions}
+          isSaving={isSavingTx}
+          error={txError}
+          onClose={() => {
+            setQuickOpen(false);
+            setTxError(null);
+          }}
+          onSave={(input) => handleSaveTx(input)}
+          onOpenFullForm={handleOpenFullTxForm}
+        />
+      )}
+
+      {celebration && (
+        <StreakCelebration
+          from={celebration.from}
+          streak={celebration.streak}
+          onClose={() => setCelebration(null)}
+        />
+      )}
 
       {/* ══════════════════════════════════════════════════════════
           TOAST NOTIFICATION
@@ -2652,7 +2851,7 @@ export default function UzHamyonPrototypeApp({
                   : activeSheet === 'confirm'
                   ? "O'chirishni tasdiqlang"
                   : activeSheet === 'user'
-                  ? 'Foydalanuvchi hisobi'
+                  ? 'Profil'
                   : activeSheet === 'month'
                   ? 'Oyni tanlang'
                   : ''}
@@ -3198,7 +3397,7 @@ export default function UzHamyonPrototypeApp({
                             fontWeight: 700,
                           }}
                           disabled={isSaveTxDisabled || isSavingTx}
-                          onClick={handleSaveTx}
+                          onClick={() => void handleSaveTx()}
                         >
                           {isSavingTx ? 'Saqlanmoqda...' : 'Saqlash'}
                         </button>
@@ -3215,7 +3414,7 @@ export default function UzHamyonPrototypeApp({
                           fontWeight: 700,
                         }}
                         disabled={isSaveTxDisabled || isSavingTx}
-                        onClick={handleSaveTx}
+                        onClick={() => void handleSaveTx()}
                       >
                         {isSavingTx ? 'Saqlanmoqda...' : 'Tranzaksiya qo‘shish'}
                       </button>
@@ -3659,33 +3858,7 @@ export default function UzHamyonPrototypeApp({
             )}
 
             {activeSheet === 'user' && (
-              <div className="p-5 space-y-4">
-                <div className="flex items-center gap-3 pb-3 border-b border-[#E8EBE5]">
-                  <div className="h-10 w-10 rounded-full bg-[#ECFDF5] text-[#059669] flex items-center justify-center font-bold text-sm shrink-0 border border-[#D1FAE5]">
-                    <User className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-bold text-[#171B16] truncate">{userName}</div>
-                    {userEmail && <div className="text-xs text-[#697168] truncate">{userEmail}</div>}
-                  </div>
-                </div>
-
-                <div className="space-y-2 pt-1">
-                  <a
-                    href="/settings"
-                    className="w-full flex items-center justify-center min-h-[44px] px-4 py-2.5 rounded-xl border border-[#D8DED3] bg-white hover:bg-[#F4F6F2] text-sm font-semibold text-[#171B16] transition-colors"
-                  >
-                    Sozlamalar
-                  </a>
-                  <button
-                    type="button"
-                    onClick={handleLogout}
-                    className="w-full flex items-center justify-center min-h-[44px] px-4 py-2.5 rounded-xl bg-[#FEE2E2] hover:bg-[#FCD2D2] text-sm font-bold text-[#991B1B] transition-colors cursor-pointer"
-                  >
-                    Hisobdan chiqish
-                  </button>
-                </div>
-              </div>
+              <ProfileSheetBody userName={userName} userEmail={userEmail} streak={streak} onLogout={handleLogout} />
             )}
           </div>
         </div>

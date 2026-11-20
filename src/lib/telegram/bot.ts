@@ -29,6 +29,9 @@ import {
   type CategoryOption,
 } from '../categories/catalog.ts';
 import { notifyCompletedGoals } from '../goals/notifications.ts';
+import { getStreakForUser } from '../streak/service.ts';
+import type { StreakSummary } from '../streak/compute.ts';
+
 import {
   type TelegramAudioLike,
   validateAudioMeta,
@@ -49,6 +52,16 @@ import {
   DELETE_CANCEL_CALLBACK,
   DELETION_MESSAGES,
 } from './accountDeletion.ts';
+
+/** Streak for the bot reply; never lets a streak problem break saving. */
+async function safeStreak(client: SupabaseClient, userId: string): Promise<StreakSummary | null> {
+  try {
+    return await getStreakForUser(client, userId);
+  } catch (err) {
+    console.warn('[Bot] streak unavailable:', err instanceof Error ? err.message : err);
+    return null;
+  }
+}
 
 /** Shown when the AI could not answer in time or is unavailable (#21). */
 export const AI_RETRY_MESSAGE =
@@ -434,9 +447,17 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
       }
 
       // 3. Execute and show the real result.
+      const logsTransaction = pending.record.actions.some((a) => a.actionType === 'create_transaction');
+      const streakBefore = logsTransaction ? await safeStreak(userAuth.client, userAuth.userId) : null;
       const execRes = await executePendingActionRecord(pending.record, userAuth.client);
       if (execRes.success) {
-        await editTelegramMessageText(chatId, messageId, escapeHtml(execRes.message || '✅ Saqlandi.'));
+        const streakAfter = streakBefore && !streakBefore.todayDone
+          ? await safeStreak(userAuth.client, userAuth.userId)
+          : null;
+        const streakLine = streakAfter && streakAfter.todayDone
+          ? `\n\n🔥 ${streakAfter.current} kun ketma-ket!`
+          : '';
+        await editTelegramMessageText(chatId, messageId, escapeHtml(execRes.message || '✅ Saqlandi.') + streakLine);
         // A contribution may have just completed a goal: congratulate once (#33).
         await notifyCompletedGoals(userAuth.client, { userId: userAuth.userId, chatId });
       } else {

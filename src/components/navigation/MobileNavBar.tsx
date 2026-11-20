@@ -7,6 +7,7 @@ import {
   Receipt,
   ChartNoAxesCombined,
   Plus,
+  Sparkles,
 } from 'lucide-react';
 
 export interface MobileNavBarProps {
@@ -14,12 +15,15 @@ export interface MobileNavBarProps {
   activeTab?: 'dashboard' | 'faoliyat' | 'tahlil' | 'ai' | 'dash' | 'act';
   onTabChange?: (tab: 'dash' | 'act' | 'tahlil' | 'ai') => void;
   className?: string;
+  /** Pulses the + button (daily nudge: nothing logged today yet). */
+  highlightAdd?: boolean;
 }
 
 export const NAV_ITEMS = [
   { id: 'home', name: 'Bosh sahifa', href: '/dashboard', linkId: 'mobile-nav-dashboard-link', icon: Home, prototypeTab: 'dash' as const },
   { id: 'activity', name: 'Faoliyat', href: '/transactions', linkId: 'mobile-nav-transactions-link', icon: Receipt, prototypeTab: 'act' as const },
   { id: 'analytics', name: 'Tahlil', href: '/analytics', linkId: 'mobile-nav-analytics-link', icon: ChartNoAxesCombined, prototypeTab: 'tahlil' as const },
+  { id: 'ai', name: 'AI', href: '/ai', linkId: 'mobile-nav-ai-link', icon: Sparkles, prototypeTab: 'ai' as const },
 ] as const;
 
 export const MobileNavBar: React.FC<MobileNavBarProps> = ({
@@ -27,6 +31,7 @@ export const MobileNavBar: React.FC<MobileNavBarProps> = ({
   activeTab,
   onTabChange,
   className,
+  highlightAdd = false,
 }) => {
   const router = useRouter();
   const currentPathname = usePathname() || '';
@@ -38,6 +43,7 @@ export const MobileNavBar: React.FC<MobileNavBarProps> = ({
       if (activeTab === 'dash' || activeTab === 'dashboard') return 0;
       if (activeTab === 'act' || activeTab === 'faoliyat') return 1;
       if (activeTab === 'tahlil') return 2;
+      if (activeTab === 'ai') return 3;
     }
     if (!currentPathname) return 0;
     if (currentPathname === '/' || currentPathname === '/dashboard') return 0;
@@ -50,6 +56,7 @@ export const MobileNavBar: React.FC<MobileNavBarProps> = ({
     ) {
       return 2;
     }
+    if (currentPathname.startsWith('/ai') || currentPathname.startsWith('/advisor')) return 3;
     return 0;
   }, [currentPathname, activeTab]);
 
@@ -179,7 +186,7 @@ export const MobileNavBar: React.FC<MobileNavBarProps> = ({
           <a href="/dashboard" id="mobile-nav-dashboard-link">Bosh sahifa</a>
           <a href="/transactions" id="mobile-nav-transactions-link">Faoliyat</a>
           <a href="/analytics" id="mobile-nav-analytics-link">Tahlil</a>
-          <a href="/advisor" id="mobile-nav-advisor-link">AI</a>
+          <a href="/ai" id="mobile-nav-ai-link">AI</a>
         </div>
         {/* 1. LEFT CAPSULE: 3-Item Liquid Glass Pill */}
         <div
@@ -188,7 +195,7 @@ export const MobileNavBar: React.FC<MobileNavBarProps> = ({
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
-          className={`liquid-glass-pill relative grid grid-cols-3 items-center flex-1 rounded-full p-1.5 h-[58px] sm:h-[62px] touch-none select-none transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+          className={`liquid-glass-pill relative grid grid-cols-4 items-center flex-1 rounded-full p-1.5 h-[58px] sm:h-[62px] touch-none select-none transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
             isScrubbing ? 'scale-[1.025]' : 'scale-100'
           }`}
         >
@@ -207,7 +214,7 @@ export const MobileNavBar: React.FC<MobileNavBarProps> = ({
             aria-hidden="true"
             className="pointer-events-none absolute inset-y-1.5 left-1.5 flex items-center justify-center z-2"
             style={{
-              width: 'calc((100% - 0.75rem) / 3)',
+              width: 'calc((100% - 0.75rem) / 4)',
               transform: `translate3d(${displayIndex * 100}%, 0, 0)`,
               transition: isScrubbing
                 ? 'none'
@@ -271,8 +278,8 @@ export const MobileNavBar: React.FC<MobileNavBarProps> = ({
         <button
           type="button"
           onClick={onOpenAddTransaction}
-          aria-label="Add transaction"
-          className="liquid-glass-primary relative flex-shrink-0 flex items-center justify-center w-[58px] h-[58px] sm:w-[62px] sm:h-[62px] rounded-full ring-4 ring-card/60 dark:ring-card/40 backdrop-blur-md active:scale-90 hover:opacity-95 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer"
+          aria-label="Amal qo‘shish"
+          className={`${highlightAdd ? 'uz-add-pulse ' : ''}liquid-glass-primary relative flex-shrink-0 flex items-center justify-center w-[58px] h-[58px] sm:w-[62px] sm:h-[62px] rounded-full ring-4 ring-card/60 dark:ring-card/40 backdrop-blur-md active:scale-90 hover:opacity-95 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer`}
         >
           {/* Refraction underlay for detached circle */}
           <span
