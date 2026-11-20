@@ -23,6 +23,7 @@ export interface TahlilGoal {
 }
 
 interface TahlilMobileProps {
+  loading?: boolean;
   /** So'm spent per category this month. */
   byCategory: Record<string, number>;
   monthExpense: number;
@@ -41,6 +42,7 @@ function compact(n: number): string {
 
 /** Phone analytics: one ring, limits as bars, goals as rings. */
 export default function TahlilMobile({
+  loading = false,
   byCategory,
   monthExpense,
   prevMonthExpense,
@@ -76,8 +78,19 @@ export default function TahlilMobile({
   const change = prevMonthExpense > 0 ? Math.round(((monthExpense - prevMonthExpense) / prevMonthExpense) * 100) : null;
 
   return (
-    <div className="uz-m-page lg:hidden">
+    <div className="uz-m-page" data-page="tahlil">
       <section className="uz-m-card uz-t-ring-card" aria-label="Xarajatlar taqsimoti">
+        {loading ? (
+          <>
+            <div className="uz-t-ring uz-skel" style={{ borderRadius: '50%' }} aria-label="Yuklanmoqda" />
+            <div className="uz-t-legend">
+              {[70, 55, 62].map((w) => (
+                <span key={w} className="uz-skel" style={{ width: `${w}%`, height: 14 }} />
+              ))}
+            </div>
+          </>
+        ) : (
+        <>
         <div className="uz-t-ring" style={{ background: ring }} role="img" aria-label={`Shu oy chiqim ${groupNumber(monthExpense)} so‘m`}>
           <div className="uz-t-ring-hole">
             <span className="uz-t-ring-total num">{compact(monthExpense)}</span>
@@ -106,6 +119,8 @@ export default function TahlilMobile({
             ))
           )}
         </div>
+        </>
+        )}
       </section>
 
       <section className="uz-m-section">
@@ -162,7 +177,7 @@ export default function TahlilMobile({
               return (
                 <button key={g.id} type="button" className="uz-m-card uz-t-goal" onClick={() => onOpenGoal(g.id)}>
                   <span className="uz-t-goal-top">
-                    <span className="uz-t-goal-ring" style={{ background: `conic-gradient(#9FE870 0 ${p}%, #ECEFE8 ${p}% 100%)` }}>
+                    <span className="uz-t-goal-ring" style={{ '--p': p } as React.CSSProperties}>
                       <span><Target size={17} strokeWidth={2.2} /></span>
                     </span>
                     <span className="uz-t-goal-pct num">{p}%</span>

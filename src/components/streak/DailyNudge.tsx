@@ -44,8 +44,8 @@ export default function DailyNudge({ onAccept, onDismiss }: DailyNudgeProps) {
 
   return (
     <>
-      <div className="uz-nudge-backdrop lg:hidden" onClick={onDismiss} aria-hidden="true" />
-      <button type="button" className="uz-nudge-bubble lg:hidden" onClick={onAccept}>
+      <div className="uz-nudge-backdrop" onClick={onDismiss} aria-hidden="true" />
+      <button type="button" className="uz-nudge-bubble" onClick={onAccept}>
         <Flame size={22} color="#FFB020" fill="#FFB020" style={{ flex: '0 0 22px' }} aria-hidden="true" />
         <span>Bugungi xarajatni qo‘shamizmi?</span>
       </button>

@@ -15,6 +15,8 @@ export interface TxRowData {
   currency?: string;
   /** Logged through the Telegram bot. */
   viaBot?: boolean;
+  /** Just saved: the row flashes once. */
+  fresh?: boolean;
 }
 
 export function groupNumber(n: number): string {
@@ -30,7 +32,7 @@ function TxRow({ t, sub, onOpen }: { t: TxRowData; sub?: string; onOpen: (t: TxR
   const meta = getCategoryMeta(t.cat, t.type);
   const Icon = meta.icon;
   return (
-    <button type="button" className="uz-m-row" onClick={() => onOpen(t)}>
+    <button type="button" className="uz-m-row" data-fresh={t.fresh ? 'true' : undefined} onClick={() => onOpen(t)}>
       <span className="uz-m-row-ic" style={{ background: meta.bg, color: meta.color }}>
         <Icon size={20} strokeWidth={2} aria-hidden="true" />
       </span>
@@ -94,11 +96,12 @@ export function TxListSkeleton({ count = 4 }: { count?: number }) {
     <div className="uz-m-list" aria-hidden="true">
       {Array.from({ length: count }, (_, i) => (
         <div key={i} className="uz-m-row" style={{ pointerEvents: 'none' }}>
-          <span className="uz-m-row-ic animate-pulse" style={{ background: '#E6EAE2' }} />
-          <span className="uz-m-row-main">
-            <span className="h-4 w-28 rounded-md bg-[#E6EAE2] animate-pulse" />
+          <span className="uz-m-row-ic uz-skel" />
+          <span className="uz-m-row-main" style={{ gap: 6 }}>
+            <span className="uz-skel" style={{ width: `${46 + ((i * 17) % 30)}%`, height: 14 }} />
+            <span className="uz-skel" style={{ width: 54, height: 11 }} />
           </span>
-          <span className="h-4 w-16 rounded-md bg-[#E6EAE2] animate-pulse" />
+          <span className="uz-skel" style={{ width: 70, height: 14 }} />
         </div>
       ))}
     </div>

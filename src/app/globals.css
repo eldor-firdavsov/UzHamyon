@@ -196,7 +196,7 @@ select,
 /* iOS/Telegram focus zoom is triggered by controls below 16px. Keep mobile
    form fields at 16px so focusing them never zooms the whole Mini App. */
 @media (max-width: 767px) {
-  input:not([type="button"]):not([type="submit"]):not([type="checkbox"]):not([type="radio"]),
+  input:not([type="button"]):not([type="submit"]):not([type="checkbox"]):not([type="radio"]):not(.uz-big-input),
   textarea,
   select,
   [contenteditable="true"] {

@@ -39,7 +39,7 @@ export default function ActivityMobile({
   onAdd,
 }: ActivityMobileProps) {
   return (
-    <div className="uz-m-page lg:hidden">
+    <div className="uz-m-page" data-page="act">
       <label className="uz-m-search">
         <Search size={17} strokeWidth={2.2} aria-hidden="true" />
         <input

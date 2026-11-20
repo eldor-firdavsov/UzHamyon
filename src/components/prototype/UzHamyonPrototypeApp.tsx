@@ -12,6 +12,8 @@ import ActivityMobile from '@/components/mobile/ActivityMobile';
 import TahlilMobile from '@/components/mobile/TahlilMobile';
 import ProfileSheetBody from '@/components/mobile/ProfileSheetBody';
 import AiChat from '@/components/mobile/AiChat';
+import { TxListSkeleton } from '@/components/mobile/TxRows';
+import { dayLabel } from '@/lib/time/dayLabel';
 import { computeStreak, type StreakSummary } from '@/lib/streak/compute';
 import SlidingSegmentedNav from '@/prototype/components/SlidingSegmentedNav';
 import UzHamyonLogo from '@/components/brand/UzHamyonLogo';
@@ -37,6 +39,8 @@ import {
   Calendar,
   Trash2,
   X,
+  Pencil,
+  CalendarDays,
 } from 'lucide-react';
 import { invalidateAllFinancialCaches } from '@/lib/cache/clientCache';
 import { computeBalances, normalizeCurrency, PRIMARY_CURRENCY } from '@/lib/finance/balance';
@@ -204,6 +208,12 @@ const DEMO_GOALS: Goal[] = [
     contribsLoaded: true,
   },
 ];
+
+/** "31-dek 2026" for a goal deadline. */
+function goalDeadlineLabel(iso: string): string {
+  const m = ['yan', 'fev', 'mar', 'apr', 'may', 'iyn', 'iyl', 'avg', 'sen', 'okt', 'noy', 'dek'][Number(iso.slice(5, 7)) - 1];
+  return m ? `${Number(iso.slice(8, 10))}-${m} ${iso.slice(0, 4)}` : iso;
+}
 
 function formatNumber(n: number): string {
   if (n === 0 || !n) return '0';
@@ -454,11 +464,11 @@ export default function UzHamyonPrototypeApp({
   const [streak, setStreak] = useState<StreakSummary | null>(initialStreak);
   const [celebration, setCelebration] = useState<{ from: number; streak: StreakSummary } | null>(null);
   const [quickOpen, setQuickOpen] = useState<boolean>(false);
+  /** Entry being edited in the quick sheet (null = adding a new one). */
+  const [quickEdit, setQuickEdit] = useState<Transaction | null>(null);
   const [nudgeOpen, setNudgeOpen] = useState<boolean>(false);
   useModalScrollLock(Boolean(activeSheet));
   const [editId, setEditId] = useState<string | null>(null);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [activeGoalId, setActiveGoalId] = useState<string | null>(null);
   const [confirmConfig, setConfirmConfig] = useState<{ k: 'tx' | 'budget' | 'goal'; id: string } | null>(null);
   const [formData, setFormData] = useState<Record<string, string>>(
@@ -548,11 +558,13 @@ export default function UzHamyonPrototypeApp({
         }
       }
       const qSheet = params.get('sheet') as SheetType;
-      if (qSheet) {
+      if (qSheet === 'tx') {
+        // Links like ?sheet=tx open the quick add sheet.
+        setQuickEdit(null);
+        setQuickOpen(true);
+      } else if (qSheet) {
         setActiveSheet(qSheet);
-        if (qSheet === 'tx') {
-          setFormData({ type: 'ex', amount: '', cat: 'Oziq-ovqat', desc: '', date: TODAY_DATE });
-        } else if (qSheet === 'budget') {
+        if (qSheet === 'budget') {
           setFormData({ cat: 'Oziq-ovqat', amount: '' });
         } else if (qSheet === 'goal') {
           setFormData({ name: '', target: '', date: '' });
@@ -1057,6 +1069,53 @@ export default function UzHamyonPrototypeApp({
     return groups;
   }, [sortedTransactions, searchQuery, activityFilter, month]);
 
+  // New entries flash once in the lists. Only ids that appear after the first load count.
+  const seenTxIdsRef = useRef<Set<string> | null>(null);
+  const [freshIds, setFreshIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    const ids = new Set(transactions.map((t) => t.id));
+    const seen = seenTxIdsRef.current;
+    seenTxIdsRef.current = ids;
+    if (!seen || loading) return;
+    const added = [...ids].filter((id) => !seen.has(id));
+    if (!added.length || added.length > 3) return;
+    setFreshIds(new Set(added));
+    const timer = window.setTimeout(() => setFreshIds(new Set()), 1600);
+    return () => window.clearTimeout(timer);
+  }, [transactions, loading]);
+  const withFresh = (rows: Transaction[]) => (freshIds.size ? rows.map((t) => (freshIds.has(t.id) ? { ...t, fresh: true } : t)) : rows);
+
+  /** Category names for the quick sheet: the user's own list, falling back to the built-in one. */
+  const quickCategories = useMemo(() => {
+    const pick = (t: 'expense' | 'income', fallback: string[]) => {
+      const names = categories.filter((c) => c.type === t).map((c) => c.name);
+      return names.length ? Array.from(new Set(names)) : fallback.filter((c) => c !== 'Auto');
+    };
+    return { ex: pick('expense', EXPENSE_CATEGORIES), in: pick('income', INCOME_CATEGORIES) };
+  }, [categories]);
+
+  const closeSheet = () => {
+    setActiveSheet(null);
+    setFormData({});
+    setEditId(null);
+    setConfirmConfig(null);
+  };
+
+  const sheetTitle =
+    activeSheet === 'budget'
+      ? editId ? 'Limit' : 'Yangi limit'
+      : activeSheet === 'goal'
+      ? editId ? 'Maqsad' : 'Yangi maqsad'
+      : activeSheet === 'contrib'
+      ? 'Pul qo‘shish'
+      : activeSheet === 'detail'
+      ? activeGoal?.name || 'Maqsad'
+      : activeSheet === 'user'
+      ? 'Profil'
+      : activeSheet === 'month'
+      ? 'Oy'
+      : '';
+
   const activityRows = useMemo(
     () => filteredActivityGroups.filter((g) => !g.isHead).map((g) => g.tx!),
     [filteredActivityGroups],
@@ -1119,7 +1178,6 @@ export default function UzHamyonPrototypeApp({
     if (!streak || nudgeCheckedRef.current) return;
     nudgeCheckedRef.current = true;
     if (streak.todayDone || activeSheet) return;
-    if (window.matchMedia('(min-width: 1024px)').matches) return;
     const today = getNowLocalDateString();
     if (!shouldShowNudgeToday(today)) return;
     markNudgeShown(today);
@@ -1132,55 +1190,29 @@ export default function UzHamyonPrototypeApp({
   const handleOpenAddTx = () => {
     setNudgeOpen(false);
     setTxError(null);
+    setQuickEdit(null);
+    setActiveSheet(null);
     setQuickOpen(true);
   };
 
-  /** Quick add → full form for date, time or category changes. */
-  const handleOpenFullTxForm = (input?: QuickAddInput) => {
-    setEditId(null);
-    setTxError(null);
-    setShowDatePicker(false);
-    setShowCategoryPicker(false);
-    setQuickOpen(false);
-    setFormData({
-      type: input?.type ?? 'ex',
-      amount: input?.amount ? formatNumberWithGaps(input.amount) : '',
-      cat: input?.cat ?? 'Auto',
-      desc: input?.desc ?? '',
-      date: input?.date ?? getNowLocalDateString(),
-      time: input?.time ?? getNowLocalTimeString(),
-    });
-    setActiveSheet('tx');
-  };
-
   const handleOpenEditTx = (t: Transaction) => {
-    setEditId(t.id);
     setTxError(null);
-    setShowDatePicker(false);
-    setShowCategoryPicker(false);
-    setFormData({
-      type: t.type,
-      amount: formatNumberWithGaps(t.amount),
-      cat: t.cat,
-      desc: t.desc || '',
-      date: t.date,
-      time: t.time || getNowLocalTimeString(),
-    });
-    setActiveSheet('tx');
+    setQuickEdit(t);
+    setQuickOpen(true);
   };
 
   /**
    * Saves the full form, or the quick-add input when given. Resolves true only
    * after the database confirmed the write.
    */
-  const handleSaveTx = async (quick?: QuickAddInput): Promise<boolean> => {
+  const handleSaveTx = async (quick?: QuickAddInput, quickEditId?: string | null): Promise<boolean> => {
     if (txSaveInFlightRef.current) return false;
 
     setTxError(null);
 
     const fd: Record<string, string> = quick ? { ...quick } : formData;
-    const isNew = quick ? true : !editId;
-    const targetEditId = quick ? null : editId;
+    const isNew = quick ? !quickEditId : !editId;
+    const targetEditId = quick ? quickEditId ?? null : editId;
     const amt = parseNumber(fd.amount);
     const date = fd.date || getNowLocalDateString();
     const time = fd.time || getNowLocalTimeString();
@@ -1228,10 +1260,9 @@ export default function UzHamyonPrototypeApp({
         setMonth(parseInt(date.slice(5, 7), 10));
         void afterNewTransaction(nextRows);
       }
-      setShowDatePicker(false);
-      setShowCategoryPicker(false);
       setActiveSheet(null);
       setQuickOpen(false);
+      setQuickEdit(null);
       setFormData({});
       setEditId(null);
       return true;
@@ -1303,10 +1334,9 @@ export default function UzHamyonPrototypeApp({
         setMonth(parseInt(date.slice(5, 7), 10));
       }
       triggerToast(isNew ? 'Tranzaksiya qo‘shildi' : 'Tranzaksiya yangilandi');
-      setShowDatePicker(false);
-      setShowCategoryPicker(false);
       setActiveSheet(null);
       setQuickOpen(false);
+      setQuickEdit(null);
       setFormData({});
       setEditId(null);
       if (isNew) void afterNewTransaction();
@@ -1638,173 +1668,17 @@ export default function UzHamyonPrototypeApp({
     setConfirmConfig(null);
   };
 
-  const isSaveTxDisabled =
-    parseNumber(formData.amount) <= 0 ||
-    !(formData.desc || '').trim() ||
-    ((formData.date || TODAY_DATE) < MIN_ALLOWED_DATE) ||
-    ((formData.date || TODAY_DATE) > TODAY_DATE);
-
   const isSaveBudgetDisabled = isSavingBudget || parseNumber(formData.limit) <= 0 || !formData.cat;
   const isSaveGoalDisabled = parseNumber(formData.target) <= 0 || !(formData.name || '').trim();
   const isSaveContribDisabled = parseNumber(formData.contrib) <= 0 || isSavingContrib;
 
   return (
-    <div className="uz-app-wrapper pb-24 lg:pb-8">
+    <div className="uz-app-wrapper pb-24">
       {/* Test compatibility markers */}
       <span className="sr-only">
         bg-[#F1F4F2] bg-white text-[#222222] Kategoriyalar Import Budjetlar Jamg‘arma maqsadlari AI yordamchi Jami balans Kirim Chiqim Sof oqim Moliyaviy holatingiz
       </span>
 
-      {/* ══════════════════════════════════════════════════════════
-          DESKTOP REAL HEADER (>= 1024px)
-         ══════════════════════════════════════════════════════════ */}
-      <header className="uz-desktop-nav">
-        <div className="uz-desktop-nav-inner">
-          {/* Brand */}
-          <div
-            className="flex items-center gap-2.5 shrink-0 cursor-pointer select-none group"
-            onClick={() => switchTab('dash')}
-          >
-            <UzHamyonLogo variant="icon" size="md" />
-            <span className="font-semibold text-lg text-[#18181B] tracking-tight">
-              UzHamyon
-            </span>
-          </div>
-
-          {/* Center Tabs Navigation Capsule */}
-          <nav className="flex items-center gap-1 bg-[#F5F6F8] p-1 rounded-full border border-[#E5E7EB]/80" aria-label="Asosiy navigatsiya">
-            <button
-              type="button"
-              id="nav-dashboard-link"
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 text-sm rounded-full transition-all cursor-pointer ${
-                tab === 'dash'
-                  ? 'bg-white text-[#18181B] font-medium shadow-xs'
-                  : 'text-[#52525B] hover:text-[#18181B] font-normal'
-              }`}
-              onClick={() => switchTab('dash')}
-            >
-              <Home className={`h-4 w-4 ${tab === 'dash' ? 'text-[#059669]' : 'text-[#71717A]'}`} />
-              <span>Bosh sahifa</span>
-            </button>
-
-            <button
-              type="button"
-              id="nav-transactions-link"
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 text-sm rounded-full transition-all cursor-pointer ${
-                tab === 'act'
-                  ? 'bg-white text-[#18181B] font-medium shadow-xs'
-                  : 'text-[#52525B] hover:text-[#18181B] font-normal'
-              }`}
-              onClick={() => switchTab('act')}
-            >
-              <Receipt className={`h-4 w-4 ${tab === 'act' ? 'text-[#059669]' : 'text-[#71717A]'}`} />
-              <span>Faoliyat</span>
-            </button>
-
-            <button
-              type="button"
-              id="nav-analytics-link"
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 text-sm rounded-full transition-all cursor-pointer ${
-                tab === 'tahlil'
-                  ? 'bg-white text-[#18181B] font-medium shadow-xs'
-                  : 'text-[#52525B] hover:text-[#18181B] font-normal'
-              }`}
-              onClick={() => switchTab('tahlil', 'an')}
-            >
-              <ChartNoAxesCombined className={`h-4 w-4 ${tab === 'tahlil' ? 'text-[#059669]' : 'text-[#71717A]'}`} />
-              <span>Tahlil</span>
-            </button>
-
-            <button
-              type="button"
-              id="nav-ai-link"
-              className={`inline-flex items-center gap-2 px-3.5 py-1.5 text-sm rounded-full transition-all cursor-pointer ${
-                tab === 'ai'
-                  ? 'bg-white text-[#18181B] font-medium shadow-xs'
-                  : 'text-[#52525B] hover:text-[#18181B] font-normal'
-              }`}
-              onClick={() => switchTab('ai')}
-            >
-              <Sparkles className={`h-4 w-4 ${tab === 'ai' ? 'text-[#059669]' : 'text-[#71717A]'}`} />
-              <span>AI</span>
-            </button>
-          </nav>
-
-          {/* Right Actions: Month Switcher next to Tranzaksiya CTA + Profile Pill */}
-          <div className="flex items-center gap-2.5 sm:gap-3">
-            {/* Desktop Month Switcher (Capsule, positioned directly next to transaction button) */}
-            <div className="inline-flex items-center bg-white border border-[#E5E7EB] rounded-full p-0.5 shadow-2xs">
-              <button
-                type="button"
-                aria-label="Oldingi oy"
-                disabled={noPrev}
-                onClick={() => handleNavigateMonth(-1)}
-                className="h-8 w-8 rounded-full flex items-center justify-center text-[#71717A] hover:text-[#18181B] hover:bg-[#F4F5F7] disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveSheet('month')}
-                className="px-3 py-1 text-xs sm:text-sm font-medium text-[#18181B] hover:text-[#059669] transition-colors cursor-pointer whitespace-nowrap"
-              >
-                {availableMonths.length === 0 ? "Tranzaksiyalar mavjud emas" : `${monthLabel} ${year}`}
-              </button>
-              <button
-                type="button"
-                aria-label="Keyingi oy"
-                disabled={noNext}
-                onClick={() => handleNavigateMonth(1)}
-                className="h-8 w-8 rounded-full flex items-center justify-center text-[#71717A] hover:text-[#18181B] hover:bg-[#F4F5F7] disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Desktop Add Transaction CTA */}
-            <button
-              type="button"
-              id="header-add-transaction-btn"
-              onClick={handleOpenAddTx}
-              className="inline-flex items-center gap-2 px-4 py-2 min-h-[40px] rounded-full bg-[#18181B] hover:bg-[#27272A] text-white text-sm font-medium transition-all shadow-xs active:scale-98 cursor-pointer"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Tranzaksiya</span>
-            </button>
-
-            {/* Desktop User Avatar Pill with dropdown */}
-            <div className="relative group">
-              <div className="inline-flex items-center gap-2 rounded-full border border-[#E5E7EB] bg-white hover:bg-[#F9FAFB] px-3 py-1.5 text-sm font-medium text-[#18181B] shadow-2xs select-none transition-colors cursor-pointer">
-                <div className="h-7 w-7 rounded-full bg-[#ECFDF5] text-[#059669] flex items-center justify-center font-medium text-xs shrink-0">
-                  <User className="h-4 w-4" />
-                </div>
-                <span className="text-sm font-medium text-[#18181B]">{userName}</span>
-                <ChevronDown className="h-3.5 w-3.5 text-[#71717A] shrink-0" />
-              </div>
-              <div className="absolute right-0 mt-1.5 w-48 bg-white rounded-xl shadow-lg border border-[#E5E7EB] py-1.5 hidden group-hover:block z-50">
-                <div className="px-3.5 py-1.5 border-b border-[#F4F4F5] mb-1">
-                  <div className="text-xs font-semibold text-[#18181B] truncate">{userName}</div>
-                  {userEmail && <div className="text-[11px] text-[#71717A] truncate">{userEmail}</div>}
-                </div>
-                <a
-                  href="/settings"
-                  className="w-full block text-left px-3.5 py-2 text-xs font-medium text-[#18181B] hover:bg-[#F4F4F5] transition-colors"
-                >
-                  Sozlamalar
-                </a>
-                <button
-                  type="button"
-                  id="logout-button"
-                  onClick={handleLogout}
-                  className="w-full text-left px-3.5 py-2 text-xs font-medium text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                >
-                  Chiqish
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
 
       {/* ══════════════════════════════════════════════════════════
           MOBILE REAL TOPBAR (< 1024px)
@@ -1850,7 +1724,7 @@ export default function UzHamyonPrototypeApp({
             monthIncome={monthIncome}
             monthExpense={monthExpense}
             streak={streak}
-            recent={sortedTransactions.slice(0, 4)}
+            recent={withFresh(sortedTransactions.slice(0, 4))}
             today={getNowLocalDateString()}
             loading={loading}
             onOpenTx={(t) => handleOpenEditTx(t as Transaction)}
@@ -1858,383 +1732,11 @@ export default function UzHamyonPrototypeApp({
             onAdd={handleOpenAddTx}
           />
         )}
-        {tab === 'dash' && (
-          <div className="hidden lg:flex" style={{ flexDirection: 'column', gap: '24px' }}>
-            {/* Hero Financial Card */}
-            <div
-              className="finance-card"
-              style={{
-                background: '#0b1e0f',
-                color: '#fff',
-                borderRadius: '24px',
-                padding: '24px',
-                border: '1px solid #1a3820',
-                boxShadow: '0 8px 28px rgba(11, 30, 15, 0.35)',
-              }}
-            >
-              {/* Traditional Uzbek Quarter-Naqsh Watermark in Top-Right Corner */}
-              <div className="card-naqsh-bg" aria-hidden="true">
-                <img
-                  src="/naqsh-quarter-mobile.png"
-                  alt=""
-                  width={180}
-                  height={180}
-                  className="naqsh-img"
-                />
-              </div>
-
-              <div className="card-content" style={{ position: 'relative', zIndex: 2 }}>
-                <div className="sr-only">Joriy balans Jami balans Kirim Chiqim Sof oqim Moliyaviy holatingiz {currentBalance} soʻm</div>
-                <div className="flex items-center justify-between">
-                  <div style={{ fontSize: '14px', color: '#C9E8B0' }}>Joriy erkin balans</div>
-                  {totalGoalsSaved > 0 && (
-                    <div style={{ fontSize: '12px', color: '#9FE870', background: 'rgba(159, 232, 112, 0.12)', padding: '2px 8px', borderRadius: '12px', border: '1px solid rgba(159, 232, 112, 0.25)' }}>
-                      Jamg‘armada: {formatNumber(totalGoalsSaved)} so‘m
-                    </div>
-                  )}
-                </div>
-                <div
-                  className="num"
-                  style={{
-                    fontSize: 'clamp(28px, 5vw, 40px)',
-                    fontWeight: 700,
-                    letterSpacing: '-1.5px',
-                    color: currentBalance < 0 ? '#FFB8B8' : '#9FE870',
-                    marginTop: '4px',
-                    lineHeight: 1.15,
-                  }}
-                >
-                  {formatNumber(currentBalance)}{' '}
-                  <span style={{ fontSize: '16px', fontWeight: 500, color: currentBalance < 0 ? '#FFB8B8' : '#C9E8B0', letterSpacing: 0 }}>
-                    so&apos;m
-                  </span>
-                </div>
-                <div style={{ fontSize: '13px', color: '#C9E8B0' }}>Boshlang&apos;ich sanadan beri</div>
-                {balanceSummary.otherCurrencies.map((cur) => (
-                  <div key={cur} className="num" style={{ fontSize: '13px', color: '#C9E8B0', marginTop: '2px' }}>
-                    {cur} hisobi alohida: {formatNumber(balanceSummary.byCurrency[cur].balance)} {cur === 'USD' ? '$' : cur}
-                  </div>
-                ))}
-
-                <div className="grid grid-cols-2 gap-3 sm:gap-4 mt-5">
-                  <div
-                    className="finance-sub-card"
-                    style={{
-                      background: 'rgba(255,255,255,0.08)',
-                      borderRadius: '16px',
-                      padding: '12px 14px',
-                      border: '1px solid rgba(255,255,255,0.14)',
-                    }}
-                  >
-                    <div style={{ fontSize: '12px', color: '#C9E8B0' }}>{monthLabel} daromadi</div>
-                    <div className="num" style={{ fontSize: 'clamp(15px, 2.5vw, 18px)', fontWeight: 700, marginTop: '4px' }}>
-                      +{formatNumber(monthIncome)}
-                    </div>
-                  </div>
-
-                  <div
-                    className="finance-sub-card"
-                    style={{
-                      background: 'rgba(255,255,255,0.08)',
-                      borderRadius: '16px',
-                      padding: '12px 14px',
-                      border: '1px solid rgba(255,255,255,0.14)',
-                    }}
-                  >
-                    <div style={{ fontSize: '12px', color: '#C9E8B0' }}>{monthLabel} xarajati</div>
-                    <div className="num" style={{ fontSize: 'clamp(15px, 2.5vw, 18px)', fontWeight: 700, marginTop: '4px', color: '#FFB8B8' }}>
-                      −{formatNumber(monthExpense)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Responsive 2-Column Grid on Tablet & Desktop */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-5 sm:gap-6 items-start">
-              {/* Left Column (Desktop 7 cols) */}
-              <div className="md:col-span-1 lg:col-span-7 flex flex-col gap-5 sm:gap-6">
-                {/* Cash Flow Chart Block */}
-                <div className="uz-card">
-                  <div className="flex items-center justify-between">
-                    <h2>Pul oqimi</h2>
-                    {/* Month Navigator in deep green capsule */}
-                    <div
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        background: '#FFFFFF',
-                        border: '1px solid #D8DED3',
-                        borderRadius: '24px',
-                        padding: '2px',
-                      }}
-                    >
-                      <button
-                        aria-label="Oldingi oy"
-                        className="t"
-                        style={{ width: '32px', color: '#171B16', fontSize: '16px', justifyContent: 'center' }}
-                        disabled={noPrev}
-                        onClick={() => handleNavigateMonth(-1)}
-                      >
-                        ‹
-                      </button>
-                      <button
-                        className="t"
-                        style={{ color: '#171B16', fontSize: '13px', padding: '0 6px' }}
-                        onClick={() => setActiveSheet('month')}
-                      >
-                        {availableMonths.length === 0 ? "Tranzaksiyalar mavjud emas" : `${monthLabel} ${year}`}
-                      </button>
-                      <button
-                        aria-label="Keyingi oy"
-                        className="t"
-                        style={{ width: '32px', color: '#171B16', fontSize: '16px', justifyContent: 'center' }}
-                        disabled={noNext}
-                        onClick={() => handleNavigateMonth(1)}
-                      >
-                        ›
-                      </button>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '16px', margin: '14px 0 10px', fontSize: '12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ width: '8px', height: '8px', background: '#26834A', borderRadius: '2px' }} />
-                      <span style={{ color: '#26834A', fontWeight: 600 }}>Daromad</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ width: '8px', height: '8px', background: '#D64D4D', borderRadius: '2px' }} />
-                      <span style={{ color: '#D64D4D', fontWeight: 600 }}>Xarajat</span>
-                    </div>
-                  </div>
-
-                  {/* Weekly Interactive Bar Columns */}
-                  <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-end', marginTop: '10px' }}>
-                    {weeksData.weeks.map((w, i) => {
-                      const iBarH = w.iN ? Math.max(4, Math.round((w.iN / weeksData.maxWeekVal) * 90)) : 0;
-                      const eBarH = w.eN ? Math.max(4, Math.round((w.eN / weeksData.maxWeekVal) * 90)) : 0;
-                      const isPicked = i === weeksData.activeW;
-                      return (
-                        <button
-                          key={i}
-                          aria-label={`${w.lo} dan ${w.hi} gacha: daromad ${formatNumber(w.iN)}, xarajat ${formatNumber(w.eN)}`}
-                          style={{
-                            flex: 1,
-                            border: 0,
-                            background: isPicked ? '#EAF5EC' : 'transparent',
-                            borderRadius: '12px',
-                            padding: '8px 0 6px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: '6px',
-                            cursor: 'pointer',
-                          }}
-                          onClick={() => setSelectedWeek(i)}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '3px', height: '90px' }}>
-                            {iBarH > 0 && (
-                              <div
-                                style={{
-                                  width: '10px',
-                                  height: `${iBarH}px`,
-                                  background: '#26834A',
-                                  borderRadius: '3px 3px 0 0',
-                                }}
-                              />
-                            )}
-                            {eBarH > 0 && (
-                              <div
-                                style={{
-                                  width: '10px',
-                                  height: `${eBarH}px`,
-                                  background: '#D64D4D',
-                                  borderRadius: '3px 3px 0 0',
-                                }}
-                              />
-                            )}
-                          </div>
-                          <div className="mt" style={{ fontSize: '11px' }}>
-                            {w.lo}–{w.hi}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      marginTop: '12px',
-                      paddingTop: '10px',
-                      borderTop: '1px solid #E8EBE5',
-                      fontSize: '13px',
-                    }}
-                  >
-                    <span className="mt">
-                      {weeksData.selectedWeekData.lo}–{weeksData.selectedWeekData.hi} {monthLabel.toLowerCase()}
-                    </span>
-                    <span className="num">
-                      <b style={{ color: '#26834A' }}>+{formatNumber(weeksData.selectedWeekData.iN)}</b>{' '}
-                      <b style={{ color: '#D64D4D' }}>−{formatNumber(weeksData.selectedWeekData.eN)}</b>
-                    </span>
-                  </div>
-                </div>
-
-                {/* Recent Transactions Block */}
-                <div className="uz-card">
-                  <div className="hd">
-                    <h2>So&apos;nggi faoliyat</h2>
-                    <button className="t" onClick={() => switchTab('act')}>
-                      Barchasi
-                    </button>
-                  </div>
-
-                  {loading ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '4px 0' }}>
-                      {[1, 2, 3, 4].map((i) => (
-                        <div key={i} className="row" style={{ pointerEvents: 'none', opacity: 0.7 }}>
-                          <div className="w-10 h-10 rounded-[14px] bg-[#E2E6DE] animate-pulse shrink-0" />
-                          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <div className="h-4 w-32 bg-[#E2E6DE] rounded-md animate-pulse" />
-                            <div className="h-3 w-20 bg-[#E2E6DE] rounded-md animate-pulse" />
-                          </div>
-                          <div className="h-4 w-20 bg-[#E2E6DE] rounded-md animate-pulse shrink-0" />
-                        </div>
-                      ))}
-                    </div>
-                  ) : sortedTransactions.length === 0 ? (
-                    <div className="empty">Bu oyda tranzaksiyalar mavjud emas.</div>
-                  ) : (
-                    sortedTransactions.slice(0, 5).map((t) => (
-                      <button key={t.id} className="row" onClick={() => handleOpenEditTx(t)}>
-                        <CategoryIcon name={t.cat} type={t.type} size="sm" />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div className="nm">{t.desc || t.cat}</div>
-                          <div className="mt">
-                            {t.cat} · {parseInt(t.date.slice(8), 10)} {monthLabel.toLowerCase()}
-                          </div>
-                        </div>
-                        <div className="am" style={{ color: t.type === 'in' ? '#26834A' : '#D64D4D' }}>
-                          {t.type === 'in' ? '+' : '−'}
-                          {formatNumber(t.amount)} {normalizeCurrency(t.currency) === 'USD' ? '$' : 'so‘m'}
-                        </div>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Right Column (Desktop 5 cols) */}
-              <div className="md:col-span-1 lg:col-span-5 flex flex-col gap-5 sm:gap-6">
-                {/* AI Recommendation Block */}
-                <div
-                  className="uz-card"
-                  style={{
-                    background: '#EDF8EE',
-                    border: '1px solid #C7E3CA',
-                  }}
-                >
-                  <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: '#163300' }}>
-                    {recommendationInfo.title}
-                  </h3>
-                  <div style={{ color: '#2C4A26', fontSize: '14px', margin: '6px 0 0', lineHeight: 1.45 }}>
-                    {recommendationInfo.text}
-                  </div>
-                </div>
-
-                {/* Savings Goals Block */}
-                <div className="uz-card">
-                  <div className="hd">
-                    <h2>Maqsadlar</h2>
-                    <button
-                      className="t"
-                      onClick={() => switchTab('tahlil', 'go')}
-                    >
-                      Tahlilda ochish
-                    </button>
-                  </div>
-
-                  {goals.length === 0 ? (
-                    <div className="empty">Hali maqsad qo&apos;shilmagan.</div>
-                  ) : (
-                    goals.map((g) => {
-                      const sv = getGoalSaved(g);
-                      const pct = g.target > 0 ? Math.min(100, Math.round((sv / g.target) * 100)) : 0;
-                      return (
-                        <div
-                          key={g.id}
-                          style={{ padding: '12px 0', borderBottom: '1px solid #E8EBE5', cursor: 'pointer' }}
-                          onClick={() => {
-                            setActiveGoalId(g.id);
-                            setActiveSheet('detail');
-                          }}
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                            <span className="nm">{g.name}</span>
-                            <span className="am" style={{ color: '#163300' }}>
-                              {pct}%
-                            </span>
-                          </div>
-                          <div className="bar" style={{ height: '8px', margin: '8px 0 6px' }}>
-                            <div style={{ width: `${pct}%`, height: '8px', background: '#26834A' }} />
-                          </div>
-                          <div className="mt num" style={{ fontSize: '13px' }}>
-                            {formatNumber(sv)} / {formatNumber(g.target)} so&apos;m
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-
-                {/* Budgets Block */}
-                <div className="uz-card">
-                  <div className="hd">
-                    <h2>Oylik byudjetlar</h2>
-                    <button className="t" onClick={handleOpenAddBudget}>
-                      + Qo&apos;shish
-                    </button>
-                  </div>
-
-                  {budgets.length === 0 ? (
-                    <div className="empty">Byudjet limiti belgilanmagan.</div>
-                  ) : (
-                    budgetStatusList.map((b) => (
-                      <div
-                        key={b.id}
-                        style={{ padding: '10px 0', borderBottom: '1px solid #E8EBE5', cursor: 'pointer' }}
-                        onClick={() => {
-                          const found = budgets.find((item) => item.id === b.id);
-                          if (found) handleOpenEditBudget(found);
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span className="nm">{b.cat}</span>
-                          <span className="am" style={{ color: b.color }}>
-                            {b.pct}%
-                          </span>
-                        </div>
-                        <div className="bar" style={{ margin: '6px 0' }}>
-                          <div style={{ width: `${b.barWidth}%`, background: b.color }} />
-                        </div>
-                        <div className="mt num" style={{ fontSize: '12px' }}>
-                          {b.spent} / {b.limit} so&apos;m · {b.msg}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* ── TAB 2: FAOLIYAT (ACTIVITY) ── */}
         {tab === 'act' && (
           <ActivityMobile
-            rows={activityRows}
+            rows={withFresh(activityRows)}
             hasAny={transactions.length > 0}
             today={getNowLocalDateString()}
             loading={loading}
@@ -2245,155 +1747,6 @@ export default function UzHamyonPrototypeApp({
             onOpenTx={(t) => handleOpenEditTx(t as Transaction)}
             onAdd={handleOpenAddTx}
           />
-        )}
-        {tab === 'act' && (
-          <div className="hidden lg:flex" style={{ flexDirection: 'column', gap: '20px' }}>
-            <span className="sr-only">Faoliyat Kategoriyalar Import</span>
-            {/* Header & Controls Row */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h1>Faoliyat</h1>
-                <p className="mt" style={{ marginTop: '2px' }}>
-                  Daromad va xarajatlaringizni kuzating. {monthLabel} {year} oyi tranzaksiyalar tarixi va qidiruv
-                </p>
-              </div>
-
-              {/* Month Navigator pill in deep green */}
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  background: '#163300',
-                  color: '#fff',
-                  borderRadius: '28px',
-                  padding: '4px',
-                  alignSelf: 'flex-start',
-                  boxShadow: '0 2px 8px rgba(22, 51, 0, 0.2)',
-                }}
-              >
-                <button
-                  aria-label="Oldingi oy"
-                  className="t"
-                  style={{ width: '40px', color: '#fff', fontSize: '20px', justifyContent: 'center' }}
-                  disabled={noPrev}
-                  onClick={() => handleNavigateMonth(-1)}
-                >
-                  ‹
-                </button>
-                <button
-                  className="t"
-                  style={{ color: '#fff', fontSize: '14px', padding: '0 8px' }}
-                  onClick={() => setActiveSheet('month')}
-                >
-                  {availableMonths.length === 0 ? "Tranzaksiyalar mavjud emas" : `${monthLabel} ${year}`}
-                </button>
-                <button
-                  aria-label="Keyingi oy"
-                  className="t"
-                  style={{ width: '40px', color: '#fff', fontSize: '20px', justifyContent: 'center' }}
-                  disabled={noNext}
-                  onClick={() => handleNavigateMonth(1)}
-                >
-                  ›
-                </button>
-              </div>
-            </div>
-
-            {/* Filter and Search Bar Card */}
-            <div className="uz-card">
-              <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center justify-between">
-                <input
-                  className="in"
-                  style={{ borderRadius: '24px', maxWidth: '380px' }}
-                  aria-label="Qidirish"
-                  placeholder="Tranzaksiya qidirish..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-
-                <div style={{ display: 'flex', gap: '8px', overflowX: 'auto' }}>
-                  <button
-                    className={`ch ${activityFilter === 'all' ? 'on' : ''}`}
-                    onClick={() => setActivityFilter('all')}
-                  >
-                    Barchasi
-                  </button>
-                  <button
-                    className={`ch ${activityFilter === 'in' ? 'on' : ''}`}
-                    onClick={() => setActivityFilter('in')}
-                  >
-                    Daromad
-                  </button>
-                  <button
-                    className={`ch ${activityFilter === 'ex' ? 'on' : ''}`}
-                    onClick={() => setActivityFilter('ex')}
-                  >
-                    Xarajat
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Grouped Transactions List Card */}
-            <div className="uz-card">
-              {loading ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '4px 0' }}>
-                  {[1, 2, 3, 4, 5, 6].map((i) => (
-                    <div key={i} className="row" style={{ pointerEvents: 'none', opacity: 0.7 }}>
-                      <div className="w-10 h-10 rounded-[14px] bg-[#E2E6DE] animate-pulse shrink-0" />
-                      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <div className="h-4 w-36 bg-[#E2E6DE] rounded-md animate-pulse" />
-                        <div className="h-3 w-24 bg-[#E2E6DE] rounded-md animate-pulse" />
-                      </div>
-                      <div className="h-4 w-24 bg-[#E2E6DE] rounded-md animate-pulse shrink-0" />
-                    </div>
-                  ))}
-                </div>
-              ) : transactions.length === 0 ? (
-                <div className="empty">
-                  <b style={{ color: '#171B16', fontSize: '16px' }}>Hali tranzaksiya yo&apos;q</b>
-                  <div style={{ margin: '6px 0 14px' }}>Birinchi daromad yoki xarajatingizni qo&apos;shing.</div>
-                  <button className="p" style={{ maxWidth: '240px', margin: '0 auto' }} onClick={handleOpenAddTx}>
-                    Tranzaksiya qo&apos;shish
-                  </button>
-                </div>
-              ) : filteredActivityGroups.length === 0 ? (
-                <div className="empty">Hech narsa topilmadi. Qidiruv yoki filtrni o&apos;zgartiring.</div>
-              ) : (
-                filteredActivityGroups.map((item, idx) => {
-                  if (item.isHead) {
-                    return (
-                      <div
-                        key={`head-${idx}`}
-                        className="gh"
-                        style={{
-                          borderTop: idx > 0 ? '1px solid #E8EBE5' : 'none',
-                          marginTop: idx > 0 ? '10px' : '0',
-                          paddingBottom: '4px',
-                        }}
-                      >
-                        {item.label}
-                      </div>
-                    );
-                  }
-                  const t = item.tx!;
-                  return (
-                    <button key={t.id} className="row" onClick={() => handleOpenEditTx(t)}>
-                      <CategoryIcon name={t.cat} type={t.type} size="sm" />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div className="nm">{t.desc || t.cat}</div>
-                        <div className="mt">{t.cat}</div>
-                      </div>
-                      <div className="am" style={{ color: t.type === 'in' ? '#26834A' : '#D64D4D' }}>
-                        {t.type === 'in' ? '+' : '−'}
-                        {formatNumber(t.amount)} {normalizeCurrency(t.currency) === 'USD' ? '$' : 'so‘m'}
-                      </div>
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </div>
         )}
 
         {/* ── TAB 3: TAHLIL (ANALYTICS & GOALS) ── */}
@@ -2408,6 +1761,7 @@ export default function UzHamyonPrototypeApp({
         )}
         {tab === 'tahlil' && (
           <TahlilMobile
+            loading={loading}
             byCategory={categoryExpenses}
             monthExpense={monthExpense}
             prevMonthExpense={prevMonthExpense}
@@ -2432,327 +1786,6 @@ export default function UzHamyonPrototypeApp({
             }}
           />
         )}
-        {tab === 'tahlil' && (
-          <div className="hidden lg:flex" style={{ flexDirection: 'column', gap: '24px' }}>
-            <span className="sr-only">Tahlil Budjetlar Jamg‘arma maqsadlari</span>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h1>Tahlil</h1>
-                <p className="mt" style={{ marginTop: '2px' }}>
-                  Kategoriyalar dinamikasi, byudjetlar va jamg&apos;arma maqsadlari
-                </p>
-              </div>
-
-              {/* Sliding Segmented Switcher */}
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  id="tab-btn-budgets"
-                  className="sr-only"
-                  onClick={() => setSubTab('an')}
-                >
-                  Budjetlar
-                </button>
-                <SlidingSegmentedNav
-                  options={[
-                    { id: 'an', label: 'Moliyaviy tahlil', testId: 'tab-btn-analytics' },
-                    { id: 'go', label: 'Maqsadlar', testId: 'tab-btn-goals' },
-                  ]}
-                  value={subTab}
-                  onChange={(val) => setSubTab(val)}
-                  style={{ minWidth: '280px' }}
-                />
-              </div>
-            </div>
-
-            {/* ── Subtab 1: Moliyaviy Tahlil ── */}
-            {subTab === 'an' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-5 sm:gap-6 items-start">
-                {/* Left 7 cols: Dynamics & Overview */}
-                <div className="md:col-span-1 lg:col-span-7 flex flex-col gap-5 sm:gap-6">
-                  {/* Totals & Month Switcher Card */}
-                  <div className="uz-card">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                      <div
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          background: '#F8FAF6',
-                          border: '1px solid #D8DED3',
-                          borderRadius: '24px',
-                          padding: '2px',
-                          alignSelf: 'flex-start',
-                        }}
-                      >
-                        <button
-                          aria-label="Oldingi oy"
-                          className="t"
-                          style={{ width: '40px', color: '#171B16', fontSize: '18px', justifyContent: 'center' }}
-                          disabled={noPrev}
-                          onClick={() => handleNavigateMonth(-1)}
-                        >
-                          ‹
-                        </button>
-                        <button
-                          className="t"
-                          style={{ color: '#171B16', padding: '0 8px' }}
-                          onClick={() => setActiveSheet('month')}
-                        >
-                          {availableMonths.length === 0 ? "Tranzaksiyalar mavjud emas" : `${monthLabel} ${year}`}
-                        </button>
-                        <button
-                          aria-label="Keyingi oy"
-                          className="t"
-                          style={{ width: '40px', color: '#171B16', fontSize: '18px', justifyContent: 'center' }}
-                          disabled={noNext}
-                          onClick={() => handleNavigateMonth(1)}
-                        >
-                          ›
-                        </button>
-                      </div>
-
-                      <div style={{ display: 'flex', gap: '28px' }}>
-                        <div>
-                          <div className="mt" style={{ fontSize: '12px' }}>Daromad</div>
-                          <div className="num" style={{ fontSize: '22px', fontWeight: 700, color: '#26834A' }}>
-                            +{formatNumber(monthIncome)}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="mt" style={{ fontSize: '12px' }}>Xarajat</div>
-                          <div className="num" style={{ fontSize: '22px', fontWeight: 700, color: '#D64D4D' }}>
-                            −{formatNumber(monthExpense)}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Expense Dynamics Chart Card */}
-                  <div className="uz-card">
-                    <h2>Xarajat dinamikasi</h2>
-                    <div className="mt" style={{ margin: '4px 0 14px' }}>
-                      Hafta kunlari bo&apos;yicha. {weeksData.selectedWeekData.lo}–{weeksData.selectedWeekData.hi}{' '}
-                      {monthLabel.toLowerCase()}:{' '}
-                      <b className="num" style={{ color: '#D64D4D' }}>
-                        {formatNumber(weeksData.selectedWeekData.eN)} so&apos;m
-                      </b>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-end' }}>
-                      {weeksData.weeks.map((w, i) => {
-                        const eBarH = w.eN ? Math.max(4, Math.round((w.eN / weeksData.maxExpVal) * 90)) : 0;
-                        const isPicked = i === weeksData.activeW;
-                        return (
-                          <button
-                            key={i}
-                            aria-label={`${w.lo} dan ${w.hi} gacha: xarajat ${formatNumber(w.eN)} so'm`}
-                            style={{
-                              flex: 1,
-                              border: 0,
-                              background: isPicked ? '#EAF5EC' : 'transparent',
-                              borderRadius: '12px',
-                              padding: '8px 0 6px',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              gap: '6px',
-                              cursor: 'pointer',
-                            }}
-                            onClick={() => setSelectedWeek(i)}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'flex-end', height: '90px' }}>
-                              <div
-                                style={{
-                                  width: '24px',
-                                  height: `${eBarH}px`,
-                                  background: '#D64D4D',
-                                  borderRadius: '4px 4px 0 0',
-                                }}
-                              />
-                            </div>
-                            <div className="mt" style={{ fontSize: '12px' }}>
-                              {w.lo}–{w.hi}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right 5 cols: Categories Breakdown & Budgets */}
-                <div className="md:col-span-1 lg:col-span-5 flex flex-col gap-5 sm:gap-6">
-                  {/* Category Breakdown Card */}
-                  <div className="uz-card">
-                    <h2>Nimaga sarfladingiz</h2>
-                    {categoryBreakdownList.length === 0 ? (
-                      <div className="empty">Bu oyda xarajat yo&apos;q.</div>
-                    ) : (
-                      categoryBreakdownList.map((c) => (
-                        <div key={c.name} style={{ padding: '12px 0' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <CategoryIcon name={c.name} size="xs" />
-                              <span className="nm">{c.name}</span>
-                            </div>
-                            <span className="am">
-                              {c.amt} <span className="mt">· {c.pct}%</span>
-                            </span>
-                          </div>
-                          <div className="bar" style={{ height: '6px', marginTop: '8px' }}>
-                            <div style={{ width: `${c.pct}%`, height: '6px', background: '#26834A' }} />
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  {/* Budgets Card */}
-                  <div className="uz-card">
-                    <div className="hd">
-                      <h2>Byudjetlar</h2>
-                      <button className="t" onClick={handleOpenAddBudget}>
-                        Byudjet qo&apos;shish
-                      </button>
-                    </div>
-
-                    {budgets.length === 0 ? (
-                      <div className="empty">O&apos;z limitingizni belgilang: kategoriya tanlang va summa kiriting.</div>
-                    ) : (
-                      budgetStatusList.map((b) => (
-                        <button
-                          key={b.id}
-                          className="row"
-                          style={{ display: 'block', padding: '14px 0' }}
-                          onClick={() => {
-                            const found = budgets.find((item) => item.id === b.id);
-                            if (found) handleOpenEditBudget(found);
-                          }}
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <CategoryIcon name={b.cat} size="xs" />
-                              <span className="nm">{b.cat}</span>
-                            </div>
-                            <span className="am" style={{ color: b.color }}>
-                              {b.pct}%
-                            </span>
-                          </div>
-                          <div className="bar" style={{ margin: '8px 0 6px' }}>
-                            <div style={{ width: `${b.barWidth}%`, background: b.color }} />
-                          </div>
-                          <div className="mt num" style={{ fontSize: '13px' }}>
-                            {b.spent} / {b.limit} so&apos;m · {b.msg}
-                          </div>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ── Subtab 2: Jamg'arma Maqsadlari ── */}
-            {subTab === 'go' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                {/* Hero Total Savings Card */}
-                <div
-                  style={{
-                    background: '#163300',
-                    color: '#fff',
-                    borderRadius: '24px',
-                    padding: '24px',
-                    border: '1px solid #234A05',
-                    boxShadow: '0 8px 28px rgba(22, 51, 0, 0.22)',
-                  }}
-                >
-                  <div style={{ fontSize: '14px', color: '#C9E8B0' }}>
-                    Jami jamg&apos;arilgan (haqiqiy hissalar)
-                  </div>
-                  <div
-                    className="num"
-                    style={{
-                      fontSize: 'clamp(28px, 5vw, 40px)',
-                      fontWeight: 700,
-                      letterSpacing: '-1.5px',
-                      color: '#9FE870',
-                      marginTop: '4px',
-                      lineHeight: 1.15,
-                    }}
-                  >
-                    {formatNumber(totalSavedAcrossGoals)}{' '}
-                    <span style={{ fontSize: '16px', fontWeight: 500, color: '#C9E8B0', letterSpacing: 0 }}>
-                      so&apos;m
-                    </span>
-                  </div>
-                </div>
-
-                {/* Goals Grid */}
-                {goals.length === 0 ? (
-                  <div className="uz-card">
-                    <div className="empty">
-                      <b style={{ color: '#171B16', fontSize: '16px' }}>Hali maqsad qo&apos;shilmagan</b>
-                      <div style={{ margin: '6px 0 14px' }}>
-                        Orzuingizdagi xarid yoki jamg&apos;arma uchun yangi maqsad yarating.
-                      </div>
-                      <button className="p" style={{ maxWidth: '240px', margin: '0 auto' }} onClick={handleOpenAddGoal}>
-                        Maqsad yaratish
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {goalsList.map((g) => (
-                      <div key={g.id} className="uz-card" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                          <span style={{ fontSize: '16px', fontWeight: 700, color: '#171B16' }}>{g.name}</span>
-                          <span className="num" style={{ fontSize: '16px', fontWeight: 700, color: '#26834A' }}>
-                            {g.pct}%
-                          </span>
-                        </div>
-
-                        <div className="bar" style={{ height: '8px' }}>
-                          <div style={{ width: `${g.pct}%`, height: '8px', background: '#26834A' }} />
-                        </div>
-
-                        <div className="mt num" style={{ fontSize: '13px' }}>
-                          {g.saved} / {g.target} so&apos;m
-                        </div>
-
-                        <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
-                          <button
-                            className="p"
-                            style={{ flex: 1, padding: '10px 14px' }}
-                            onClick={() => handleOpenAddContrib(g.id)}
-                          >
-                            Hissa qo&apos;shish
-                          </button>
-                          <button
-                            className="s"
-                            style={{ padding: '10px 14px' }}
-                            onClick={() => {
-                              setActiveGoalId(g.id);
-                              setActiveSheet('detail');
-                            }}
-                          >
-                            Tafsilot
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div>
-                  <button className="p" style={{ maxWidth: '260px' }} onClick={handleOpenAddGoal}>
-                    + Yangi maqsad yaratish
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
 
         </main>
 
@@ -2763,7 +1796,7 @@ export default function UzHamyonPrototypeApp({
         onOpenAddTransaction={handleOpenAddTx}
         highlightAdd={nudgeOpen}
         activeTab={tab}
-        className="lg:hidden"
+        className=""
         onTabChange={(newTab) => {
           switchTab(newTab, newTab === 'tahlil' ? 'an' : undefined);
         }}
@@ -2776,14 +1809,37 @@ export default function UzHamyonPrototypeApp({
       {quickOpen && (
         <QuickAddSheet
           transactions={transactions}
+          categories={quickCategories}
           isSaving={isSavingTx}
           error={txError}
+          initial={
+            quickEdit
+              ? {
+                  type: quickEdit.type,
+                  amount: String(quickEdit.amount),
+                  desc: quickEdit.desc || '',
+                  cat: quickEdit.cat,
+                  date: quickEdit.date,
+                  time: quickEdit.time || '12:00',
+                }
+              : undefined
+          }
           onClose={() => {
             setQuickOpen(false);
+            setQuickEdit(null);
             setTxError(null);
           }}
-          onSave={(input) => handleSaveTx(input)}
-          onOpenFullForm={handleOpenFullTxForm}
+          onSave={(input) => handleSaveTx(input, quickEdit?.id ?? null)}
+          onDelete={
+            quickEdit
+              ? () => {
+                  setConfirmConfig({ k: 'tx', id: quickEdit.id });
+                  setQuickOpen(false);
+                  setQuickEdit(null);
+                  setActiveSheet('confirm');
+                }
+              : undefined
+          }
         />
       )}
 
@@ -2812,1049 +1868,274 @@ export default function UzHamyonPrototypeApp({
          ══════════════════════════════════════════════════════════ */}
       {activeSheet && (
         <div
-          className="ov"
+          className="uz-sh-overlay"
           onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setActiveSheet(null);
-              setFormData({});
-              setEditId(null);
-            }
+            if (e.target === e.currentTarget) closeSheet();
           }}
         >
-          <div
-            className={`sh ${['tx', 'budget', 'goal', 'contrib'].includes(activeSheet || '') ? 'fx' : ''}`}
-            role="dialog"
-            aria-label="Modal oyna"
-          >
-            {/* Grab Handle for Mobile */}
-            <div style={{ width: '40px', height: '4px', backgroundColor: '#D8DED3', borderRadius: '2px', margin: '0 auto 12px auto' }} />
+          <div className="uz-sh" data-kind={activeSheet} role="dialog" aria-modal="true" aria-label={sheetTitle || 'Oyna'}>
+            <div className="uz-sh-grab" />
 
-            {/* Sheet Header */}
-            <div className="hd">
-              <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#163300', margin: 0 }}>
-                {activeSheet === 'tx'
-                  ? editId
-                    ? 'Tranzaksiyani tahrirlash'
-                    : 'Yangi tranzaksiya'
-                  : activeSheet === 'budget'
-                  ? editId
-                    ? 'Byudjetni tahrirlash'
-                    : 'Yangi byudjet'
-                  : activeSheet === 'goal'
-                  ? editId
-                    ? 'Maqsadni tahrirlash'
-                    : 'Yangi maqsad'
-                  : activeSheet === 'contrib'
-                  ? 'Hissa qo‘shish'
-                  : activeSheet === 'detail'
-                  ? activeGoal?.name || ''
-                  : activeSheet === 'confirm'
-                  ? "O'chirishni tasdiqlang"
-                  : activeSheet === 'user'
-                  ? 'Profil'
-                  : activeSheet === 'month'
-                  ? 'Oyni tanlang'
-                  : ''}
-              </h2>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveSheet(null);
-                  setFormData({});
-                  setEditId(null);
-                  setTxError(null);
-                  setShowDatePicker(false);
-                  setShowCategoryPicker(false);
-                }}
-                style={{
-                  height: '34px',
-                  padding: '0 12px',
-                  borderRadius: '17px',
-                  background: '#F0F3ED',
-                  color: '#47544C',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  border: '1px solid #D8DED3',
-                  cursor: 'pointer',
-                  transition: 'background-color 0.15s ease',
-                }}
-                aria-label="Yopish"
-              >
-                <X size={14} />
-                <span>Yopish</span>
-              </button>
-            </div>
+            {activeSheet !== 'confirm' && (
+              <div className="uz-sh-head">
+                <button type="button" className="uz-qa-round" aria-label="Yopish" onClick={closeSheet}>
+                  <X size={20} strokeWidth={2.2} />
+                </button>
+                <h2>{sheetTitle}</h2>
+                {activeSheet === 'detail' && activeGoal ? (
+                  <button type="button" className="uz-qa-round" aria-label="Maqsadni tahrirlash" onClick={() => handleOpenEditGoal(activeGoal)}>
+                    <Pencil size={18} strokeWidth={2.2} />
+                  </button>
+                ) : (
+                  <span style={{ width: 44 }} aria-hidden="true" />
+                )}
+              </div>
+            )}
 
-            {/* ── SHEET: Add / Edit Transaction ── */}
-            {activeSheet === 'tx' && (() => {
-              const txType = (formData.type || 'ex') as 'in' | 'ex';
-              const livePredicted = predictCategoryFromTitle(formData.desc || '', txType);
-              const effectiveCategory =
-                !formData.cat || formData.cat === 'Auto'
-                  ? livePredicted.category
-                  : formData.cat;
-              const isCustomCategory = Boolean(
-                formData.cat && formData.cat !== 'Auto' && formData.cat !== livePredicted.category
-              );
-              const currentDate = formData.date || TODAY_DATE;
-              const currentTime = formData.time || getNowLocalTimeString();
-              const isToday = currentDate === TODAY_DATE;
-
-              return (
-                <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-                  <div className="fxb">
-                    {/* 1. Type selector: Daromad / Xarajat */}
-                    <SlidingSegmentedNav
-                      options={[
-                        {
-                          id: 'in',
-                          label: '+ Daromad',
-                          activeBg: '#EAF5EC',
-                          activeColor: '#26834A',
-                        },
-                        {
-                          id: 'ex',
-                          label: '− Xarajat',
-                          activeBg: '#FCEEEE',
-                          activeColor: '#B33A3A',
-                        },
-                      ]}
-                      value={formData.type || 'ex'}
-                      onChange={(val) => {
-                        setFormData((prev) => ({ ...prev, type: val, cat: 'Auto' }));
-                      }}
-                      style={{ marginTop: '8px' }}
-                    />
-
-                    {/* 2. Summa (so'm) — Majburiy */}
-                    <div style={{ marginTop: '14px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                        <label className="lb" htmlFor="tx-amount" style={{ margin: 0, fontWeight: 600 }}>
-                          Summa (so&apos;m) <span style={{ color: '#D64D4D' }}>*</span>
-                        </label>
-                        <span style={{ fontSize: '11px', color: '#71717A', fontWeight: 500 }}>Majburiy</span>
-                      </div>
-                      <div style={{ position: 'relative' }}>
-                        <input
-                          id="tx-amount"
-                          className="in num"
-                          inputMode="numeric"
-                          placeholder="0"
-                          value={formData.amount || ''}
-                          onChange={(e) => setFormData((prev) => ({ ...prev, amount: formatNumberWithGaps(e.target.value) }))}
-                          style={{
-                            width: '100%',
-                            height: '50px',
-                            borderRadius: '16px',
-                            paddingRight: '64px',
-                            paddingLeft: '14px',
-                            fontSize: '18px',
-                            fontWeight: 700,
-                            border: '1.5px solid #D8DED3',
-                            boxSizing: 'border-box',
-                          }}
-                        />
-                        <span
-                          style={{
-                            position: 'absolute',
-                            right: '12px',
-                            top: '50%',
-                            transform: 'translateY(-50%)',
-                            fontSize: '12px',
-                            fontWeight: 700,
-                            color: '#5C6659',
-                            background: '#F0F3ED',
-                            padding: '4px 8px',
-                            borderRadius: '8px',
-                            border: '1px solid #E0E5DC',
-                            pointerEvents: 'none',
-                          }}
-                        >
-                          UZS
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* 3. Nomi (Title) — Majburiy */}
-                    <div style={{ marginTop: '14px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                        <label className="lb" htmlFor="tx-desc" style={{ margin: 0, fontWeight: 600 }}>
-                          Nomi (Title) <span style={{ color: '#D64D4D' }}>*</span>
-                        </label>
-                        <span style={{ fontSize: '11px', color: '#71717A', fontWeight: 500 }}>Majburiy</span>
-                      </div>
-                      <input
-                        id="tx-desc"
-                        className="in"
-                        placeholder={txType === 'in' ? 'Masalan: Oylik maosh, Keshbek, Mukofot...' : 'Masalan: Tushlik, Korzinka, Taksi, Benzin...'}
-                        value={formData.desc || ''}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, desc: e.target.value }))}
-                        style={{
-                          width: '100%',
-                          height: '48px',
-                          borderRadius: '14px',
-                          padding: '0 14px',
-                          border: '1.5px solid #D8DED3',
-                          fontSize: '14px',
-                          fontWeight: 500,
-                          boxSizing: 'border-box',
-                        }}
-                      />
-                    </div>
-
-                    {/* 4. Kategoriya — Title ga qarab AI tomonidan belgilanadi */}
-                    <div style={{ marginTop: '12px' }}>
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '10px 14px',
-                          borderRadius: '14px',
-                          background: isCustomCategory ? '#F9FAFB' : '#F0FDF4',
-                          border: `1.5px solid ${isCustomCategory ? '#E5E7EB' : '#BBF7D0'}`,
-                          transition: 'all 0.15s ease',
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-                          <div
-                            style={{
-                              width: '32px',
-                              height: '32px',
-                              borderRadius: '10px',
-                              background: isCustomCategory ? '#374151' : '#163300',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              flexShrink: 0,
-                            }}
-                          >
-                            <Sparkles size={16} style={{ color: '#9FE870' }} />
-                          </div>
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: '11px', color: isCustomCategory ? '#6B7280' : '#15803D', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              <span>{isCustomCategory ? 'Tanlangan kategoriya' : 'AI Kategoriya (avtomatik)'}</span>
-                            </div>
-                            <div style={{ fontSize: '14px', fontWeight: 700, color: '#163300', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '1px' }}>
-                              <CategoryIcon name={effectiveCategory} type={txType} size="xs" showBackground={false} />
-                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {effectiveCategory}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => setShowCategoryPicker((prev) => !prev)}
-                          style={{
-                            flexShrink: 0,
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            color: '#163300',
-                            background: '#FFFFFF',
-                            border: '1px solid #D8DED3',
-                            borderRadius: '10px',
-                            padding: '6px 10px',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                          }}
-                        >
-                          <span>{showCategoryPicker ? 'Yopish' : 'O‘zgartirish'}</span>
-                        </button>
-                      </div>
-
-                      {/* Boshqa kategoriya tanlash (ixtiyoriy) */}
-                      {showCategoryPicker && (
-                        <div
-                          style={{
-                            marginTop: '8px',
-                            padding: '12px',
-                            borderRadius: '14px',
-                            background: '#F8FAF6',
-                            border: '1px solid #D8E0D4',
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                            <span style={{ fontSize: '11px', fontWeight: 600, color: '#556052' }}>Kategoriyani tanlang:</span>
-                            {isCustomCategory && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setFormData((prev) => ({ ...prev, cat: 'Auto' }));
-                                  setShowCategoryPicker(false);
-                                }}
-                                style={{
-                                  fontSize: '11px',
-                                  fontWeight: 600,
-                                  color: '#15803D',
-                                  background: 'none',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '3px',
-                                }}
-                              >
-                                <Sparkles size={11} />
-                                <span>AI-avtoga qaytish</span>
-                              </button>
-                            )}
-                          </div>
-                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                            {(txType === 'in' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map((catName) => {
-                              const isAuto = catName === 'Auto';
-                              const isSelected = isAuto ? (!formData.cat || formData.cat === 'Auto') : formData.cat === catName;
-                              return (
-                                <button
-                                  key={catName}
-                                  type="button"
-                                  onClick={() => {
-                                    setFormData((prev) => ({ ...prev, cat: catName }));
-                                    setShowCategoryPicker(false);
-                                  }}
-                                  style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '5px',
-                                    padding: '6px 12px',
-                                    borderRadius: '16px',
-                                    cursor: 'pointer',
-                                    fontSize: '12px',
-                                    border: '1px solid',
-                                    backgroundColor: isSelected ? '#163300' : '#FFFFFF',
-                                    color: isSelected ? '#9FE870' : '#374151',
-                                    borderColor: isSelected ? '#163300' : '#E5E7EB',
-                                    fontWeight: isSelected ? 700 : 500,
-                                  }}
-                                >
-                                  {isAuto ? (
-                                    <Sparkles size={12} style={{ color: isSelected ? '#9FE870' : '#16A34A' }} />
-                                  ) : (
-                                    <CategoryIcon name={catName} size="xs" showBackground={false} />
-                                  )}
-                                  <span>{isAuto ? 'Auto (AI)' : catName}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* 5. Vaqt — avtomatik hozirgi vaqt, bitta kichikroq button orqali o‘zgartiriladi */}
-                    <div style={{ marginTop: '12px' }}>
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '10px 14px',
-                          borderRadius: '14px',
-                          background: '#F9FAFB',
-                          border: '1.5px solid #E5E7EB',
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <div
-                            style={{
-                              width: '32px',
-                              height: '32px',
-                              borderRadius: '10px',
-                              background: '#EEF2F6',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              flexShrink: 0,
-                            }}
-                          >
-                            <Clock size={16} style={{ color: '#374151' }} />
-                          </div>
-                          <div>
-                            <div style={{ fontSize: '11px', color: '#6B7280', fontWeight: 500 }}>
-                              Vaqt va sana (avtomatik)
-                            </div>
-                            <div style={{ fontSize: '13px', fontWeight: 700, color: '#1F2937', marginTop: '1px' }}>
-                              {isToday ? 'Bugun' : currentDate}, {currentTime}
-                            </div>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => setShowDatePicker((prev) => !prev)}
-                          style={{
-                            flexShrink: 0,
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            color: '#374151',
-                            background: '#FFFFFF',
-                            border: '1px solid #D1D5DB',
-                            borderRadius: '10px',
-                            padding: '6px 10px',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '5px',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                          }}
-                        >
-                          <Calendar size={13} style={{ color: '#4B5563' }} />
-                          <span>{showDatePicker ? 'Yopish' : 'O‘zgartirish'}</span>
-                        </button>
-                      </div>
-
-                      {/* Expandable Date & Time Pickers */}
-                      {showDatePicker && (
-                        <div
-                          style={{
-                            marginTop: '8px',
-                            padding: '12px',
-                            borderRadius: '14px',
-                            background: '#F8FAF6',
-                            border: '1px solid #D8E0D4',
-                          }}
-                        >
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                            <div>
-                              <label
-                                htmlFor="tx-date-input"
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '4px',
-                                  fontSize: '11px',
-                                  fontWeight: 600,
-                                  color: '#4B5563',
-                                  marginBottom: '4px',
-                                }}
-                              >
-                                <Calendar size={12} style={{ color: '#163300' }} />
-                                <span>Sana</span>
-                              </label>
-                              <input
-                                id="tx-date-input"
-                                className="in"
-                                type="date"
-                                min={MIN_ALLOWED_DATE}
-                                max={TODAY_DATE}
-                                value={formData.date || TODAY_DATE}
-                                onChange={(e) => setFormData((prev) => ({ ...prev, date: e.target.value }))}
-                                style={{
-                                  width: '100%',
-                                  height: '42px',
-                                  borderRadius: '12px',
-                                  border: '1.5px solid #D8DED3',
-                                  padding: '0 10px',
-                                  fontSize: '13px',
-                                  fontWeight: 500,
-                                  boxSizing: 'border-box',
-                                }}
-                              />
-                            </div>
-                            <div>
-                              <label
-                                htmlFor="tx-time-input"
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '4px',
-                                  fontSize: '11px',
-                                  fontWeight: 600,
-                                  color: '#4B5563',
-                                  marginBottom: '4px',
-                                }}
-                              >
-                                <Clock size={12} style={{ color: '#163300' }} />
-                                <span>Vaqt</span>
-                              </label>
-                              <input
-                                id="tx-time-input"
-                                className="in"
-                                type="time"
-                                value={formData.time || getNowLocalTimeString()}
-                                onChange={(e) => setFormData((prev) => ({ ...prev, time: e.target.value }))}
-                                style={{
-                                  width: '100%',
-                                  height: '42px',
-                                  borderRadius: '12px',
-                                  border: '1.5px solid #D8DED3',
-                                  padding: '0 10px',
-                                  fontSize: '13px',
-                                  fontWeight: 500,
-                                  boxSizing: 'border-box',
-                                }}
-                              />
-                            </div>
-                          </div>
-
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', paddingTop: '8px', borderTop: '1px solid #E5EBE0' }}>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  date: TODAY_DATE,
-                                  time: getNowLocalTimeString(),
-                                }));
-                              }}
-                              style={{
-                                fontSize: '11px',
-                                color: '#166534',
-                                background: 'none',
-                                border: 'none',
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                              }}
-                            >
-                              <RefreshCw size={11} />
-                              <span>Hozirgi vaqtga sozlash</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setShowDatePicker(false)}
-                              style={{
-                                fontSize: '11px',
-                                color: '#4B5563',
-                                background: '#E5E7EB',
-                                border: 'none',
-                                borderRadius: '6px',
-                                padding: '3px 8px',
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                              }}
-                            >
-                              Tayyor
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {txError && (
-                      <div
-                        id="tx-save-error"
-                        role="alert"
-                        style={{
-                          marginTop: '12px',
-                          padding: '10px 12px',
-                          borderRadius: '10px',
-                          background: '#FDF2F2',
-                          border: '1px solid rgba(214, 77, 77, 0.25)',
-                          color: '#B33A3A',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          lineHeight: 1.4,
-                        }}
-                      >
-                        {txError}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="fxf">
-                    {editId ? (
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '10px', width: '100%' }}>
-                        <button
-                          type="button"
-                          className="d"
-                          style={{
-                            width: '100%',
-                            height: '48px',
-                            borderRadius: '16px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '6px',
-                            fontSize: '14px',
-                            fontWeight: 600,
-                          }}
-                          onClick={() => {
-                            setConfirmConfig({ k: 'tx', id: editId });
-                            setActiveSheet('confirm');
-                          }}
-                        >
-                          <Trash2 size={16} />
-                          <span>O&apos;chirish</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="p"
-                          style={{
-                            width: '100%',
-                            height: '48px',
-                            borderRadius: '16px',
-                            fontSize: '15px',
-                            fontWeight: 700,
-                          }}
-                          disabled={isSaveTxDisabled || isSavingTx}
-                          onClick={() => void handleSaveTx()}
-                        >
-                          {isSavingTx ? 'Saqlanmoqda...' : 'Saqlash'}
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        className="p"
-                        style={{
-                          width: '100%',
-                          height: '48px',
-                          borderRadius: '16px',
-                          fontSize: '15px',
-                          fontWeight: 700,
-                        }}
-                        disabled={isSaveTxDisabled || isSavingTx}
-                        onClick={() => void handleSaveTx()}
-                      >
-                        {isSavingTx ? 'Saqlanmoqda...' : 'Tranzaksiya qo‘shish'}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* ── SHEET: Add / Edit Budget ── */}
+            {/* ── Limit (budget) ── */}
             {activeSheet === 'budget' && (
-              <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-                <div className="fxb">
-                  <label className="lb" htmlFor="budget-cat">
-                    Kategoriya
-                  </label>
-                  <select
-                    id="budget-cat"
-                    className="in"
-                    value={formData.cat || ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, cat: e.target.value }))}
-                  >
-                    <option value="">Tanlang...</option>
-                    {EXPENSE_CATEGORIES.filter((c) => c !== 'Auto').map((catName) => (
-                      <option key={catName} value={catName}>
-                        {catName}
-                      </option>
-                    ))}
-                  </select>
-
-                  <label className="lb" htmlFor="budget-limit">
-                    Oylik limit (so&apos;m)
-                  </label>
+              <>
+                <div className="uz-sh-amount">
                   <input
                     id="budget-limit"
-                    className="in num"
+                    className="uz-big-input"
                     inputMode="numeric"
                     placeholder="0"
+                    aria-label="Oylik limit, so‘m"
                     value={formData.limit || ''}
                     onChange={(e) => setFormData((prev) => ({ ...prev, limit: formatNumberWithGaps(e.target.value) }))}
                   />
+                  <span>so‘m / oy</span>
                 </div>
-
-                <div className="fxf">
-                  {editId ? (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '10px', width: '100%' }}>
+                <div className="uz-qa-catgrid" role="listbox" aria-label="Kategoriya">
+                  {Array.from(new Set([...quickCategories.ex, formData.cat].filter((c): c is string => Boolean(c) && c !== 'Auto'))).map((name) => {
+                    const meta = getCategoryMeta(name, 'ex');
+                    const Icon = meta.icon;
+                    return (
                       <button
+                        key={name}
                         type="button"
-                        className="d"
-                        style={{ width: '100%', height: '48px', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '14px', fontWeight: 600 }}
-                        onClick={() => {
-                          setConfirmConfig({ k: 'budget', id: editId });
-                          setActiveSheet('confirm');
-                        }}
+                        role="option"
+                        aria-selected={formData.cat === name}
+                        className="uz-qa-fav"
+                        onClick={() => setFormData((prev) => ({ ...prev, cat: name }))}
                       >
-                        <Trash2 size={16} />
-                        <span>O&apos;chirish</span>
+                        <span className="uz-qa-fav-ic" style={{ background: meta.bg, color: meta.color }}>
+                          <Icon size={22} strokeWidth={2.1} />
+                        </span>
+                        <span className="uz-qa-fav-name">{name}</span>
                       </button>
-                      <button
-                        type="button"
-                        className="p"
-                        style={{ width: '100%', height: '48px', borderRadius: '16px', fontSize: '15px', fontWeight: 700 }}
-                        disabled={isSaveBudgetDisabled}
-                        onClick={handleSaveBudget}
-                      >
-                        Saqlash
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      className="p"
-                      style={{ width: '100%', height: '48px', borderRadius: '16px', fontSize: '15px', fontWeight: 700 }}
-                      disabled={isSaveBudgetDisabled}
-                      onClick={handleSaveBudget}
-                    >
-                      Saqlash
+                    );
+                  })}
+                </div>
+                <div className="uz-sh-foot">
+                  {editId && (
+                    <button type="button" className="uz-qa-trash" aria-label="Limitni o‘chirish" onClick={() => { setConfirmConfig({ k: 'budget', id: editId }); setActiveSheet('confirm'); }}>
+                      <Trash2 size={22} strokeWidth={2.2} />
                     </button>
                   )}
+                  <button type="button" className="uz-qa-save" disabled={isSaveBudgetDisabled} onClick={handleSaveBudget}>
+                    <Check size={20} strokeWidth={2.8} /> Saqlash
+                  </button>
                 </div>
-              </div>
+              </>
             )}
 
-            {/* ── SHEET: Add / Edit Goal ── */}
+            {/* ── Goal ── */}
             {activeSheet === 'goal' && (
-              <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-                <div className="fxb">
-                  <label className="lb" htmlFor="goal-name">
-                    Maqsad nomi
-                  </label>
-                  <input
-                    id="goal-name"
-                    className="in"
-                    placeholder="Masalan, Noutbuk yoki Ta'til"
-                    value={formData.name || ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                  />
-
-                  <label className="lb" htmlFor="goal-target">
-                    Kutilayotgan summa (so&apos;m)
-                  </label>
+              <>
+                <input
+                  id="goal-name"
+                  className="uz-qa-desc"
+                  style={{ alignSelf: 'center' }}
+                  placeholder="Nima uchun yig‘asiz?"
+                  aria-label="Maqsad nomi"
+                  maxLength={80}
+                  value={formData.name || ''}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                />
+                <div className="uz-sh-amount">
                   <input
                     id="goal-target"
-                    className="in num"
+                    className="uz-big-input"
                     inputMode="numeric"
                     placeholder="0"
+                    aria-label="Kerakli summa, so‘m"
                     value={formData.target || ''}
                     onChange={(e) => setFormData((prev) => ({ ...prev, target: formatNumberWithGaps(e.target.value) }))}
                   />
-
-                  <label className="lb" htmlFor="goal-date">
-                    Muddat (ixtiyoriy)
-                  </label>
-                  <input
-                    id="goal-date"
-                    className="in"
-                    type="date"
-                    value={formData.date || ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, date: e.target.value }))}
-                  />
+                  <span>so‘m kerak</span>
                 </div>
-
-                <div className="fxf">
-                  {editId ? (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '10px', width: '100%' }}>
-                      <button
-                        type="button"
-                        className="d"
-                        style={{ width: '100%', height: '48px', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '14px', fontWeight: 600 }}
-                        onClick={() => {
-                          setConfirmConfig({ k: 'goal', id: editId });
-                          setActiveSheet('confirm');
-                        }}
-                      >
-                        <Trash2 size={16} />
-                        <span>O&apos;chirish</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="p"
-                        style={{ width: '100%', height: '48px', borderRadius: '16px', fontSize: '15px', fontWeight: 700 }}
-                        disabled={isSaveGoalDisabled}
-                        onClick={handleSaveGoal}
-                      >
-                        Saqlash
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      className="p"
-                      style={{ width: '100%', height: '48px', borderRadius: '16px', fontSize: '15px', fontWeight: 700 }}
-                      disabled={isSaveGoalDisabled}
-                      onClick={handleSaveGoal}
-                    >
-                      Saqlash
+                <div className="uz-m-list">
+                  <label className="uz-sh-row">
+                    <CalendarDays size={20} strokeWidth={2} color="#6B7068" aria-hidden="true" />
+                    <span className="uz-sh-row-label">Muddat</span>
+                    {!formData.date && <span className="uz-sh-row-date">Ixtiyoriy</span>}
+                    <input
+                      id="goal-date"
+                      type="date"
+                      data-empty={!formData.date}
+                      className="uz-sh-row-date"
+                      min={TODAY_DATE}
+                      value={formData.date || ''}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, date: e.target.value }))}
+                    />
+                  </label>
+                </div>
+                <div className="uz-sh-foot">
+                  {editId && (
+                    <button type="button" className="uz-qa-trash" aria-label="Maqsadni o‘chirish" onClick={() => { setConfirmConfig({ k: 'goal', id: editId }); setActiveSheet('confirm'); }}>
+                      <Trash2 size={22} strokeWidth={2.2} />
                     </button>
                   )}
+                  <button type="button" className="uz-qa-save" disabled={isSaveGoalDisabled} onClick={handleSaveGoal}>
+                    <Check size={20} strokeWidth={2.8} /> Saqlash
+                  </button>
                 </div>
-              </div>
+              </>
             )}
 
-            {/* ── SHEET: Add Contribution ── */}
+            {/* ── Add money to a goal ── */}
             {activeSheet === 'contrib' && (
-              <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                {/* Available free cashflow indicator */}
-                <div style={{ background: '#F7F8F5', border: '1px solid #E8EBE5', borderRadius: '16px', padding: '12px 14px' }}>
-                  <div style={{ fontSize: '12px', color: '#697168', fontWeight: 500 }}>
-                    Daromadlardan qolgan erkin balans:
-                  </div>
-                  <div className="num" style={{ fontSize: '18px', fontWeight: 700, color: currentBalance < 0 ? '#DC2626' : '#163300', marginTop: '2px' }}>
-                    {formatNumber(currentBalance)} so‘m
-                  </div>
-                </div>
-
-                <div className="fxb">
-                  <label className="lb" htmlFor="contrib-amount">
-                    Maqsadga qo‘shiladigan hissa summasi (so&apos;m)
-                  </label>
+              <>
+                <div className="uz-sh-amount">
                   <input
                     id="contrib-amount"
-                    className="in num"
+                    className="uz-big-input"
                     inputMode="numeric"
                     placeholder="0"
+                    aria-label="Qo‘shiladigan summa, so‘m"
                     value={formData.contrib || ''}
                     onChange={(e) => setFormData((prev) => ({ ...prev, contrib: formatNumberWithGaps(e.target.value) }))}
                   />
-
-                  {/* Dynamic remaining balance preview */}
-                  {parseNumber(formData.contrib) > 0 && (
-                    <div style={{ fontSize: '12px', marginTop: '6px', color: (currentBalance - parseNumber(formData.contrib)) < 0 ? '#DC2626' : '#697168' }}>
-                      {(currentBalance - parseNumber(formData.contrib)) < 0 ? (
-                        <span>⚠️ Hissadan so‘ng balans manfiyga tushadi: <b>{formatNumber(currentBalance - parseNumber(formData.contrib))} so‘m</b></span>
-                      ) : (
-                        <span>Hissadan so‘ng qoladigan balans: <b style={{ color: '#163300' }}>{formatNumber(currentBalance - parseNumber(formData.contrib))} so‘m</b></span>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Quick percentage helper pills if user has positive balance */}
-                  {currentBalance > 0 && (
-                    <div style={{ display: 'flex', gap: '6px', marginTop: '10px', flexWrap: 'wrap' }}>
-                      {[25, 50, 100].map((pct) => {
-                        const amt = Math.round((currentBalance * pct) / 100);
-                        return (
-                          <button
-                            key={pct}
-                            type="button"
-                            onClick={() => setFormData((prev) => ({ ...prev, contrib: formatNumberWithGaps(String(amt)) }))}
-                            style={{
-                              padding: '5px 12px',
-                              borderRadius: '12px',
-                              border: '1px solid #D8DED3',
-                              background: '#FFFFFF',
-                              fontSize: '12px',
-                              fontWeight: 600,
-                              color: '#163300',
-                              cursor: 'pointer',
-                            }}
-                          >
-                            {pct === 100 ? 'Barchasi' : `${pct}%`} ({formatNumber(amt)})
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+                  <span>so‘m</span>
                 </div>
-
-                <div className="fxf" style={{ marginTop: 'auto', paddingTop: '10px' }}>
-                  <button className="p" disabled={isSaveContribDisabled} onClick={handleSaveContribution}>
-                    Maqsadga qo&apos;shish
-                  </button>
+                <div className="uz-sh-hint" data-warn={currentBalance - parseNumber(formData.contrib) < 0}>
+                  {currentBalance - parseNumber(formData.contrib) < 0
+                    ? `Balans ${formatNumber(Math.abs(currentBalance - parseNumber(formData.contrib)))} so‘m minusga tushadi`
+                    : `Balansda qoladi: ${formatNumber(currentBalance - parseNumber(formData.contrib))} so‘m`}
                 </div>
-              </div>
-            )}
-
-            {/* ── SHEET: Goal Detail View ── */}
-            {activeSheet === 'detail' && activeGoal && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div>
-                  <div className="mt" style={{ fontSize: '13px' }}>Jami yig&apos;ilgan</div>
-                  <div className="num" style={{ fontSize: '24px', fontWeight: 700, color: '#163300' }}>
-                    {formatNumber(getGoalSaved(activeGoal))} so&apos;m
-                  </div>
-                  <div className="mt" style={{ fontSize: '13px' }}>
-                    Maqsad: {formatNumber(activeGoal.target)} so&apos;m
-                    {activeGoal.date ? ` · ${activeGoal.date} gacha` : ''}
-                  </div>
-                </div>
-
-                <div className="bar" style={{ height: '10px' }}>
-                  <div
-                    style={{
-                      width: `${activeGoal.target > 0 ? Math.min(100, Math.round((getGoalSaved(activeGoal) / activeGoal.target) * 100)) : 0}%`,
-                      height: '10px',
-                      background: '#26834A',
-                    }}
-                  />
-                </div>
-
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button className="p" onClick={() => handleOpenAddContrib(activeGoal.id)}>
-                    Hissa qo&apos;shish
-                  </button>
-                  <button className="s" onClick={() => handleOpenEditGoal(activeGoal)}>
-                    Tahrirlash
-                  </button>
-                </div>
-
-                <div style={{ marginTop: '10px' }}>
-                  <b style={{ fontSize: '14px' }}>Hissalar tarixi:</b>
-                  {!activeGoal.contribsLoaded ? (
-                    <div className="empty">Yuklanmoqda...</div>
-                  ) : (!activeGoal.contribs || activeGoal.contribs.length === 0) ? (
-                    <div className="empty">Hozircha hissa qo&apos;shilmagan.</div>
-                  ) : (
-                    activeGoal.contribs.map((c, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          gap: '12px',
-                          padding: '8px 0',
-                          borderBottom: '1px solid #E8EBE5',
-                        }}
-                      >
-                        <span className="mt" style={{ display: 'flex', flexDirection: 'column' }}>
-                          <span>{c.d}</span>
-                          {(c.source === 'initial_balance' || c.note) && (
-                            <span style={{ fontSize: '12px', color: '#697168' }}>
-                              {c.source === 'initial_balance' ? 'Boshlang‘ich qoldiq' : c.note}
-                            </span>
-                          )}
-                        </span>
-                        <span className="num" style={{ fontWeight: 600, color: c.a < 0 ? '#DC2626' : '#26834A', whiteSpace: 'nowrap' }}>
-                          {c.a < 0 ? '−' : '+'}{formatNumber(Math.abs(c.a))}{' '}
-                          {normalizeCurrency(activeGoal.currency) === 'USD' ? '$' : 'so‘m'}
-                        </span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* ── SHEET: Confirm Delete ── */}
-            {activeSheet === 'confirm' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <p style={{ margin: '8px 0', fontSize: '14px', lineHeight: 1.5, color: '#171B16' }}>
-                  Haqiqatan ham ushbu yozuvni butunlay o&apos;chirmoqchimisiz? Ushbu amalni qaytarib bo&apos;lmaydi.
-                </p>
-                <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
-                  <button className="d" style={{ flex: 1 }} onClick={handleConfirmDelete}>
-                    Ha, o&apos;chirilsin
-                  </button>
-                  <button
-                    className="s"
-                    style={{ flex: 1 }}
-                    onClick={() => {
-                      setActiveSheet(null);
-                      setConfirmConfig(null);
-                    }}
-                  >
-                    Bekor qilish
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* ── SHEET: Month Selector Popup ── */}
-            {activeSheet === 'month' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {availableMonths.length === 0 ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '12px 4px', textAlign: 'center' }}>
-                    <div
-                      style={{
-                        width: '48px',
-                        height: '48px',
-                        borderRadius: '50%',
-                        background: '#F0FDF4',
-                        color: '#16A34A',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        margin: '0 auto',
-                      }}
-                    >
-                      <Calendar className="h-6 w-6 text-[#16A34A]" />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '15px', fontWeight: 700, color: '#171B16' }}>
-                        Tranzaksiyalar mavjud emas
-                      </div>
-                      <p style={{ fontSize: '12px', color: '#697168', marginTop: '4px', lineHeight: 1.5 }}>
-                        Birinchi tranzaksiyangizni kiritganingizdan so‘ng, faqat haqiqiy tranzaksiyaga ega bo‘lgan oylar bu yerda ko‘rinadi.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveSheet('tx');
-                        setFormData({
-                          type: 'ex',
-                          amount: '',
-                          cat: 'Auto',
-                          desc: '',
-                          date: TODAY_DATE,
-                        });
-                      }}
-                      style={{
-                        marginTop: '6px',
-                        padding: '12px 16px',
-                        borderRadius: '12px',
-                        background: '#9FE870',
-                        color: '#163300',
-                        fontWeight: 700,
-                        fontSize: '13px',
-                        border: 'none',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px',
-                      }}
-                    >
-                      <Plus className="h-4 w-4 stroke-[3]" />
-                      <span>Birinchi tranzaksiyani qo‘shish</span>
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <div className="mt" style={{ marginBottom: '6px', fontSize: '12px', color: '#697168' }}>
-                      Tranzaksiyalar qayd etilgan mavjud oylar:
-                    </div>
-                    {availableMonths.map((item) => {
-                      const isSelected = year === item.year && month === item.month;
+                {currentBalance > 0 && (
+                  <div className="uz-qa-days">
+                    {[25, 50, 100].map((pct) => {
+                      const amt = Math.round((currentBalance * pct) / 100);
                       return (
                         <button
-                          key={item.key}
-                          className={`row ${isSelected ? 'on' : ''}`}
-                          style={{
-                            padding: '12px 14px',
-                            background: isSelected ? '#EAF5EC' : '#fff',
-                            border: `1px solid ${isSelected ? '#9FE870' : '#D8DED3'}`,
-                            borderRadius: '12px',
-                            fontWeight: isSelected ? 700 : 500,
-                            color: isSelected ? '#163300' : '#171B16',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            cursor: 'pointer',
-                          }}
-                          onClick={() => handleSelectMonth(item.year, item.month)}
+                          key={pct}
+                          type="button"
+                          className="uz-qa-dayopt"
+                          aria-pressed={parseNumber(formData.contrib) === amt}
+                          onClick={() => setFormData((prev) => ({ ...prev, contrib: formatNumberWithGaps(String(amt)) }))}
                         >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span>{item.label}</span>
-                            <span
-                              style={{
-                                fontSize: '11px',
-                                padding: '2px 8px',
-                                borderRadius: '999px',
-                                background: isSelected ? '#C7F2A4' : '#F7F8F5',
-                                color: isSelected ? '#163300' : '#697168',
-                                fontWeight: 600,
-                              }}
-                            >
-                              {item.count} ta tranzaksiya
-                            </span>
-                          </div>
-                          {isSelected && (
-                            <span className="inline-flex items-center gap-1" style={{ color: '#26834A', fontSize: '13px' }}>
-                              <Check className="h-3.5 w-3.5 stroke-[2.5]" />
-                              <span>Tanlangan</span>
-                            </span>
-                          )}
+                          {pct === 100 ? 'Hammasi' : `${pct}%`}
                         </button>
                       );
                     })}
-                  </>
+                  </div>
                 )}
+                <div className="uz-sh-foot">
+                  <button type="button" className="uz-qa-save" disabled={isSaveContribDisabled} onClick={handleSaveContribution}>
+                    <Plus size={20} strokeWidth={2.8} /> Qo‘shish
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* ── Goal detail ── */}
+            {activeSheet === 'detail' && activeGoal && (() => {
+              const saved = getGoalSaved(activeGoal);
+              const pct = activeGoal.target > 0 ? Math.min(100, Math.round((saved / activeGoal.target) * 100)) : 0;
+              const cur = normalizeCurrency(activeGoal.currency) === 'USD' ? '$' : 'so‘m';
+              return (
+                <>
+                  <div className="uz-sh-goal">
+                    <div className="uz-sh-goal-ring" style={{ background: `conic-gradient(#9FE870 0 ${pct}%, #E6EAE2 ${pct}% 100%)` }}>
+                      <span className="num">{pct}%</span>
+                    </div>
+                    <div className="uz-sh-goal-num num">{formatNumber(saved)}</div>
+                    <div className="uz-m-row-sub num">
+                      / {formatNumber(activeGoal.target)} {cur}
+                      {activeGoal.date ? ` · ${goalDeadlineLabel(activeGoal.date)} gacha` : ''}
+                    </div>
+                  </div>
+                  <button type="button" className="uz-qa-save" onClick={() => handleOpenAddContrib(activeGoal.id)}>
+                    <Plus size={20} strokeWidth={2.8} /> Pul qo‘shish
+                  </button>
+                  {!activeGoal.contribsLoaded ? (
+                    <TxListSkeleton count={2} />
+                  ) : activeGoal.contribs && activeGoal.contribs.length > 0 ? (
+                    <div className="uz-m-list">
+                      {activeGoal.contribs.map((c, i) => (
+                        <div key={i} className="uz-m-row" style={{ cursor: 'default' }}>
+                          <span className="uz-m-row-main">
+                            <span className="uz-m-row-name" style={{ fontSize: 15 }}>{/^\d{4}-\d{2}-\d{2}/.test(c.d) ? dayLabel(c.d.slice(0, 10), getNowLocalDateString()) : c.d}</span>
+                            {(c.source === 'initial_balance' || c.note) && (
+                              <span className="uz-m-row-sub">{c.source === 'initial_balance' ? 'Boshlang‘ich qoldiq' : c.note}</span>
+                            )}
+                          </span>
+                          <span className="uz-m-row-amt" data-in={c.a >= 0}>
+                            {c.a < 0 ? '−' : '+'}{formatNumber(Math.abs(c.a))}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="uz-sh-hint">Hali pul qo‘shilmagan</div>
+                  )}
+                </>
+              );
+            })()}
+
+            {/* ── Delete confirmation (action sheet) ── */}
+            {activeSheet === 'confirm' && (
+              <div className="uz-sh-confirm">
+                <span className="uz-sh-confirm-ic"><Trash2 size={26} strokeWidth={2.2} /></span>
+                <h2>{confirmConfig?.k === 'budget' ? 'Limit o‘chirilsinmi?' : confirmConfig?.k === 'goal' ? 'Maqsad o‘chirilsinmi?' : 'Amal o‘chirilsinmi?'}</h2>
+                <p>Buni qaytarib bo‘lmaydi.</p>
+                <button type="button" className="uz-sh-danger" onClick={handleConfirmDelete}>O‘chirish</button>
+                <button
+                  type="button"
+                  className="uz-sh-plain"
+                  onClick={() => {
+                    setActiveSheet(null);
+                    setConfirmConfig(null);
+                  }}
+                >
+                  Bekor qilish
+                </button>
               </div>
+            )}
+
+            {/* ── Month picker ── */}
+            {activeSheet === 'month' && (
+              availableMonths.length === 0 ? (
+                <button type="button" className="uz-m-empty" onClick={handleOpenAddTx}>
+                  <span className="uz-m-empty-ic"><Plus size={26} strokeWidth={2.6} /></span>
+                  <span>Birinchi amal</span>
+                </button>
+              ) : (
+                <div className="uz-m-list" role="listbox" aria-label="Oy">
+                  {availableMonths.map((item) => {
+                    const isSelected = year === item.year && month === item.month;
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        role="option"
+                        aria-selected={isSelected}
+                        className="uz-m-row uz-sh-month"
+                        onClick={() => handleSelectMonth(item.year, item.month)}
+                      >
+                        <span className="uz-m-row-main"><span className="uz-m-row-name">{item.label}</span></span>
+                        <span className="uz-m-row-sub num">{item.count} ta</span>
+                        <span style={{ width: 22, display: 'grid', placeItems: 'center', color: '#2E6B00' }}>
+                          {isSelected && <Check size={20} strokeWidth={2.8} />}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )
             )}
 
             {activeSheet === 'user' && (

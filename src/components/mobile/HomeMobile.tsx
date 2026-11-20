@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, ChevronRight, Plus } from 'lucide-react';
 import type { StreakSummary } from '@/lib/streak/compute';
 import { StreakWeek } from '@/components/streak/StreakParts';
 import { TxFlatList, TxListSkeleton, groupNumber, type TxRowData } from './TxRows';
+import { useCountUp } from '@/lib/ui/useCountUp';
 
 interface HomeMobileProps {
   balance: number;
@@ -32,21 +33,29 @@ export default function HomeMobile({
   onSeeAll,
   onAdd,
 }: HomeMobileProps) {
+  // Start from 0 on first show so the balance visibly counts up.
+  const bal = useCountUp(loading ? 0 : balance);
+  const inc = useCountUp(loading ? 0 : monthIncome);
+  const exp = useCountUp(loading ? 0 : monthExpense);
   return (
-    <div className="uz-m-page lg:hidden">
+    <div className="uz-m-page" data-page="home">
       <section className="uz-m-hero" aria-label="Balans">
         <div className="uz-m-hero-bal" data-neg={balance < 0}>
-          <span className="num">{balance < 0 ? '−' : ''}{groupNumber(balance)}</span>
+          {loading ? (
+            <span className="uz-skel uz-skel-dark" style={{ width: 220, height: 40 }} aria-label="Yuklanmoqda" />
+          ) : (
+            <span className="num">{bal < 0 ? '−' : ''}{groupNumber(bal)}</span>
+          )}
           <span className="uz-m-hero-cur">so‘m</span>
         </div>
         <div className="uz-m-hero-pills">
-          <div className="uz-m-hero-pill" aria-label={`Shu oy kirim ${groupNumber(monthIncome)} so‘m`}>
+          <div className="uz-m-hero-pill" data-kind="in" aria-label={`Shu oy kirim ${groupNumber(monthIncome)} so‘m`}>
             <span className="uz-m-hero-dot" data-kind="in"><ArrowDown size={15} strokeWidth={2.6} /></span>
-            <span className="num">{groupNumber(monthIncome)}</span>
+            <span className="num">{groupNumber(inc)}</span>
           </div>
-          <div className="uz-m-hero-pill" aria-label={`Shu oy chiqim ${groupNumber(monthExpense)} so‘m`}>
+          <div className="uz-m-hero-pill" data-kind="ex" aria-label={`Shu oy chiqim ${groupNumber(monthExpense)} so‘m`}>
             <span className="uz-m-hero-dot" data-kind="ex"><ArrowUp size={15} strokeWidth={2.6} /></span>
-            <span className="num">{groupNumber(monthExpense)}</span>
+            <span className="num">{groupNumber(exp)}</span>
           </div>
         </div>
       </section>
