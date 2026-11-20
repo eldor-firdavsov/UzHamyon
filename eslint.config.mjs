@@ -21,6 +21,7 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     "tests/**",
     "scripts/**",
+    "video/**",
   ]),
 ]);
 

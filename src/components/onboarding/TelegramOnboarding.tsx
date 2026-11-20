@@ -46,6 +46,29 @@ const TELEGRAM_FINANCIAL_GOALS = [
   { id: 'better_habits', label: 'Moliyaviy odatlarimni yaxshilash', icon: Sprout },
 ];
 
+/** Re-creates the session from Telegram initData. True when a fresh session was set. */
+async function reauthWithTelegram(): Promise<boolean> {
+  try {
+    const initData = typeof window !== 'undefined' ? window.Telegram?.WebApp?.initData : undefined;
+    if (!initData) return false;
+    const r = await fetch('/api/auth/telegram', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ initData }),
+    });
+    const data = await r.json().catch(() => null);
+    if (!data?.success || !data.session) return false;
+    await createClient().auth.setSession({
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export default function TelegramOnboarding({
   initialFirstName = '',
   onCompleted,
@@ -76,14 +99,21 @@ export default function TelegramOnboarding({
     const goalsToSave = noSpecificGoal ? ['no_specific_goal'] : selectedGoals;
 
     try {
-      const res = await completeOnboardingAction({
+      const input = {
         first_name: preferredName.trim() || initialFirstName || 'Foydalanuvchi',
         declared_monthly_income: 0,
         declared_monthly_expenses: 0,
         goals: goalsToSave,
         custom_goal: '',
         category_expenses: {},
-      });
+      };
+      let res = await completeOnboardingAction(input);
+
+      // Inside Telegram the login cookies are sometimes gone by the last step (iOS WebView).
+      // Log in again with Telegram's own initData, then retry once.
+      if (!res.success && (await reauthWithTelegram())) {
+        res = await completeOnboardingAction(input);
+      }
 
       if (!res.success) {
         // Fallback: update profile directly via client if server session cookie hadn't arrived
