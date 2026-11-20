@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Check, Snowflake, Trophy } from 'lucide-react';
 import type { StreakSummary } from '@/lib/streak/compute';
+import { useClosing } from '@/lib/ui/useClosing';
 import { useModalScrollLock } from '@/lib/ui/useModalScrollLock';
 import { haptic } from '@/lib/ui/haptics';
 
@@ -36,6 +37,7 @@ export default function StreakCelebration({ from, streak, onClose }: StreakCeleb
   const [barWidth, setBarWidth] = useState(((from - prevGoalBase) / Math.max(1, goal - prevGoalBase)) * 100);
 
   useModalScrollLock(true);
+  const { closing, close } = useClosing(onClose);
 
   useEffect(() => {
     haptic('success');
@@ -48,7 +50,7 @@ export default function StreakCelebration({ from, streak, onClose }: StreakCeleb
   const todayIndex = streak.week.reduce((idx, d, i) => (d.state !== 'future' ? i : idx), -1);
 
   return (
-    <div className="uz-cele" role="dialog" aria-modal="true" aria-label={`Seriya: ${to} kun`}>
+    <div className="uz-cele" data-closing={closing} role="dialog" aria-modal="true" aria-label={`Seriya: ${to} kun`}>
       <div className="uz-cele-flame-wrap" aria-hidden="true">
         <div className="uz-cele-glow" />
         {SPARKS.map((s, i) => (
@@ -103,7 +105,7 @@ export default function StreakCelebration({ from, streak, onClose }: StreakCeleb
         <span>{streak.freezesLeft}</span>
       </div>
 
-      <button type="button" className="uz-cele-btn" onClick={onClose} autoFocus>
+      <button type="button" className="uz-cele-btn" onClick={close} autoFocus>
         Zo‘r!
       </button>
     </div>

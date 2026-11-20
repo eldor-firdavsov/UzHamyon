@@ -9,6 +9,7 @@ import { addDaysToDate } from '@/lib/time/tashkent';
 import { getNowLocalDateString, getNowLocalTimeString } from '@/lib/transactions/dateTime';
 import { useModalScrollLock } from '@/lib/ui/useModalScrollLock';
 import { haptic } from '@/lib/ui/haptics';
+import { useClosing } from '@/lib/ui/useClosing';
 
 export interface QuickAddInput {
   type: 'in' | 'ex';
@@ -77,6 +78,7 @@ export default function QuickAddSheet({
   const [panel, setPanel] = useState<Panel>('keys');
 
   useModalScrollLock(true);
+  const { closing, close } = useClosing(onClose);
 
   const picks = useMemo(() => computeQuickPicks(transactions, type, today), [transactions, type, today]);
 
@@ -134,15 +136,16 @@ export default function QuickAddSheet({
   return (
     <div
       className="uz-qa-overlay"
+      data-closing={closing}
       onClick={(e) => {
-        if (e.target === e.currentTarget && !isSaving) onClose();
+        if (e.target === e.currentTarget && !isSaving) close();
       }}
     >
       <div className="uz-qa-sheet" role="dialog" aria-modal="true" aria-label={editing ? 'Amalni tahrirlash' : 'Amal qo‘shish'}>
         <div className="uz-sh-grab" />
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <button type="button" className="uz-qa-round" aria-label="Yopish" onClick={onClose} disabled={isSaving}>
+          <button type="button" className="uz-qa-round" aria-label="Yopish" onClick={close} disabled={isSaving}>
             <X size={20} strokeWidth={2.2} />
           </button>
           <div className="uz-qa-seg" role="group" aria-label="Turi">

@@ -7,6 +7,7 @@ import type { Category, CategoryType } from '@/types/database';
 import { getCategoryMeta } from '@/components/categories/CategoryIcon';
 import { getCategoryDisplayName } from '@/lib/categories/schemas';
 import { TxListSkeleton } from '@/components/mobile/TxRows';
+import { useClosing } from '@/lib/ui/useClosing';
 
 type SheetState = { mode: 'new' } | { mode: 'edit'; category: Category } | { mode: 'delete'; category: Category } | null;
 
@@ -201,6 +202,7 @@ function CategorySheet({
   const meta = getCategoryMeta(name || undefined, type === 'income' ? 'in' : 'ex');
   const Icon = meta.icon;
   const changed = name.trim() && name.trim() !== editing?.name;
+  const { closing, close } = useClosing(onClose);
 
   const submit = async () => {
     if (!changed || busy) return;
@@ -210,11 +212,11 @@ function CategorySheet({
   };
 
   return (
-    <div className="uz-sh-overlay" onClick={(e) => e.target === e.currentTarget && !busy && onClose()}>
+    <div className="uz-sh-overlay" data-closing={closing} onClick={(e) => e.target === e.currentTarget && !busy && close()}>
       <div className="uz-sh" role="dialog" aria-modal="true" aria-label={editing ? 'Kategoriya' : 'Yangi kategoriya'}>
         <div className="uz-sh-grab" />
         <div className="uz-sh-head">
-          <button type="button" className="uz-qa-round" aria-label="Yopish" onClick={onClose}>
+          <button type="button" className="uz-qa-round" aria-label="Yopish" onClick={close}>
             <X size={20} strokeWidth={2.2} />
           </button>
           <h2>{editing ? 'Kategoriya' : 'Yangi kategoriya'}</h2>
@@ -265,8 +267,9 @@ function CategorySheet({
 function DeleteSheet({ category, onCancel, onConfirm }: { category: Category; onCancel: () => void; onConfirm: () => Promise<string | null> }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { closing, close } = useClosing(onCancel);
   return (
-    <div className="uz-sh-overlay" onClick={(e) => e.target === e.currentTarget && !busy && onCancel()}>
+    <div className="uz-sh-overlay" data-closing={closing} onClick={(e) => e.target === e.currentTarget && !busy && close()}>
       <div className="uz-sh" role="alertdialog" aria-modal="true" aria-label="Kategoriya o‘chirilsinmi?">
         <div className="uz-sh-grab" />
         <div className="uz-sh-confirm">
@@ -286,7 +289,7 @@ function DeleteSheet({ category, onCancel, onConfirm }: { category: Category; on
           >
             {busy ? 'O‘chirilmoqda…' : 'O‘chirish'}
           </button>
-          <button type="button" className="uz-sh-plain" onClick={onCancel} disabled={busy}>
+          <button type="button" className="uz-sh-plain" onClick={close} disabled={busy}>
             Bekor qilish
           </button>
         </div>

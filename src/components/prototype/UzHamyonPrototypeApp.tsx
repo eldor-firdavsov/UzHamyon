@@ -5,6 +5,8 @@ import '@/app/prototype/prototype.css';
 import MobileNavBar from '@/components/navigation/MobileNavBar';
 import QuickAddSheet, { type QuickAddInput } from '@/components/transactions/QuickAddSheet';
 import StreakCelebration from '@/components/streak/StreakCelebration';
+import StreakSheet from '@/components/streak/StreakSheet';
+import { useClosing } from '@/lib/ui/useClosing';
 import DailyNudge, { markNudgeShown, shouldShowNudgeToday } from '@/components/streak/DailyNudge';
 import { StreakChip } from '@/components/streak/StreakParts';
 import HomeMobile from '@/components/mobile/HomeMobile';
@@ -464,6 +466,7 @@ export default function UzHamyonPrototypeApp({
   const [streak, setStreak] = useState<StreakSummary | null>(initialStreak);
   const [celebration, setCelebration] = useState<{ from: number; streak: StreakSummary } | null>(null);
   const [quickOpen, setQuickOpen] = useState<boolean>(false);
+  const [streakOpen, setStreakOpen] = useState<boolean>(false);
   /** Entry being edited in the quick sheet (null = adding a new one). */
   const [quickEdit, setQuickEdit] = useState<Transaction | null>(null);
   const [nudgeOpen, setNudgeOpen] = useState<boolean>(false);
@@ -1094,12 +1097,15 @@ export default function UzHamyonPrototypeApp({
     return { ex: pick('expense', EXPENSE_CATEGORIES), in: pick('income', INCOME_CATEGORIES) };
   }, [categories]);
 
-  const closeSheet = () => {
+  const closeSheetNow = () => {
     setActiveSheet(null);
     setFormData({});
     setEditId(null);
     setConfirmConfig(null);
   };
+  // ✕, backdrop and "Bekor qilish" play the exit animation first.
+  const sheetExit = useClosing(closeSheetNow);
+  const closeSheet = sheetExit.close;
 
   const sheetTitle =
     activeSheet === 'budget'
@@ -1709,7 +1715,7 @@ export default function UzHamyonPrototypeApp({
               </button>
             </div>
           )}
-          {streak && <StreakChip streak={streak} onClick={handleOpenAddTx} />}
+          {streak && <StreakChip streak={streak} onClick={() => setStreakOpen(true)} />}
         </div>
       </div>
 
@@ -1843,6 +1849,17 @@ export default function UzHamyonPrototypeApp({
         />
       )}
 
+      {streakOpen && streak && (
+        <StreakSheet
+          streak={streak}
+          onClose={() => setStreakOpen(false)}
+          onAdd={() => {
+            setStreakOpen(false);
+            handleOpenAddTx();
+          }}
+        />
+      )}
+
       {celebration && (
         <StreakCelebration
           from={celebration.from}
@@ -1869,6 +1886,7 @@ export default function UzHamyonPrototypeApp({
       {activeSheet && (
         <div
           className="uz-sh-overlay"
+          data-closing={sheetExit.closing}
           onClick={(e) => {
             if (e.target === e.currentTarget) closeSheet();
           }}
@@ -2096,10 +2114,7 @@ export default function UzHamyonPrototypeApp({
                 <button
                   type="button"
                   className="uz-sh-plain"
-                  onClick={() => {
-                    setActiveSheet(null);
-                    setConfirmConfig(null);
-                  }}
+                  onClick={closeSheet}
                 >
                   Bekor qilish
                 </button>

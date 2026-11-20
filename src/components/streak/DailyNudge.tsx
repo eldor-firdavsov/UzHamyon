@@ -3,6 +3,7 @@
 import React, { useEffect } from 'react';
 import { Flame } from 'lucide-react';
 import { haptic } from '@/lib/ui/haptics';
+import { useClosing } from '@/lib/ui/useClosing';
 
 const KEY_PREFIX = 'uzh_nudge_';
 
@@ -38,14 +39,15 @@ interface DailyNudgeProps {
  * The + button itself is highlighted by MobileNavBar (highlightAdd) and stays above the dim.
  */
 export default function DailyNudge({ onAccept, onDismiss }: DailyNudgeProps) {
+  const { closing, close } = useClosing(onDismiss);
   useEffect(() => {
     haptic('medium');
   }, []);
 
   return (
     <>
-      <div className="uz-nudge-backdrop" onClick={onDismiss} aria-hidden="true" />
-      <button type="button" className="uz-nudge-bubble" onClick={onAccept}>
+      <div className="uz-nudge-backdrop" data-closing={closing} onClick={close} aria-hidden="true" />
+      <button type="button" className="uz-nudge-bubble" data-closing={closing} onClick={onAccept}>
         <Flame size={22} color="#FFB020" fill="#FFB020" style={{ flex: '0 0 22px' }} aria-hidden="true" />
         <span>Bugungi xarajatni qo‘shamizmi?</span>
       </button>
