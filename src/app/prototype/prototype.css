@@ -1526,3 +1526,11 @@ div.uz-m-empty { cursor: default; color: var(--uz-muted); }
 .uz-ai-send { width: 44px; height: 44px; flex: 0 0 44px; border-radius: 22px; border: 0; background: var(--uz-lime); color: var(--uz-forest); display: grid; place-items: center; cursor: pointer; transition: opacity .15s; }
 .uz-ai-send:disabled { opacity: .45; cursor: default; }
 @media (prefers-reduced-motion: reduce) { .uz-ai-msg, .uz-ai-typing span { animation: none; } }
+.uz-ai-think { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; padding: 6px 4px; font-size: 15px; font-weight: 600; color: var(--uz-muted); }
+.uz-ai-think-ic { width: 28px; height: 28px; border-radius: 9px; background: var(--uz-forest); color: var(--uz-lime); display: grid; place-items: center; animation: uz-pop-in .3s ease-out both, uz-think-pulse 1.4s ease-in-out .3s infinite; }
+.uz-ai-think-secs { font-size: 13px; font-weight: 600; color: #AEB4AA; font-variant-numeric: tabular-nums; }
+.uz-ai-shimmer { background: linear-gradient(90deg, #6B7068 0%, #6B7068 40%, #C9CFC4 50%, #6B7068 60%, #6B7068 100%); background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: uz-shimmer 1.6s linear infinite; }
+.uz-ai-msg b { font-weight: 800; color: var(--uz-forest); }
+@keyframes uz-shimmer { from { background-position: 100% 0 } to { background-position: -150% 0 } }
+@keyframes uz-think-pulse { 0%,100% { transform: scale(1) } 50% { transform: scale(.9) } }
+@media (prefers-reduced-motion: reduce) { .uz-ai-think-ic, .uz-ai-shimmer { animation: none; } .uz-ai-shimmer { color: var(--uz-muted); background: none; } }

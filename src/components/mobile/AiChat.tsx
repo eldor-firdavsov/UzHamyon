@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowUp, PiggyBank, SquarePen, Sparkles, Target, TrendingDown } from 'lucide-react';
+import { ArrowUp, Calculator, PenLine, PiggyBank, Search, SquarePen, Sparkles, Target, TrendingDown } from 'lucide-react';
 import { haptic } from '@/lib/ui/haptics';
 
 interface Msg {
@@ -9,6 +9,8 @@ interface Msg {
   role: 'me' | 'ai';
   text: string;
   error?: boolean;
+  /** Just arrived: reveal it word by word. */
+  fresh?: boolean;
 }
 
 interface AiChatProps {
@@ -23,6 +25,86 @@ const STARTERS = [
   { text: 'Shu oy tejadimmi?', Icon: PiggyBank },
   { text: 'Maqsadimga qachon yetaman?', Icon: Target },
 ];
+
+/** Loading steps, Claude-style: one shimmering line that moves on while the answer is prepared. */
+const STEPS = [
+  { at: 0, label: 'O‘ylayapman', Icon: Sparkles },
+  { at: 1800, label: 'Ma’lumotlaringizni ko‘ryapman', Icon: Search },
+  { at: 4500, label: 'Hisoblayapman', Icon: Calculator },
+  { at: 9000, label: 'Javobni yozyapman', Icon: PenLine },
+];
+
+function Thinking() {
+  const [step, setStep] = useState(0);
+  const [secs, setSecs] = useState(0);
+  useEffect(() => {
+    const start = Date.now();
+    const timer = window.setInterval(() => {
+      const ms = Date.now() - start;
+      let next = 0;
+      STEPS.forEach((s, i) => {
+        if (ms >= s.at) next = i;
+      });
+      setStep(next);
+      setSecs(Math.floor(ms / 1000));
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, []);
+  const { label, Icon } = STEPS[step];
+  return (
+    <div className="uz-ai-think" role="status" aria-live="polite">
+      <span className="uz-ai-think-ic" key={step}><Icon size={16} strokeWidth={2.2} aria-hidden="true" /></span>
+      <span className="uz-ai-shimmer">{label}…</span>
+      {secs >= 6 && <span className="uz-ai-think-secs">{secs}s</span>}
+    </div>
+  );
+}
+
+/** **bold** → <b>; everything else as text. */
+function RichText({ text }: { text: string }) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <>
+      {parts.map((p, i) =>
+        p.startsWith('**') && p.endsWith('**') && p.length > 4 ? <b key={i}>{p.slice(2, -2)}</b> : <React.Fragment key={i}>{p}</React.Fragment>
+      )}
+    </>
+  );
+}
+
+function prefersReducedMotion(): boolean {
+  try {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch {
+    return false;
+  }
+}
+
+/** Reveals a fresh answer word by word (about 0.6 s for a short reply), then shows it whole. */
+function Reveal({ text, onDone }: { text: string; onDone: () => void }) {
+  const [shown, setShown] = useState(0);
+  const words = text.split(/(\s+)/);
+  useEffect(() => {
+    if (prefersReducedMotion()) {
+      onDone();
+      return;
+    }
+    const perTick = Math.max(1, Math.ceil(words.length / 40));
+    const timer = window.setInterval(() => {
+      setShown((n) => {
+        const next = n + perTick;
+        if (next >= words.length) {
+          window.clearInterval(timer);
+          window.setTimeout(onDone, 0);
+        }
+        return next;
+      });
+    }, 16);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return <RichText text={words.slice(0, shown).join('')} />;
+}
 
 let seq = 0;
 const nextId = () => `m${Date.now()}-${seq++}`;
@@ -54,11 +136,14 @@ export default function AiChat({ isAuthenticated, getAuthToken, onAnswered }: Ai
     setBusy(true);
     try {
       const token = await getAuthToken();
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 45000);
       const res = await fetch('/api/ai/advisor', {
+        signal: controller.signal,
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ question, conversationId }),
-      });
+      }).finally(() => window.clearTimeout(timeout));
       const data = (await res.json().catch(() => ({}))) as {
         answer?: string;
         error?: string;
@@ -68,7 +153,7 @@ export default function AiChat({ isAuthenticated, getAuthToken, onAnswered }: Ai
         throw new Error(data.error || 'Javob kelmadi');
       }
       if (data.response?.conversationId) setConversationId(data.response.conversationId);
-      setMessages((m) => [...m, { id: nextId(), role: 'ai', text: data.answer! }]);
+      setMessages((m) => [...m, { id: nextId(), role: 'ai', text: data.answer!.trim(), fresh: true }]);
       haptic('success');
       onAnswered?.();
     } catch {
@@ -95,15 +180,17 @@ export default function AiChat({ isAuthenticated, getAuthToken, onAnswered }: Ai
         ) : (
           messages.map((m) => (
             <div key={m.id} className="uz-ai-msg" data-role={m.role} data-error={m.error ? 'true' : undefined}>
-              {m.text}
+              {m.role === 'ai' && m.fresh ? (
+                <Reveal text={m.text} onDone={() => setMessages((all) => all.map((x) => (x.id === m.id ? { ...x, fresh: false } : x)))} />
+              ) : m.role === 'ai' ? (
+                <RichText text={m.text} />
+              ) : (
+                m.text
+              )}
             </div>
           ))
         )}
-        {busy && (
-          <div className="uz-ai-msg uz-ai-typing" data-role="ai" aria-label="Yozmoqda">
-            <span /><span /><span />
-          </div>
-        )}
+        {busy && <Thinking />}
         <div ref={endRef} />
       </div>
 

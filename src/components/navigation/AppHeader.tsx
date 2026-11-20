@@ -413,7 +413,7 @@ export default function AppHeader({ userEmail, userName, monthSwitcher }: AppHea
                     <div className="my-1 border-t border-[#E5E7EB]" />
 
                     <div className="px-1 pt-0.5">
-                      <LogoutButton className="w-full justify-center text-sm py-2 text-[#DC2626] hover:bg-rose-50 rounded-xl font-medium transition-colors" />
+                      <LogoutButton variant="pill" className="w-full justify-center text-sm py-2 text-[#DC2626] hover:bg-rose-50 rounded-xl font-medium transition-colors" />
                     </div>
                   </div>
                 )}
@@ -428,7 +428,7 @@ export default function AppHeader({ userEmail, userName, monthSwitcher }: AppHea
 
       {/* Accessible Hidden Logout Button for SSR Discovery */}
       <div className="sr-only" aria-hidden="true">
-        <LogoutButton />
+        <LogoutButton variant="pill" />
       </div>
 
       {/* Fast Transaction Entry Modal Available Everywhere */}

@@ -784,11 +784,12 @@ Asosiy vazifalar va javob tuzilishi:
    - Katta xarid uchun reja (mashina, uy va h.k.): Agar narx aytilmagan bo'lsa, aniq bitta savol bilan narxni so'rang (masalan: "Qancha narxdagi mashina olmoqchisiz?").
    - Aniqlashtirish: Agar savol noaniq bo'lsa yoki zarur raqam yetishmasa, bitta qisqa aniqlashtiruvchi savol bering.
 
-2. JAVOB FORMATI (To'liq, mazmunli va ixcham):
-   - 1-jumla: Savolga to'g'ridan-to'g'ri, lo'nda javob.
-   - Keyingi 1–2 jumla: Kerakli hisob-kitob, solishtirish yoki izoh.
-   - Oxirida: Zarur bo'lsa, bitta aniq amaliy tavsiya yoki bitta zarur savol.
-   - Keraksiz kirish jumlalari ("Salom", "Albatta yordam beraman") va takroriy xulosalar yozmang.
+2. JAVOB FORMATI (JUDA QISQA — telefon ekrani uchun):
+   - Ko'pi bilan 2 ta qisqa jumla, jami 220 belgidan oshmasin.
+   - 1-jumla: savolga to'g'ridan-to'g'ri javob, eng muhim raqam bilan (raqamni **qalin** qiling).
+   - 2-jumla (faqat kerak bo'lsa): bitta aniq amaliy maslahat yoki bitta aniqlashtiruvchi savol.
+   - Ro'yxat, sarlavha, kirish so'zlari ("Salom", "Albatta"), takror va xulosa YOZMANG.
+   - Foydalanuvchi batafsil so'rasa, 4 jumlagacha yozish mumkin.
 
 3. FAKTIK ANIKLIK VA VALYUTA:
    - Barcha pul summalarini so'mda (masalan: 6 000 000 soʻm) ko'rsating.
@@ -800,7 +801,7 @@ Asosiy vazifalar va javob tuzilishi:
      * Jamg‘arma maqsadlari yangi boshlangan bo‘lsa, to‘plangan mablag‘ 0 soʻm ekanligini ko‘rsating.
    - Amal muvaffaqiyatsiz bo'lsa yoki bajarilmagan bo'lsa, aslo bajarildi deb da'vo qilmang.
 
-4. TILI: O'zbek tilida tabiiy, to'liq, ravon va grammatik to'g'ri jumlalar bilan yozing. Javobni aslo chala yoki tugallanmagan qoldirmang.`;
+4. TILI: Sodda, ravon o'zbek tilida, grammatik to'g'ri, tugallangan jumlalar bilan yozing.`;
 
     const { sanitizeUserInputForAi } = await import('./actionExtractionEngine.ts');
     const sanitizedQuestion = sanitizeUserInputForAi(question.trim());

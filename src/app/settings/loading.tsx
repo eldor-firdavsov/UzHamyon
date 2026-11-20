@@ -1,41 +1,21 @@
 import React from 'react';
-import { Skeleton } from '@/components/ui/Skeleton';
-import PageContainer from '@/components/bento/PageContainer';
 
 export default function SettingsLoading() {
   return (
-    <div className="min-h-screen bg-[#F1F4F2] text-[#17211B] pb-24 md:pb-14">
-      {/* Header Placeholder */}
-      <div className="h-16 w-full bg-white border-b border-[#DCE4DE]" />
-
-      <PageContainer>
-        <div className="space-y-6">
-          <div className="space-y-1.5 pb-4 border-b border-[#D5DED7]">
-            <Skeleton className="h-8 w-44" />
-            <Skeleton className="h-4 w-72" />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="skeleton-card p-6 space-y-4">
-              <Skeleton className="h-5 w-36" />
-              <div className="space-y-3">
-                <Skeleton className="h-10 w-full rounded-xl" />
-                <Skeleton className="h-10 w-full rounded-xl" />
-                <Skeleton className="h-10 w-full rounded-xl" />
-              </div>
-            </div>
-
-            <div className="skeleton-card p-6 space-y-4">
-              <Skeleton className="h-5 w-40" />
-              <div className="space-y-3">
-                <Skeleton className="h-10 w-full rounded-xl" />
-                <Skeleton className="h-10 w-full rounded-xl" />
-                <Skeleton className="h-10 w-32 rounded-xl" />
-              </div>
-            </div>
-          </div>
+    <div className="min-h-screen bg-[#F2F4EF]" aria-busy="true" aria-label="Yuklanmoqda">
+      <div className="w-full max-w-xl mx-auto px-4 pt-4 flex flex-col gap-5 animate-pulse">
+        <div className="flex items-center gap-2">
+          <div className="h-10 w-10 rounded-full bg-white" />
+          <div className="h-8 w-40 rounded-lg bg-[#E6EAE2]" />
         </div>
-      </PageContainer>
+        <div className="flex flex-col items-center gap-2">
+          <div className="h-20 w-20 rounded-full bg-[#E6EAE2]" />
+          <div className="h-6 w-44 rounded-lg bg-[#E6EAE2]" />
+        </div>
+        <div className="h-[105px] rounded-[20px] bg-white" />
+        <div className="h-[157px] rounded-[20px] bg-white" />
+        <div className="h-[52px] rounded-[20px] bg-white" />
+      </div>
     </div>
   );
 }

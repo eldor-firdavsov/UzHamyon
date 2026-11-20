@@ -7,8 +7,11 @@ import { clearAllCache } from '@/lib/cache/clientCache';
 
 export default function LogoutButton({
   className = '',
+  variant = 'row',
 }: {
   className?: string;
+  /** 'row': red list row (settings); 'pill': small bordered button (headers). */
+  variant?: 'row' | 'pill';
 }) {
   const [isPending, startTransition] = useTransition();
 
@@ -18,6 +21,20 @@ export default function LogoutButton({
       await logoutAction();
     });
   };
+
+  if (variant === 'row') {
+    return (
+      <button
+        id="logout-button"
+        type="button"
+        onClick={handleLogout}
+        disabled={isPending}
+        className={`w-full min-h-[52px] px-4 text-left text-[16px] font-medium text-[#C62F21] disabled:opacity-60 cursor-pointer ${className}`}
+      >
+        {isPending ? 'Chiqilmoqda…' : 'Hisobdan chiqish'}
+      </button>
+    );
+  }
 
   return (
     <button

@@ -1,17 +1,15 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import { ChevronLeft, ChevronRight, Download, LayoutGrid, Send, Target } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
-import AppHeader from '@/components/navigation/AppHeader';
 import ProfileForm from '@/components/ProfileForm';
 import LogoutButton from '@/components/LogoutButton';
-import {
-  User,
-  FileSpreadsheet,
-  Layers,
-  Wallet,
-  ChevronRight,
-  ShieldCheck,
-} from 'lucide-react';
+
+const LINKS = [
+  { href: '/categories', label: 'Kategoriyalar', bg: '#7A5AE0', Icon: LayoutGrid },
+  { href: '/imports', label: 'Import', bg: '#2457C5', Icon: Download },
+  { href: '/analytics', label: 'Limitlar va maqsadlar', bg: '#3E8E0A', Icon: Target },
+];
 
 export const metadata = {
   title: 'Sozlamalar — UzHamyon',
@@ -46,173 +44,58 @@ export default async function SettingsPage() {
     : '';
   const fullName = `${firstName} ${lastName}`.trim() || formattedEmailName || 'Foydalanuvchi';
 
-  // Extract initials (e.g. Eldor Firdavsov -> EF)
-  const initials = firstName && lastName
-    ? `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase()
-    : fullName.slice(0, 2).toUpperCase() || 'UZ';
+  const initial = fullName.charAt(0).toUpperCase() || 'U';
+  const viaTelegram = email.startsWith('tg_') && email.endsWith('@telegram.uzhamyon.uz');
 
   return (
-    <div className="min-h-screen bg-[#F7F8F5] text-[#171B16] pb-44 md:pb-16 antialiased">
-      <AppHeader userEmail={user.email} userName={fullName} />
-
-      <main className="w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10 space-y-6 sm:space-y-8">
-        {/* Breadcrumb Trail & Page Title */}
-        <div className="space-y-2">
-          <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs font-semibold text-[#697168]">
-            <Link href="/dashboard" className="hover:text-[#171B16] transition-colors">
-              Bosh sahifa
-            </Link>
-            <ChevronRight className="h-3.5 w-3.5 text-[#959E94]" />
-            <span className="text-[#171B16]">Sozlamalar</span>
-          </nav>
-
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#171B16] pt-1">
-            Hisob sozlamalari
-          </h1>
+    <div className="min-h-screen bg-[#F2F4EF] text-[#111511] antialiased">
+      <main className="w-full max-w-xl mx-auto px-4 pt-4 pb-16 flex flex-col gap-5">
+        <div className="flex items-center gap-2">
+          <Link
+            href="/dashboard"
+            aria-label="Orqaga"
+            className="h-10 w-10 rounded-full bg-white text-[#3B403A] grid place-items-center shrink-0"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </Link>
+          <h1 className="text-[28px] font-extrabold tracking-tight">Sozlamalar</h1>
+          <span className="sr-only">Hisob sozlamalari</span>
         </div>
 
-        {/* 1. Profile Hero & Edit Card */}
-        <section className="bg-white rounded-3xl p-5 sm:p-8 border border-[#E8EBE5] shadow-xs space-y-6">
-          {/* User Banner */}
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-5 pb-6 border-b border-[#F0F2ED]">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-[#163300] text-[#9FE870] font-extrabold text-xl sm:text-2xl flex items-center justify-center shrink-0 shadow-xs ring-4 ring-[#9FE870]/20">
-              {initials}
-            </div>
-            <div className="min-w-0 flex-1 space-y-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-lg sm:text-xl font-bold text-[#171B16] truncate">
-                  {fullName}
-                </h2>
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#26834A] bg-[#EDF7F0] border border-[#26834A]/20 px-2 py-0.5 rounded-full shrink-0">
-                  <ShieldCheck className="h-3 w-3" />
-                  <span>Tasdiqlangan</span>
-                </span>
-              </div>
-              <p className="text-xs sm:text-sm text-[#697168] break-all">
-                {email.startsWith('tg_') && email.endsWith('@telegram.uzhamyon.uz')
-                  ? 'Telegram hisobi orqali ulangan'
-                  : email}
-              </p>
-              <div className="pt-0.5">
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#163300] bg-[#F0F9E9] px-2.5 py-0.5 rounded-md">
-                  UzHamyon Foydalanuvchisi
-                </span>
-              </div>
-            </div>
+        <div className="flex flex-col items-center gap-1.5 pt-1">
+          <div className="h-20 w-20 rounded-full bg-[#163300] text-[#9FE870] grid place-items-center text-[32px] font-extrabold">
+            {initial}
           </div>
-
-          {/* Edit Form */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <User className="h-4 w-4 text-[#163300]" />
-              <h3 className="text-sm font-bold text-[#171B16] uppercase tracking-wider">
-                Shaxsiy ma’lumotlarni tahrirlash
-              </h3>
+          <div className="text-[22px] font-extrabold tracking-tight text-center">{fullName}</div>
+          {viaTelegram ? (
+            <div className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#2AABEE]">
+              <Send className="h-3.5 w-3.5" aria-hidden="true" />
+              Telegram
             </div>
+          ) : (
+            <div className="text-[13px] text-[#6B7068] break-all">{email}</div>
+          )}
+        </div>
 
-            <ProfileForm
-              initialFirstName={firstName}
-              initialLastName={lastName}
-              email={email}
-            />
-          </div>
-        </section>
+        <ProfileForm initialFirstName={firstName} initialLastName={lastName} email={email} />
 
-        {/* 2. Quick Action Navigation Hub */}
-        <section className="space-y-3">
-          <h2 className="text-base sm:text-lg font-bold text-[#171B16]">
-            Boshqaruv va bo‘limlar
-          </h2>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
-            <Link
-              href="/categories"
-              className="bg-white rounded-3xl p-4 sm:p-5 border border-[#E8EBE5] hover:border-[#163300]/30 hover:shadow-card transition-all flex items-center justify-between group cursor-pointer"
-            >
-              <div className="flex items-center gap-3.5 min-w-0">
-                <div className="p-2.5 rounded-2xl bg-[#F0F9E9] text-[#163300] group-hover:scale-105 transition-transform shrink-0">
-                  <Layers className="h-5 w-5" />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="text-sm font-bold text-[#171B16] truncate">
-                    Kategoriyalarni sozlash
-                  </h3>
-                  <p className="text-xs text-[#697168] truncate mt-0.5">
-                    Daromad va xarajat toifalarini boshqarish
-                  </p>
-                </div>
-              </div>
-              <div className="h-8 w-8 rounded-xl bg-[#F7F8F5] flex items-center justify-center text-[#697168] group-hover:text-[#163300] group-hover:bg-[#F0F9E9] transition-colors shrink-0">
-                <ChevronRight className="h-4 w-4" />
-              </div>
+        <div className="uz-m-list">
+          {LINKS.map(({ href, label, bg, Icon }) => (
+            <Link key={href} href={href} className="uz-m-row uz-p-link">
+              <span className="uz-p-link-ic" style={{ background: bg }}>
+                <Icon size={17} strokeWidth={2.2} />
+              </span>
+              <span className="uz-m-row-main">
+                <span className="uz-p-link-label">{label}</span>
+              </span>
+              <ChevronRight className="h-4 w-4 text-[#AEB4AA]" aria-hidden="true" />
             </Link>
+          ))}
+        </div>
 
-            <Link
-              href="/imports"
-              className="bg-white rounded-3xl p-4 sm:p-5 border border-[#E8EBE5] hover:border-[#163300]/30 hover:shadow-card transition-all flex items-center justify-between group cursor-pointer"
-            >
-              <div className="flex items-center gap-3.5 min-w-0">
-                <div className="p-2.5 rounded-2xl bg-[#EBF2FF] text-[#2563EB] group-hover:scale-105 transition-transform shrink-0">
-                  <FileSpreadsheet className="h-5 w-5" />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="text-sm font-bold text-[#171B16] truncate">
-                    Bank ko‘chirmalarini import qilish
-                  </h3>
-                  <p className="text-xs text-[#697168] truncate mt-0.5">
-                    Excel, CSV va 1C ko‘chirmalarini yuklash
-                  </p>
-                </div>
-              </div>
-              <div className="h-8 w-8 rounded-xl bg-[#F7F8F5] flex items-center justify-center text-[#697168] group-hover:text-[#163300] group-hover:bg-[#F0F9E9] transition-colors shrink-0">
-                <ChevronRight className="h-4 w-4" />
-              </div>
-            </Link>
-
-            <Link
-              href="/budgets"
-              className="bg-white rounded-3xl p-4 sm:p-5 border border-[#E8EBE5] hover:border-[#163300]/30 hover:shadow-card transition-all flex items-center justify-between group cursor-pointer"
-            >
-              <div className="flex items-center gap-3.5 min-w-0">
-                <div className="p-2.5 rounded-2xl bg-[#FEF7EC] text-[#D97706] group-hover:scale-105 transition-transform shrink-0">
-                  <Wallet className="h-5 w-5" />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="text-sm font-bold text-[#171B16] truncate">
-                    Jamg‘arma va budjetlar
-                  </h3>
-                  <p className="text-xs text-[#697168] truncate mt-0.5">
-                    Oylik xarajat limitlari va moliyaviy maqsadlar
-                  </p>
-                </div>
-              </div>
-              <div className="h-8 w-8 rounded-xl bg-[#F7F8F5] flex items-center justify-center text-[#697168] group-hover:text-[#163300] group-hover:bg-[#F0F9E9] transition-colors shrink-0">
-                <ChevronRight className="h-4 w-4" />
-              </div>
-            </Link>
-
-
-          </div>
-        </section>
-
-        {/* 3. Danger Zone / Security & Session */}
-        <section className="bg-white rounded-3xl p-5 sm:p-8 border border-[#E8EBE5] shadow-xs space-y-4">
-          <div className="space-y-1">
-            <h2 className="text-base sm:text-lg font-bold text-[#171B16]">
-              Xavfsizlik va tizimdan chiqish
-            </h2>
-            <p className="text-xs sm:text-sm text-[#697168]">
-              Joriy qurilmadagi faol sessiyani yakunlash yoki hisobdan chiqish
-            </p>
-          </div>
-
-          <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-t border-[#F0F2ED]">
-            <div className="text-xs text-[#697168]">
-              Sessiyani yakunlaganingizdan so‘ng qayta kirish uchun Telegram hisobingizdan foydalanasiz.
-            </div>
-            <LogoutButton className="w-full sm:w-auto justify-center" />
-          </div>
-        </section>
+        <div className="uz-m-list">
+          <LogoutButton />
+        </div>
       </main>
     </div>
   );
