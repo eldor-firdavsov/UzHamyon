@@ -3,30 +3,21 @@
 import React, { useState } from 'react';
 import {
   ArrowRight,
-  ArrowLeft,
-  Check,
-  CheckCircle2,
-  Sparkles,
-  ShieldCheck,
-  User,
-  Loader2,
-  Target,
-  Compass,
-  TrendingUp,
-  Wallet,
   BarChart3,
+  Check,
+  ChevronLeft,
+  Flame,
+  Loader2,
   PiggyBank,
-  TrendingDown,
-  Search,
-  Shield,
   Plane,
   Scale,
+  Search,
+  Shield,
+  Sparkles,
   Sprout,
-  HelpCircle,
-  Settings,
-  PartyPopper,
+  TrendingDown,
+  Zap,
 } from 'lucide-react';
-import UzHamyonLogo from '@/components/brand/UzHamyonLogo';
 import { completeOnboardingAction } from '@/app/onboarding/actions';
 import { createClient } from '@/lib/supabase/client';
 
@@ -36,14 +27,14 @@ interface TelegramOnboardingProps {
 }
 
 const TELEGRAM_FINANCIAL_GOALS = [
-  { id: 'track_expenses', label: 'Xarajatlarimni nazorat qilish', icon: BarChart3 },
-  { id: 'save_more', label: 'Ko‘proq pul jamg‘arish', icon: PiggyBank },
-  { id: 'reduce_debt', label: 'Qarzlarimni kamaytirish', icon: TrendingDown },
-  { id: 'understand_flow', label: 'Pulim qayerga ketayotganini tushunish', icon: Search },
-  { id: 'emergency_fund', label: 'Favqulodda vaziyatlar uchun zaxira yaratish', icon: Shield },
-  { id: 'big_purchase', label: 'Katta xarid yoki safar uchun pul yig‘ish', icon: Plane },
-  { id: 'balance_flow', label: 'Daromad va xarajatlarimni muvozanatlash', icon: Scale },
-  { id: 'better_habits', label: 'Moliyaviy odatlarimni yaxshilash', icon: Sprout },
+  { id: 'track_expenses', label: 'Xarajatni kuzatish', icon: BarChart3 },
+  { id: 'save_more', label: 'Pul jamg‘arish', icon: PiggyBank },
+  { id: 'reduce_debt', label: 'Qarzdan chiqish', icon: TrendingDown },
+  { id: 'understand_flow', label: 'Pul qayerga ketadi', icon: Search },
+  { id: 'emergency_fund', label: 'Zaxira yig‘ish', icon: Shield },
+  { id: 'big_purchase', label: 'Katta xarid, safar', icon: Plane },
+  { id: 'balance_flow', label: 'Kirim-chiqim muvozanati', icon: Scale },
+  { id: 'better_habits', label: 'Yaxshi odatlar', icon: Sprout },
 ];
 
 /** Re-creates the session from Telegram initData. True when a fresh session was set. */
@@ -75,28 +66,27 @@ export default function TelegramOnboarding({
 }: TelegramOnboardingProps) {
   const [step, setStep] = useState<number>(1);
   const [preferredName, setPreferredName] = useState<string>(initialFirstName || '');
-  const [selectedGoals, setSelectedGoals] = useState<string[]>(['track_expenses', 'save_more']);
-  const [noSpecificGoal, setNoSpecificGoal] = useState<boolean>(false);
+  const [selectedGoals, setSelectedGoals] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [dir, setDir] = useState<'fwd' | 'back'>('fwd');
 
   const toggleGoal = (id: string) => {
-    if (noSpecificGoal) setNoSpecificGoal(false);
     setSelectedGoals((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
   };
 
-  const handleSelectNoSpecificGoal = () => {
-    setNoSpecificGoal(true);
-    setSelectedGoals([]);
+  const go = (next: number) => {
+    setDir(next > step ? 'fwd' : 'back');
+    setStep(next);
   };
 
   const handleComplete = async () => {
     setIsSubmitting(true);
     setErrorMsg(null);
 
-    const goalsToSave = noSpecificGoal ? ['no_specific_goal'] : selectedGoals;
+    const goalsToSave = selectedGoals.length ? selectedGoals : ['no_specific_goal'];
 
     try {
       const input = {
@@ -170,355 +160,111 @@ export default function TelegramOnboarding({
     }
   };
 
+  const fromTelegram = !!initialFirstName && preferredName === initialFirstName;
+
   return (
-    <div className="min-h-screen bg-[#F7F8F5] text-[#171B16] flex flex-col justify-between p-4 sm:p-6 max-w-lg mx-auto w-full antialiased">
-      {/* Header with Logo and Progress Dots */}
-      <header className="pt-2 pb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <UzHamyonLogo variant="icon" size="sm" />
-          <span className="font-extrabold text-base text-[#171B16] tracking-tight">UzHamyon</span>
-        </div>
+    <div className="uz-ob" data-step={step}>
+      {step > 1 && (
+        <header className="uz-ob-top">
+          <button type="button" className="uz-ob-back" aria-label="Orqaga" onClick={() => go(step - 1)} disabled={isSubmitting}>
+            <ChevronLeft size={24} strokeWidth={2.4} />
+          </button>
+          <div className="uz-ob-dots" aria-label={`${step - 1}-qadam, jami 2`}>
+            <i data-on={step >= 2} />
+            <i data-on={step >= 3} />
+          </div>
+          <span style={{ width: 44 }} aria-hidden="true" />
+        </header>
+      )}
 
-        {/* 5-step progress pill */}
-        <div className="flex items-center gap-1.5 bg-white border border-[#E8EBE5] px-2.5 py-1 rounded-full shadow-2xs">
-          {[1, 2, 3, 4, 5].map((s) => (
-            <div
-              key={s}
-              className={`h-1.5 rounded-full transition-all duration-300 ${
-                s === step
-                  ? 'w-5 bg-[#163300]'
-                  : s < step
-                  ? 'w-2 bg-[#9FE870]'
-                  : 'w-2 bg-[#E8EBE5]'
-              }`}
-            />
-          ))}
-        </div>
-      </header>
-
-      {/* Main Container */}
-      <main className="flex-1 flex flex-col justify-center py-4">
-        {/* SCREEN 1: Welcome */}
+      <main key={step} className="uz-ob-step" data-dir={dir}>
         {step === 1 && (
-          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E8EBE5] shadow-xs space-y-6 animate-in fade-in duration-200">
-            <div className="w-16 h-16 rounded-2xl bg-[#F0F9E9] text-[#163300] flex items-center justify-center shadow-2xs border border-[#9FE870]/40">
-              <Sprout className="w-8 h-8 stroke-[2.2]" />
+          <>
+            <div className="uz-ob-hero">
+              <span className="uz-ob-mark" aria-hidden="true">
+                <span />
+              </span>
+              <h1>Pulingiz nazoratda</h1>
+              <p>Har kuni bir necha soniya.</p>
             </div>
-
-            <div className="space-y-2">
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#171B16]">
-                Moliyaviy tartibni bugundan boshlang
-              </h1>
-              <p className="text-sm text-[#697168] leading-relaxed">
-                UzHamyon sizga pulingizni nazorat qilish, xarajatlaringizni tushunish va maqsadlaringiz sari harakat qilishda yordam beradi.
-              </p>
+            <ul className="uz-ob-feats">
+              <li><span><Zap size={20} strokeWidth={2.4} /></span>Bir bosishda yozing</li>
+              <li><span><Flame size={20} strokeWidth={2.4} /></span>Har kuni seriyani o‘stiring</li>
+              <li><span><Sparkles size={20} strokeWidth={2.4} /></span>AI qisqa maslahat beradi</li>
+            </ul>
+            <div className="uz-ob-foot">
+              <button type="button" className="uz-ob-cta" data-tone="lime" onClick={() => go(2)}>
+                Boshlash <ArrowRight size={20} strokeWidth={2.6} />
+              </button>
+              <p className="uz-ob-note">Telegram orqali kirasiz — parol kerak emas</p>
             </div>
-
-            <div className="space-y-2.5 pt-2 border-t border-[#F0F2ED] text-xs text-[#697168]">
-              <div className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-[#26834A] shrink-0" />
-                <span>Telegram orqali avtomatik xavfsiz ulanish</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-[#26834A] shrink-0" />
-                <span>Email yoki parol kiritish talab qilinmaydi</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-[#26834A] shrink-0" />
-                <span>Shaxsiy moliyaviy ma’lumotlar to‘liq himoyalangan</span>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setStep(2)}
-              className="w-full min-h-[50px] inline-flex items-center justify-center gap-2 rounded-2xl bg-[#163300] hover:bg-[#204400] px-6 py-3 text-sm font-bold text-[#9FE870] transition-all shadow-xs active:scale-[0.98] cursor-pointer"
-            >
-              <span>Davom etish</span>
-              <ArrowRight className="h-4 w-4" />
-            </button>
-          </div>
+          </>
         )}
 
-        {/* SCREEN 2: Preferred Name */}
         {step === 2 && (
-          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E8EBE5] shadow-xs space-y-6 animate-in fade-in duration-200">
-            <div className="w-14 h-14 rounded-2xl bg-[#F0F9E9] text-[#163300] flex items-center justify-center shadow-2xs border border-[#9FE870]/40">
-              <User className="w-7 h-7 stroke-[2.2]" />
+          <>
+            <div className="uz-ob-title">
+              <h1>Ismingiz?</h1>
+              <p>{fromTelegram ? 'Telegramdan olindi. O‘zgartirish mumkin.' : 'Shunday murojaat qilamiz.'}</p>
             </div>
-
-            <div className="space-y-1.5">
-              <h2 className="text-2xl font-extrabold tracking-tight text-[#171B16]">
-                Sizga qanday murojaat qilaylik?
-              </h2>
-              <p className="text-xs sm:text-sm text-[#697168]">
-                Telegram profilingizdagi ism kiritildi. Xohlasangiz tahrirlashingiz mumkin.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="telegram-preferred-name" className="block text-xs font-bold uppercase tracking-wider text-[#697168]">
-                Ismingiz
-              </label>
-              <div className="relative">
-                <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#959E94]" />
-                <input
-                  id="telegram-preferred-name"
-                  type="text"
-                  required
-                  value={preferredName}
-                  onChange={(e) => setPreferredName(e.target.value)}
-                  placeholder="Ismingizni kiriting"
-                  className="w-full min-h-[48px] rounded-2xl border border-[#E8EBE5] bg-white py-3 pl-10 pr-4 text-sm font-semibold text-[#171B16] placeholder-[#959E94] focus:border-[#163300] focus:outline-none focus:ring-2 focus:ring-[#9FE870]/40 transition-all shadow-2xs"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setStep(1)}
-                className="min-h-[48px] px-4 rounded-2xl border border-[#E8EBE5] bg-white text-[#697168] hover:text-[#171B16] font-bold text-sm transition-all"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setStep(3)}
-                disabled={!preferredName.trim()}
-                className="flex-1 min-h-[48px] inline-flex items-center justify-center gap-2 rounded-2xl bg-[#163300] hover:bg-[#204400] px-6 py-3 text-sm font-bold text-[#9FE870] transition-all shadow-xs active:scale-[0.98] disabled:opacity-50 cursor-pointer"
-              >
-                <span>Davom etish</span>
-                <ArrowRight className="h-4 w-4" />
+            <input
+              className="uz-ob-input uz-big-input"
+              value={preferredName}
+              maxLength={40}
+              autoComplete="given-name"
+              aria-label="Ismingiz"
+              placeholder="Ism"
+              onChange={(e) => setPreferredName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && preferredName.trim() && go(3)}
+            />
+            <div className="uz-ob-foot">
+              <button type="button" className="uz-ob-cta" onClick={() => go(3)} disabled={!preferredName.trim()}>
+                Davom etish
               </button>
             </div>
-          </div>
+          </>
         )}
 
-        {/* SCREEN 3: Financial Goals */}
         {step === 3 && (
-          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E8EBE5] shadow-xs space-y-5 animate-in fade-in duration-200">
-            <div className="space-y-1">
-              <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-[#171B16]">
-                UzHamyon yordamida nimaga erishmoqchisiz?
-              </h2>
-              <p className="text-xs text-[#697168] leading-relaxed">
-                O‘zingiz uchun muhim bo‘lgan maqsadlarni tanlang. Bu bizga sizga mosroq tajriba taqdim etishga yordam beradi.
-              </p>
+          <>
+            <div className="uz-ob-title">
+              <h1>Nima uchun kerak?</h1>
+              <p>Ixtiyoriy. Bir nechtasini tanlang.</p>
             </div>
-
-            <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
-              {TELEGRAM_FINANCIAL_GOALS.map((goal) => {
-                const isSelected = selectedGoals.includes(goal.id);
-                const GoalIcon = goal.icon;
+            <div className="uz-ob-goals">
+              {TELEGRAM_FINANCIAL_GOALS.map((goal, i) => {
+                const on = selectedGoals.includes(goal.id);
+                const Icon = goal.icon;
                 return (
                   <button
                     key={goal.id}
                     type="button"
+                    className="uz-ob-goal"
+                    aria-pressed={on}
+                    style={{ animationDelay: `${60 + i * 35}ms` }}
                     onClick={() => toggleGoal(goal.id)}
-                    className={`w-full text-left p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 cursor-pointer ${
-                      isSelected
-                        ? 'border-[#163300] bg-[#F0F9E9] text-[#163300] shadow-2xs'
-                        : 'border-[#E8EBE5] bg-white text-[#171B16] hover:border-[#163300]/30'
-                    }`}
+                    disabled={isSubmitting}
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div
-                        className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border transition-colors ${
-                          isSelected
-                            ? 'bg-[#163300] text-[#9FE870] border-[#163300]'
-                            : 'bg-[#F0F9E9] text-[#163300] border-[#9FE870]/40'
-                        }`}
-                      >
-                        <GoalIcon className="w-4 h-4 stroke-[2.2]" />
-                      </div>
-                      <span className="text-xs sm:text-sm font-semibold truncate">{goal.label}</span>
-                    </div>
-                    <div
-                      className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 border ${
-                        isSelected
-                          ? 'bg-[#163300] border-[#163300] text-[#9FE870]'
-                          : 'border-[#E8EBE5] bg-white'
-                      }`}
-                    >
-                      {isSelected && <Check className="h-3 w-3 stroke-[3]" />}
-                    </div>
+                    <span className="uz-ob-goal-ic"><Icon size={22} strokeWidth={2.2} /></span>
+                    <span className="uz-ob-goal-tx">{goal.label}</span>
+                    <span className="uz-ob-goal-ck" aria-hidden="true">{on && <Check size={14} strokeWidth={3.2} />}</span>
                   </button>
                 );
               })}
-
-              {/* Exclusive "No specific goal" option */}
-              <button
-                type="button"
-                onClick={handleSelectNoSpecificGoal}
-                className={`w-full text-left p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-3 cursor-pointer ${
-                  noSpecificGoal
-                    ? 'border-[#163300] bg-[#F0F9E9] text-[#163300] shadow-2xs'
-                    : 'border-[#E8EBE5] bg-white text-[#697168] hover:border-[#163300]/30'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border transition-colors ${
-                      noSpecificGoal
-                        ? 'bg-[#163300] text-[#9FE870] border-[#163300]'
-                        : 'bg-[#F7F8F5] text-[#697168] border-[#E8EBE5]'
-                    }`}
-                  >
-                    <HelpCircle className="w-4 h-4 stroke-[2]" />
-                  </div>
-                  <span className="text-xs sm:text-sm font-semibold">Hozircha aniq maqsadim yo‘q</span>
-                </div>
-                <div
-                  className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 border ${
-                    noSpecificGoal
-                      ? 'bg-[#163300] border-[#163300] text-[#9FE870]'
-                      : 'border-[#E8EBE5] bg-white'
-                  }`}
-                >
-                  {noSpecificGoal && <Check className="h-3 w-3 stroke-[3]" />}
-                </div>
+            </div>
+            <div className="uz-ob-foot">
+              {errorMsg && <div className="uz-qa-error" role="alert">{errorMsg}</div>}
+              <button type="button" className="uz-ob-cta" onClick={handleComplete} disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <><Loader2 size={20} className="animate-spin" /> Tayyorlanmoqda…</>
+                ) : (
+                  'Boshlash'
+                )}
               </button>
             </div>
-
-            <div className="flex items-center gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setStep(2)}
-                className="min-h-[48px] px-4 rounded-2xl border border-[#E8EBE5] bg-white text-[#697168] hover:text-[#171B16] font-bold text-sm transition-all"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setStep(4)}
-                disabled={selectedGoals.length === 0 && !noSpecificGoal}
-                className="flex-1 min-h-[48px] inline-flex items-center justify-center gap-2 rounded-2xl bg-[#163300] hover:bg-[#204400] px-6 py-3 text-sm font-bold text-[#9FE870] transition-all shadow-xs active:scale-[0.98] disabled:opacity-50 cursor-pointer"
-              >
-                <span>Davom etish</span>
-                <ArrowRight className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* SCREEN 4: Optional Financial Preferences */}
-        {step === 4 && (
-          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E8EBE5] shadow-xs space-y-6 animate-in fade-in duration-200">
-            <div className="w-14 h-14 rounded-2xl bg-[#F0F9E9] text-[#163300] flex items-center justify-center shadow-2xs border border-[#9FE870]/40">
-              <Settings className="w-7 h-7 stroke-[2.2]" />
-            </div>
-
-            <div className="space-y-1.5">
-              <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-[#171B16]">
-                Ilova parametrlari
-              </h2>
-              <p className="text-xs sm:text-sm text-[#697168]">
-                Siz uchun standart qulay parametrlar avtomatik belgilandi. Istalgan vaqtda sozlamalardan o‘zgartirishingiz mumkin.
-              </p>
-            </div>
-
-            <div className="space-y-3 divide-y divide-[#F0F2ED]">
-              <div className="pt-2 flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-bold text-[#171B16]">Asosiy valyuta</div>
-                  <div className="text-[11px] text-[#697168]">O‘zbek so‘mi</div>
-                </div>
-                <span className="px-3 py-1 rounded-xl bg-[#163300] text-[#9FE870] font-bold text-xs">
-                  UZS — So‘m
-                </span>
-              </div>
-
-              <div className="pt-3 flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-bold text-[#171B16]">Hisobot davri</div>
-                  <div className="text-[11px] text-[#697168]">Har oyning 1-sanasidan</div>
-                </div>
-                <span className="text-xs font-semibold text-[#171B16] bg-[#F7F8F5] border border-[#E8EBE5] px-2.5 py-1 rounded-xl">
-                  Oylik
-                </span>
-              </div>
-
-              <div className="pt-3 flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-bold text-[#171B16]">AI Maslahatchi</div>
-                  <div className="text-[11px] text-[#697168]">UzHamyon AI modeli</div>
-                </div>
-                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#26834A] bg-[#EDF7F0] border border-[#26834A]/20 px-2.5 py-0.5 rounded-full">
-                  <CheckCircle2 className="h-3 w-3" />
-                  <span>Faol</span>
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setStep(3)}
-                className="min-h-[48px] px-4 rounded-2xl border border-[#E8EBE5] bg-white text-[#697168] hover:text-[#171B16] font-bold text-sm transition-all"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setStep(5)}
-                className="flex-1 min-h-[48px] inline-flex items-center justify-center gap-2 rounded-2xl bg-[#163300] hover:bg-[#204400] px-6 py-3 text-sm font-bold text-[#9FE870] transition-all shadow-xs active:scale-[0.98] cursor-pointer"
-              >
-                <span>Davom etish</span>
-                <ArrowRight className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* SCREEN 5: Completion */}
-        {step === 5 && (
-          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#E8EBE5] shadow-xs space-y-6 text-center animate-in fade-in duration-200">
-            <div className="w-20 h-20 rounded-3xl bg-[#F0F9E9] text-[#163300] flex items-center justify-center shadow-xs border border-[#9FE870]/50 mx-auto">
-              <PartyPopper className="w-10 h-10 stroke-[2.2]" />
-            </div>
-
-            <div className="space-y-2">
-              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#171B16]">
-                Hammasi tayyor!
-              </h2>
-              <p className="text-xs sm:text-sm text-[#697168] leading-relaxed max-w-sm mx-auto">
-                Endi UzHamyon orqali daromad va xarajatlaringizni kuzatishingiz, moliyaviy holatingizni tahlil qilishingiz va maqsadlaringiz sari harakat qilishingiz mumkin.
-              </p>
-            </div>
-
-            {errorMsg && (
-              <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs text-left">
-                {errorMsg}
-              </div>
-            )}
-
-            <button
-              type="button"
-              onClick={handleComplete}
-              disabled={isSubmitting}
-              className="w-full min-h-[50px] inline-flex items-center justify-center gap-2.5 rounded-2xl bg-[#163300] hover:bg-[#204400] px-6 py-3.5 text-sm font-bold text-[#9FE870] transition-all shadow-xs active:scale-[0.98] disabled:opacity-50 cursor-pointer"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin text-[#9FE870]" />
-                  <span>Boshlanmoqda...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4 text-[#9FE870]" />
-                  <span>UzHamyon’ni boshlash</span>
-                </>
-              )}
-            </button>
-          </div>
+          </>
         )}
       </main>
-
-      {/* Footer */}
-      <footer className="text-center py-2 text-[11px] text-[#959E94]">
-        UzHamyon — O‘zbekiston uchun aqlli shaxsiy moliya
-      </footer>
     </div>
   );
 }

@@ -1786,3 +1786,54 @@ nav[aria-label="Mobil navigatsiya"] > button.liquid-glass-primary {
 .uz-sh, .uz-qa-sheet { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 28px); }
 .uz-sk-btn, .uz-cele-btn { height: 58px; margin-top: 10px; padding: 0 24px; font-size: 18px; }
 .uz-cele { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 36px); }
+
+/* ══════════════════════════════════════════════════════════
+   Onboarding (Telegram) — 3 screens, same phone language
+   ══════════════════════════════════════════════════════════ */
+.uz-ob { min-height: 100dvh; box-sizing: border-box; display: flex; flex-direction: column; background: var(--uz-ground); color: var(--uz-ink); font-family: var(--font-inter, Inter), system-ui, -apple-system, sans-serif; padding: calc(env(safe-area-inset-top, 0px) + 12px) 20px calc(env(safe-area-inset-bottom, 0px) + 28px); max-width: 520px; margin: 0 auto; width: 100%; -webkit-font-smoothing: antialiased; }
+.uz-ob[data-step="1"] { max-width: none; background: var(--uz-forest); color: #fff; }
+.uz-ob[data-step="1"] > .uz-ob-step { max-width: 480px; margin: 0 auto; width: 100%; }
+.uz-ob-top { display: flex; align-items: center; justify-content: space-between; height: 48px; }
+.uz-ob-back { width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--uz-well); color: var(--uz-ink); display: grid; place-items: center; cursor: pointer; transition: transform .15s; }
+.uz-ob-back:active { transform: scale(.92); }
+.uz-ob-dots { display: flex; gap: 6px; }
+.uz-ob-dots i { width: 8px; height: 8px; border-radius: 4px; background: #CFD5C9; transition: width .3s cubic-bezier(.2,.8,.2,1), background .3s; }
+.uz-ob-dots i[data-on="true"] { width: 24px; background: var(--uz-forest); }
+.uz-ob-step { flex: 1; display: flex; flex-direction: column; gap: 28px; animation: uz-ob-in .38s cubic-bezier(.2,.8,.2,1) both; }
+.uz-ob-step[data-dir="back"] { animation-name: uz-ob-in-back; }
+.uz-ob-hero { margin-top: 12vh; display: flex; flex-direction: column; gap: 14px; }
+.uz-ob-mark { width: 72px; height: 72px; border-radius: 22px; background: var(--uz-lime); display: grid; place-items: center; margin-bottom: 10px; animation: uz-flame .7s cubic-bezier(.2,.9,.3,1.3) .1s both; }
+.uz-ob-mark span { width: 26px; height: 26px; border-radius: 50%; background: var(--uz-forest); }
+.uz-ob-hero h1 { margin: 0; color: #fff; font-size: 44px; line-height: 1.02; font-weight: 800; letter-spacing: -.035em; }
+.uz-ob-hero p { margin: 0; font-size: 18px; color: rgba(255,255,255,.66); }
+.uz-ob-feats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.uz-ob-feats li { display: flex; align-items: center; gap: 14px; font-size: 17px; font-weight: 600; animation: uz-ob-in .45s cubic-bezier(.2,.8,.2,1) both; }
+.uz-ob-feats li:nth-child(1) { animation-delay: .18s } .uz-ob-feats li:nth-child(2) { animation-delay: .26s } .uz-ob-feats li:nth-child(3) { animation-delay: .34s }
+.uz-ob-feats li > span { width: 40px; height: 40px; border-radius: 13px; background: rgba(159,232,112,.14); color: var(--uz-lime); display: grid; place-items: center; flex: none; }
+.uz-ob-foot { margin-top: auto; display: flex; flex-direction: column; gap: 12px; }
+.uz-ob-cta { height: 58px; border-radius: 18px; border: 0; background: var(--uz-forest); color: var(--uz-lime); font-size: 18px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; transition: transform .15s, opacity .2s; }
+.uz-ob-cta:active:not(:disabled) { transform: scale(.97); }
+.uz-ob-cta:disabled { opacity: .4; cursor: default; }
+.uz-ob-cta[data-tone="lime"] { background: var(--uz-lime); color: var(--uz-forest); }
+.uz-ob-note { margin: 0; text-align: center; font-size: 13px; color: rgba(255,255,255,.55); }
+.uz-ob-title { margin-top: 20px; display: flex; flex-direction: column; gap: 8px; }
+.uz-ob-title h1 { margin: 0; color: var(--uz-ink); font-size: 34px; line-height: 1.08; font-weight: 800; letter-spacing: -.03em; }
+.uz-ob-title p { margin: 0; font-size: 16px; color: var(--uz-muted); }
+.uz-ob-input { border: 0; outline: 0; background: transparent; font: inherit; font-size: 40px; font-weight: 800; letter-spacing: -.03em; color: var(--uz-ink); padding: 8px 0 12px; border-bottom: 2px solid #CFD5C9; border-radius: 0; transition: border-color .2s; width: 100%; }
+.uz-ob-input:focus { border-color: var(--uz-forest); }
+.uz-ob-input::placeholder { color: #B9C0B3; }
+.uz-ob-goals { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.uz-ob-goal { position: relative; min-height: 96px; border-radius: 20px; border: 2px solid transparent; background: #fff; padding: 14px; display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 10px; text-align: left; cursor: pointer; color: var(--uz-ink); transition: border-color .2s, background .2s, transform .15s; animation: uz-pop-in .35s cubic-bezier(.2,.8,.2,1) both; }
+.uz-ob-goal:active { transform: scale(.96); }
+.uz-ob-goal-ic { width: 40px; height: 40px; border-radius: 13px; background: var(--uz-ground); color: var(--uz-forest); display: grid; place-items: center; transition: background .2s, color .2s; }
+.uz-ob-goal-tx { font-size: 15px; font-weight: 700; line-height: 1.2; }
+.uz-ob-goal-ck { position: absolute; top: 12px; right: 12px; width: 22px; height: 22px; border-radius: 50%; border: 2px solid #D5DBCF; display: grid; place-items: center; color: var(--uz-forest); transition: background .2s, border-color .2s; }
+.uz-ob-goal[aria-pressed="true"] { border-color: var(--uz-forest); background: #F4FBEE; }
+.uz-ob-goal[aria-pressed="true"] .uz-ob-goal-ic { background: var(--uz-forest); color: var(--uz-lime); }
+.uz-ob-goal[aria-pressed="true"] .uz-ob-goal-ck { background: var(--uz-lime); border-color: var(--uz-lime); animation: uz-pop-in .25s ease-out both; }
+.uz-ob-back:focus-visible, .uz-ob-cta:focus-visible, .uz-ob-goal:focus-visible { outline: 3px solid var(--uz-lime); outline-offset: 2px; }
+@keyframes uz-ob-in { from { opacity: 0; transform: translateX(28px) } to { opacity: 1; transform: none } }
+@keyframes uz-ob-in-back { from { opacity: 0; transform: translateX(-28px) } to { opacity: 1; transform: none } }
+@media (prefers-reduced-motion: reduce) {
+  .uz-ob-step, .uz-ob-feats li, .uz-ob-mark, .uz-ob-goal, .uz-ob-goal-ck { animation: none !important; }
+}
