@@ -26,6 +26,10 @@ export interface TelegramRecipient {
   telegramId: number;
   firstName: string;
   username?: string | null;
+  /** False = never logged anything: gets the first-entry message instead (see below). */
+  hasLogged?: boolean;
+  /** Whole days since the profile was created (Tashkent dates). */
+  daysSinceSignup?: number;
 }
 
 export interface ReminderBroadcastResult {
@@ -37,6 +41,8 @@ export interface ReminderBroadcastResult {
   remaining: boolean;
   /** False when migration 014 is missing (no skip/resume tracking). */
   trackingAvailable: boolean;
+  /** Recipients left out today on purpose (see shouldRemindToday). */
+  skipped: number;
 }
 
 function getAdminClient(providedClient?: SupabaseClient): SupabaseClient | null {
@@ -54,6 +60,9 @@ interface ProfileRow {
   first_name?: string | null;
   email?: string | null;
   onboarding_data?: Record<string, unknown> | null;
+  created_at?: string | null;
+  /** Filled in by the broadcast (from activity_days), not a profiles column. */
+  has_logged?: boolean;
 }
 
 /** Telegram recipient for a profile row, or null if it is not a Telegram user. */
@@ -73,7 +82,26 @@ export function toRecipient(p: ProfileRow): TelegramRecipient | null {
     telegramId: tgId,
     firstName: rawName && rawName !== 'Foydalanuvchi' ? rawName : 'aziz foydalanuvchi',
     username: typeof obData?.telegram_username === 'string' ? obData.telegram_username : null,
+    hasLogged: p.has_logged,
+    daysSinceSignup: p.created_at ? daysBetween(p.created_at.slice(0, 10), todayTashkent()) : undefined,
   };
+}
+
+function daysBetween(fromDate: string, toDate: string): number {
+  const ms = Date.parse(`${toDate}T00:00:00Z`) - Date.parse(`${fromDate}T00:00:00Z`);
+  return Number.isFinite(ms) ? Math.max(0, Math.round(ms / 86_400_000)) : 0;
+}
+
+/**
+ * People who already log get the reminder every day. People who never logged anything get the
+ * first-entry message on day 1, 3 and 7 after signing up, then once a week — a daily ping they
+ * ignore only teaches them to mute or block the bot.
+ */
+export function shouldRemindToday(r: Pick<TelegramRecipient, 'hasLogged' | 'daysSinceSignup'>): boolean {
+  if (r.hasLogged !== false) return true;
+  const d = r.daysSinceSignup;
+  if (d === undefined) return true;
+  return d === 1 || d === 3 || (d >= 7 && d % 7 === 0);
 }
 
 function isMissingColumnError(error: { code?: string; message?: string } | null): boolean {
@@ -99,7 +127,7 @@ export async function fetchReminderCandidatesPage(
       : TELEGRAM_PROFILE_FILTER;
     let q = db
       .from('profiles')
-      .select('id, first_name, email, onboarding_data')
+      .select('id, first_name, email, onboarding_data, created_at')
       .or(filter)
       .order('id', { ascending: true })
       .limit(options.pageSize ?? REMINDER_PAGE_SIZE);
@@ -149,6 +177,11 @@ export function buildTransactionReminderMessage(firstName: string): string {
   return `Salom, <b>${escapeHtml(firstName)}</b>! 👋\n\nBugungi o‘tkazmalarni ilovaga kiritishni unutmang yoki shunchaki bugungi o‘tkazmalaringizni shu chatga yozib qo‘ying! ✍️`;
 }
 
+/** For someone who never logged anything: one concrete example they can copy and send. */
+export function buildFirstEntryReminderMessage(firstName: string): string {
+  return `Salom, <b>${escapeHtml(firstName)}</b>! 👋\n\nBirinchi xarajatingizni yozing — 5 soniya. Shu chatga yuboring:\n\n<code>non 8000</code>\n\nQolganini o‘zim qilaman 🔥`;
+}
+
 export type ReminderSendStatus = 'sent' | 'blocked' | 'failed';
 
 /** Classifies a Bot API response for one reminder. */
@@ -162,10 +195,11 @@ export function classifySendResult(res: BotApiResponse | null): { status: Remind
 export async function sendTransactionReminderToUser(
   recipient: TelegramRecipient
 ): Promise<{ status: ReminderSendStatus; retryAfterSec?: number }> {
+  const first = recipient.hasLogged === false;
   const res = await sendTelegramMessage(
     recipient.telegramId,
-    buildTransactionReminderMessage(recipient.firstName),
-    "🚀 UzHamyon'ni ochish",
+    first ? buildFirstEntryReminderMessage(recipient.firstName) : buildTransactionReminderMessage(recipient.firstName),
+    first ? '➕ Ilovada qo‘shish' : "🚀 UzHamyon'ni ochish",
     MINIAPP_URL
   );
   return classifySendResult(res);
@@ -178,6 +212,8 @@ export interface ReminderLoopDeps {
   markBlocked: (userIds: string[]) => Promise<void>;
   sleep: (ms: number) => Promise<void>;
   now: () => number;
+  /** False = leave this recipient out today (counted as skipped). Default: everyone. */
+  shouldSend?: (r: TelegramRecipient) => boolean;
   timeBudgetMs?: number;
   batchSize?: number;
   batchIntervalMs?: number;
@@ -195,7 +231,7 @@ export async function runReminderLoop(deps: ReminderLoopDeps): Promise<ReminderB
   const pageSize = deps.pageSize ?? REMINDER_PAGE_SIZE;
 
   const result: ReminderBroadcastResult = {
-    total: 0, sent: 0, blocked: 0, failed: 0, remaining: false, trackingAvailable: true,
+    total: 0, sent: 0, blocked: 0, failed: 0, remaining: false, trackingAvailable: true, skipped: 0,
   };
   const seenTelegramIds = new Set<number>();
   let afterId: string | undefined;
@@ -213,7 +249,8 @@ export async function runReminderLoop(deps: ReminderLoopDeps): Promise<ReminderB
       const r = toRecipient(row);
       if (r && !seenTelegramIds.has(r.telegramId)) {
         seenTelegramIds.add(r.telegramId);
-        recipients.push(r);
+        if (deps.shouldSend && !deps.shouldSend(r)) result.skipped++;
+        else recipients.push(r);
       }
     }
 
@@ -277,9 +314,11 @@ export async function broadcastDailyTransactionReminders(
     fetchPage: async (afterId) => {
       const page = await fetchReminderCandidatesPage(db, { afterId, today, tracking });
       tracking = page.tracking;
+      await markWhoHasLogged(db, page.rows);
       return page;
     },
     send: sendTransactionReminderToUser,
+    shouldSend: shouldRemindToday,
     markSent: async (ids) => {
       const { error } = await db.from('profiles').update({ last_reminder_on: today }).in('id', ids);
       if (error) console.warn('[Reminders] markSent failed:', error.message);
@@ -295,6 +334,25 @@ export async function broadcastDailyTransactionReminders(
     now: Date.now,
     timeBudgetMs: options.timeBudgetMs,
   });
+}
+
+/**
+ * Sets has_logged on each row from activity_days (migration 016). On any error rows stay
+ * undefined, which means "treat as a regular user" — the old behaviour.
+ */
+async function markWhoHasLogged(db: SupabaseClient, rows: ProfileRow[]): Promise<void> {
+  const ids = rows.map((r) => r.id);
+  const logged = new Set<string>();
+  for (let i = 0; i < ids.length; i += 200) {
+    const chunk = ids.slice(i, i + 200);
+    const { data, error } = await db.from('activity_days').select('user_id').in('user_id', chunk).limit(20_000);
+    if (error) {
+      console.warn('[Reminders] activity_days lookup failed:', error.message);
+      return;
+    }
+    for (const row of data || []) logged.add((row as { user_id: string }).user_id);
+  }
+  for (const r of rows) r.has_logged = logged.has(r.id);
 }
 
 /**

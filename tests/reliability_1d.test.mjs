@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { TelegramSessionCache, sessionExpiryMs } from '../src/lib/telegram/sessionCache.ts';
 import { callBotApi, isBlockedByUser } from '../src/lib/telegram/botApi.ts';
 import { isCommandForThisBot } from '../src/lib/telegram/bot.ts';
-import { runReminderLoop, classifySendResult, toRecipient } from '../src/lib/telegram/reminders.ts';
+import { runReminderLoop, classifySendResult, toRecipient, shouldRemindToday, buildFirstEntryReminderMessage } from '../src/lib/telegram/reminders.ts';
 import { findAuthUserIdByEmail } from '../src/lib/telegram/auth.ts';
 
 // ── #34 session cache ────────────────────────────────────────────────────────
@@ -209,4 +209,40 @@ test('#35 uses profiles first, then the RPC, without listing users', async () =>
   const b = fakeAdmin({ rpc: { data: 'r1', error: null } });
   assert.equal(await findAuthUserIdByEmail(b, 'x@y'), 'r1');
   assert.equal(b.listCalls.length, 0);
+});
+
+// ── First-entry reminders for people who never logged ─────────────────────────
+test('shouldRemindToday: loggers daily; never-logged on day 1, 3, 7, then weekly', () => {
+  assert.equal(shouldRemindToday({ hasLogged: true, daysSinceSignup: 2 }), true);
+  assert.equal(shouldRemindToday({ hasLogged: undefined, daysSinceSignup: 2 }), true);
+  assert.equal(shouldRemindToday({ hasLogged: false, daysSinceSignup: undefined }), true);
+  const days = [0, 1, 2, 3, 4, 5, 6, 7, 8, 13, 14, 15, 21, 30];
+  assert.deepEqual(
+    days.filter((d) => shouldRemindToday({ hasLogged: false, daysSinceSignup: d })),
+    [1, 3, 7, 14, 21]
+  );
+});
+
+test('reminder loop skips left-out recipients without sending or marking them', async () => {
+  const sentTo = [];
+  const marked = [];
+  const rows = [profile('a', 1), { ...profile('b', 2), has_logged: false }];
+  const res = await runReminderLoop({
+    fetchPage: async () => ({ rows, tracking: true }),
+    send: async (r) => { sentTo.push(r.telegramId); return { status: 'sent' }; },
+    shouldSend: (r) => r.hasLogged !== false,
+    markSent: async (ids) => { marked.push(...ids); },
+    markBlocked: async () => {},
+    sleep: async () => {},
+    now: () => 0,
+  });
+  assert.deepEqual(sentTo, [1]);
+  assert.deepEqual(marked, ['a']);
+  assert.equal(res.skipped, 1);
+});
+
+test('first-entry message escapes the name and carries an example', () => {
+  const m = buildFirstEntryReminderMessage('<Ali>');
+  assert.ok(m.includes('&lt;Ali&gt;'));
+  assert.ok(m.includes('<code>non 8000</code>'));
 });

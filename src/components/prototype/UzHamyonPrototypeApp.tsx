@@ -470,6 +470,8 @@ export default function UzHamyonPrototypeApp({
   /** Entry being edited in the quick sheet (null = adding a new one). */
   const [quickEdit, setQuickEdit] = useState<Transaction | null>(null);
   const [nudgeOpen, setNudgeOpen] = useState<boolean>(false);
+  /** Opened right after registration (?first=1): quick add asks for the first expense. */
+  const [firstRun, setFirstRun] = useState<boolean>(false);
   useModalScrollLock(Boolean(activeSheet));
   const [editId, setEditId] = useState<string | null>(null);
   const [activeGoalId, setActiveGoalId] = useState<string | null>(null);
@@ -565,6 +567,11 @@ export default function UzHamyonPrototypeApp({
         // Links like ?sheet=tx open the quick add sheet.
         setQuickEdit(null);
         setQuickOpen(true);
+        if (params.get('first') === '1') {
+          setFirstRun(true);
+          // A reload should not ask again.
+          window.history.replaceState(null, '', window.location.pathname);
+        }
       } else if (qSheet) {
         setActiveSheet(qSheet);
         if (qSheet === 'budget') {
@@ -1183,7 +1190,7 @@ export default function UzHamyonPrototypeApp({
   useEffect(() => {
     if (!streak || nudgeCheckedRef.current) return;
     nudgeCheckedRef.current = true;
-    if (streak.todayDone || activeSheet) return;
+    if (streak.todayDone || activeSheet || quickOpen) return;
     const today = getNowLocalDateString();
     if (!shouldShowNudgeToday(today)) return;
     markNudgeShown(today);
@@ -1830,10 +1837,12 @@ export default function UzHamyonPrototypeApp({
                 }
               : undefined
           }
+          title={firstRun && transactions.length === 0 ? 'Bugun nimaga pul sarfladingiz?' : undefined}
           onClose={() => {
             setQuickOpen(false);
             setQuickEdit(null);
             setTxError(null);
+            setFirstRun(false);
           }}
           onSave={(input) => handleSaveTx(input, quickEdit?.id ?? null)}
           onDelete={

@@ -13,6 +13,8 @@ import {
   type CompleteOnboardingInput,
 } from '@/lib/onboarding/schemas';
 import { todayTashkent } from '@/lib/time/tashkent';
+import { after } from 'next/server';
+import { sendRegistrationDoneMessage, telegramIdOf } from '@/lib/telegram/welcome';
 
 export interface OnboardingActionResult<T = unknown> {
   success: boolean;
@@ -230,6 +232,12 @@ export async function completeOnboardingAction(
         first_name,
       },
     });
+
+    // 4. First completion only: the bot explains the fastest way to log (writing in the chat).
+    const chatId = telegramIdOf(user.email, user.user_metadata);
+    if (chatId && !existingOnboardingData.completed_at) {
+      after(() => sendRegistrationDoneMessage(chatId, first_name).catch(() => false));
+    }
 
     return { success: true };
   } catch (err) {

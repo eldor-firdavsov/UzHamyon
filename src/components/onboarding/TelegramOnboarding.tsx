@@ -151,7 +151,8 @@ export default function TelegramOnboarding({
       if (onCompleted) {
         onCompleted();
       } else {
-        window.location.replace('/dashboard');
+        // Straight into quick add: the first expense is the step that keeps people.
+        window.location.replace('/dashboard?sheet=tx&first=1');
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Kutilmagan xatolik';

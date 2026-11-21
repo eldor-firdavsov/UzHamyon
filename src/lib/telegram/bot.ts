@@ -564,7 +564,7 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
       const returningMsg = `<b>Qaytganingizdan xursandmiz, ${firstName}!</b>\n\nUzHamyon tayyor. Moliyaviy holatingizni davom ettiring.\n\n🎤 Ovozli xabar yuborishingiz ham mumkin — masalan: «bugun tushlikka 45 ming sarfladim».`;
       await sendTelegramMessage(chatId, returningMsg, 'Ilovani ochish', MINIAPP_URL);
     } else {
-      const welcomeMsg = `<b>Assalomu alaykum, ${firstName}!</b>\n\nUzHamyon'ga xush kelibsiz!\n\nEndi daromad va xarajatlaringizni nazorat qilishingiz, pulingiz qayerga sarflanayotganini tushunishingiz va moliyaviy maqsadlaringiz sari harakat qilishingiz mumkin.\n\nUzHamyon sizga:\n• Daromad va xarajatlarni qayd etish\n• Moliyaviy holatingizni tahlil qilish\n• Jamg‘arma maqsadlarini belgilash\n• Qarzlaringizni nazorat qilish\n• AI yordamida moliyaviy qarorlar qabul qilishda yordam beradi\n\n✍️ Xarajatingizni shu chatga yozing yoki 🎤 ovozli xabar yuboring — UzHamyon o‘zi hisoblaydi.\n\nBoshlash uchun quyidagi tugmani bosing.`;
+      const welcomeMsg = `<b>Assalomu alaykum, ${firstName}!</b>\n\nUzHamyon — xarajatlaringizni 5 soniyada yozib boradigan hamyon.\n\n✍️ Shu chatga yozing: <code>taksi 20000</code>\n🎤 Yoki ovozli xabar yuboring.\n\nYoki pastdagi tugma bilan ilovani oching 👇`;
       await sendTelegramMessage(chatId, welcomeMsg, "UzHamyon'ni ochish", MINIAPP_URL);
     }
     return;

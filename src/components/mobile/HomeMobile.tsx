@@ -76,7 +76,8 @@ export default function HomeMobile({
         ) : recent.length === 0 ? (
           <button type="button" className="uz-m-empty" onClick={onAdd}>
             <span className="uz-m-empty-ic"><Plus size={26} strokeWidth={2.6} /></span>
-            <span>Birinchi amal</span>
+            <span>Birinchi xarajatni qo‘shing</span>
+            <span className="uz-m-empty-hint">yoki botga yozing: <b>taksi 20000</b></span>
           </button>
         ) : (
           <TxFlatList rows={recent} today={today} onOpen={onOpenTx} />

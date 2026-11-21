@@ -35,7 +35,7 @@ function runBroadcast(req: NextRequest, logLabel: string) {
       const goalDeadlines = continuation === 0 ? await runDailyGoalDeadlineNotices() : null;
       const result = await broadcastDailyTransactionReminders(undefined, { timeBudgetMs: REMINDER_TIME_BUDGET_MS });
       console.log(
-        `[Reminders] run ${continuation}: total=${result.total} sent=${result.sent} blocked=${result.blocked} ` +
+        `[Reminders] run ${continuation}: total=${result.total} sent=${result.sent} blocked=${result.blocked} skipped=${result.skipped} ` +
           `failed=${result.failed} remaining=${result.remaining} tracking=${result.trackingAvailable}` +
           (goalDeadlines ? ` goalDeadlines=${goalDeadlines.sent}/${goalDeadlines.claimed}` : '')
       );

@@ -33,6 +33,8 @@ interface QuickAddSheetProps {
   /** Editing an existing entry: starts from these values and shows Delete. */
   initial?: QuickAddInput;
   onDelete?: () => void;
+  /** Optional question above the amount (first entry after registration). */
+  title?: string;
 }
 
 type Panel = 'keys' | 'category' | 'day';
@@ -66,6 +68,7 @@ export default function QuickAddSheet({
   onSave,
   initial,
   onDelete,
+  title,
 }: QuickAddSheetProps) {
   const today = getNowLocalDateString();
   const editing = Boolean(initial);
@@ -169,6 +172,7 @@ export default function QuickAddSheet({
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+          {title && !editing && <p className="uz-qa-title">{title}</p>}
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }} aria-live="polite">
             <span className="uz-qa-amount" style={{ color: type === 'in' ? '#2E7D32' : '#111511' }}>
               {type === 'in' ? '+' : '−'}

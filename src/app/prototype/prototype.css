@@ -1837,3 +1837,5 @@ nav[aria-label="Mobil navigatsiya"] > button.liquid-glass-primary {
 @media (prefers-reduced-motion: reduce) {
   .uz-ob-step, .uz-ob-feats li, .uz-ob-mark, .uz-ob-goal, .uz-ob-goal-ck { animation: none !important; }
 }
+.uz-qa-title { margin: 4px 0 0; font-size: 17px; font-weight: 700; color: var(--uz-ink); text-align: center; animation: uz-pop-in .35s ease-out both; }
+.uz-m-empty-hint { font-size: 13px; font-weight: 500; color: var(--uz-muted); } .uz-m-empty-hint b { color: var(--uz-ink); font-weight: 700; }
