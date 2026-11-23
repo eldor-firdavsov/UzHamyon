@@ -441,6 +441,8 @@ export default function UzHamyonPrototypeApp({
   const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>(initialCurrency ?? 'UZS');
   const [fx, setFx] = useState<FxRate>(initialFx ?? { usdUzs: FALLBACK_USD_UZS, date: '', source: 'fallback' });
   const [isSavingCurrency, setIsSavingCurrency] = useState<boolean>(false);
+  /** Set once the user taps the switch: a late server read must not undo their choice. */
+  const currencyTouchedRef = useRef(false);
   const dc = displayCurrency;
   const usdUzs = fx.usdUzs;
   const toDc = useCallback(
@@ -719,6 +721,29 @@ export default function UzHamyonPrototypeApp({
           } catch (profErr) {
             console.error('Failed to load profile in UzHamyon prototype app:', profErr);
           }
+
+          // 1b. Streak and currency, re-read after every sign-in: on a Telegram cold start the
+          //     server render ran before the session existed and showed streak 0 / so'm.
+          void (async () => {
+            try {
+              const [streakRes, curRes] = await Promise.all([
+                fetch('/api/streak', { cache: 'no-store', headers: authHeaders }),
+                fetch('/api/profile/currency', { cache: 'no-store', headers: authHeaders }),
+              ]);
+              if (streakRes.ok) {
+                const next = (await streakRes.json()) as StreakSummary;
+                if (isMounted && next && typeof next.current === 'number') setStreak(next);
+              }
+              if (curRes.ok) {
+                const data = await curRes.json();
+                if (isMounted && data?.currency && !currencyTouchedRef.current) {
+                  setDisplayCurrency(toDisplayCurrency(data.currency));
+                }
+              }
+            } catch (err) {
+              console.error('Failed to refresh streak/currency:', err);
+            }
+          })();
 
           // 2. Categories — required to resolve the user's category_id on save
           try {
@@ -1239,6 +1264,7 @@ export default function UzHamyonPrototypeApp({
   const handleCurrencyChange = async (next: DisplayCurrency) => {
     if (next === dc || isSavingCurrency) return;
     const prev = dc;
+    currencyTouchedRef.current = true;
     setDisplayCurrency(next);
     if (!isAuthenticated) {
       triggerToast(`Endi hammasi ${currencyName(next)}da`);

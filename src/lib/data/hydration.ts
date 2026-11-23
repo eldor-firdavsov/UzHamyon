@@ -56,7 +56,7 @@ export async function getDashboardHydrationData(
   supabase: SupabaseClient,
   userId: string
 ): Promise<DashboardHydrationData> {
-  const [txRes, budgetsRes, goalsRes, initialStreak, initialCurrency, initialFx] = await Promise.all([
+  const [txRes, budgetsRes, goalsRes, cookieStreak, cookieCurrency, initialFx] = await Promise.all([
     supabase
       .from('transactions')
       .select('id, type, amount, currency, description, transaction_date, categories(name)')
@@ -84,6 +84,10 @@ export async function getDashboardHydrationData(
   let rawTransactions = txRes.data || [];
   let rawBudgets = budgetsRes.data || [];
   let rawGoals = goalsRes.data || [];
+  // Read with the cookie session; on a Telegram cold start that session is not ready yet and
+  // these come back empty (streak 0, so'm) — they are re-read with the admin client below.
+  let initialStreak = cookieStreak;
+  let initialCurrency = cookieCurrency;
 
   // Fallback resilience: if cookie session was refreshed mid-flight and RLS returned empty data,
   // query with authenticated userId via admin client to guarantee initial SSR data is never 0 for existing users
@@ -115,6 +119,13 @@ export async function getDashboardHydrationData(
         ]);
         if (adminTx.data && adminTx.data.length > 0) {
           rawTransactions = adminTx.data;
+          // The cookie session saw nothing, so its streak/currency are wrong too.
+          const [adminStreak, adminCurrency] = await Promise.all([
+            getStreakForUser(adminClient, userId).catch(() => null),
+            getPreferredCurrency(adminClient, userId),
+          ]);
+          if (adminStreak) initialStreak = adminStreak;
+          initialCurrency = adminCurrency;
         }
         if (adminBudgets.data && adminBudgets.data.length > 0) {
           rawBudgets = adminBudgets.data;
