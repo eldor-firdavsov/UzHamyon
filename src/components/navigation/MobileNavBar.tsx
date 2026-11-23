@@ -195,7 +195,7 @@ export const MobileNavBar: React.FC<MobileNavBarProps> = ({
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
-          className={`liquid-glass-pill relative grid grid-cols-4 items-center flex-1 rounded-full p-1.5 h-[58px] sm:h-[62px] touch-none select-none transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+          className={`liquid-glass-pill relative grid grid-cols-4 items-center flex-1 rounded-full p-1.5 h-[66px] sm:h-[70px] touch-none select-none transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] ${
             isScrubbing ? 'scale-[1.025]' : 'scale-100'
           }`}
         >
@@ -222,7 +222,7 @@ export const MobileNavBar: React.FC<MobileNavBarProps> = ({
             }}
           >
             <div
-              className="liquid-glass-primary w-11 h-11 sm:w-12 sm:h-12 rounded-full"
+              className="liquid-glass-primary w-[52px] h-[52px] sm:w-14 sm:h-14 rounded-full"
               style={{
                 transform: isScrubbing
                   ? `scale(1.12, 0.94) skewX(${scrubVelocity * -6}deg)`
@@ -247,7 +247,7 @@ export const MobileNavBar: React.FC<MobileNavBarProps> = ({
                 {/* Recessed Circular Glass Well */}
                 <div
                   aria-hidden="true"
-                  className="liquid-glass-slot absolute w-11 h-11 sm:w-12 sm:h-12 rounded-full pointer-events-none transition-opacity duration-200"
+                  className="liquid-glass-slot absolute w-[52px] h-[52px] sm:w-14 sm:h-14 rounded-full pointer-events-none transition-opacity duration-200"
                 />
 
                 {/* Interactive Icon Button */}
@@ -257,14 +257,14 @@ export const MobileNavBar: React.FC<MobileNavBarProps> = ({
                   onClick={(e) => handleItemClick(idx, e)}
                   aria-label={item.name}
                   aria-current={isActive ? 'page' : undefined}
-                  className={`relative z-10 flex items-center justify-center w-11 h-11 sm:w-12 sm:h-12 rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer ${
+                  className={`relative z-10 flex items-center justify-center w-[52px] h-[52px] sm:w-14 sm:h-14 rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer ${
                     isActive
                       ? 'text-[#163300]'
                       : 'text-[#52525B] hover:text-[#171B16]'
                   }`}
                 >
                   <Icon
-                    className={`w-5 h-5 stroke-[2.3] transition-transform duration-200 ${
+                    className={`w-6 h-6 stroke-[2.2] transition-transform duration-200 ${
                       isActive ? 'scale-110 stroke-[2.5]' : 'scale-100'
                     }`}
                   />
@@ -279,7 +279,7 @@ export const MobileNavBar: React.FC<MobileNavBarProps> = ({
           type="button"
           onClick={onOpenAddTransaction}
           aria-label="Amal qo‘shish"
-          className={`${highlightAdd ? 'uz-add-pulse ' : ''}liquid-glass-primary relative flex-shrink-0 flex items-center justify-center w-[58px] h-[58px] sm:w-[62px] sm:h-[62px] rounded-full ring-4 ring-card/60 dark:ring-card/40 backdrop-blur-md active:scale-90 hover:opacity-95 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer`}
+          className={`${highlightAdd ? 'uz-add-pulse ' : ''}liquid-glass-primary relative flex-shrink-0 flex items-center justify-center w-[66px] h-[66px] sm:w-[70px] sm:h-[70px] rounded-full ring-4 ring-card/60 dark:ring-card/40 backdrop-blur-md active:scale-90 hover:opacity-95 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer`}
         >
           {/* Refraction underlay for detached circle */}
           <span
@@ -290,7 +290,7 @@ export const MobileNavBar: React.FC<MobileNavBarProps> = ({
               WebkitBackdropFilter: 'blur(16px) saturate(180%)',
             }}
           />
-          <Plus className="w-6 h-6 stroke-[2.5] relative z-10" />
+          <Plus className="w-7 h-7 stroke-[2.5] relative z-10" />
         </button>
       </nav>
     </div>

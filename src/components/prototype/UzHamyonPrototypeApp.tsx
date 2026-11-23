@@ -464,6 +464,7 @@ export default function UzHamyonPrototypeApp({
   const [isSavingTx, setIsSavingTx] = useState<boolean>(false);
   const [isSavingContrib, setIsSavingContrib] = useState<boolean>(false);
   const [isSavingBudget, setIsSavingBudget] = useState<boolean>(false);
+  const [isSavingGoal, setIsSavingGoal] = useState<boolean>(false);
 
   // ── Transaction-based Available Months ──
   // STRICT REQUIREMENT: Only calendar months with >= 1 actual recorded transaction belonging to the user appear!
@@ -527,6 +528,8 @@ export default function UzHamyonPrototypeApp({
       : {}
   );
   const [toastMessage, setToastMessage] = useState<string>('');
+  const [toastKind, setToastKind] = useState<'ok' | 'error'>('ok');
+  const [budgetError, setBudgetError] = useState<string | null>(null);
 
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
   // Synchronous in-flight guard: state updates are async, so rapid double
@@ -870,12 +873,14 @@ export default function UzHamyonPrototypeApp({
   }, []);
 
   // Toast notification helper
-  const triggerToast = useCallback((msg: string) => {
+  // Errors stay longer and use a different look than success messages.
+  const triggerToast = useCallback((msg: string, kind: 'ok' | 'error' = 'ok') => {
     setToastMessage(msg);
+    setToastKind(kind);
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     toastTimerRef.current = setTimeout(() => {
       setToastMessage('');
-    }, 2200);
+    }, kind === 'error' ? 4200 : 2200);
   }, []);
 
   // Re-reads transactions from the server so the UI reflects committed rows
@@ -1231,6 +1236,7 @@ export default function UzHamyonPrototypeApp({
   }, [categories]);
 
   const closeSheetNow = () => {
+    setBudgetError(null);
     setActiveSheet(null);
     setFormData({});
     setEditId(null);
@@ -1282,7 +1288,7 @@ export default function UzHamyonPrototypeApp({
     } catch (err) {
       console.error('Currency save failed:', err);
       setDisplayCurrency(prev);
-      triggerToast('Valyutani saqlab bo‘lmadi. Qayta urinib ko‘ring.');
+      triggerToast('Valyutani saqlab bo‘lmadi. Qayta urinib ko‘ring.', 'error');
     } finally {
       setIsSavingCurrency(false);
     }
@@ -1525,13 +1531,17 @@ export default function UzHamyonPrototypeApp({
 
   const handleOpenAddBudget = () => {
     setEditId(null);
+    setBudgetError(null);
     setFormData({ cat: '', limit: '' });
     setActiveSheet('budget');
   };
 
   const handleOpenEditBudget = (b: Budget) => {
     setEditId(b.id);
-    setFormData({ cat: b.cat, limit: formatNumberWithGaps(Math.round(toDc(b.limit, b.currency))) });
+    setBudgetError(null);
+    // Select the user's own category row (e.g. "Dining Out"), not the internal key, so the grid highlights it.
+    const ownCat = b.categoryId ? categories.find((c) => c.id === b.categoryId)?.name : undefined;
+    setFormData({ cat: ownCat || b.cat, limit: formatNumberWithGaps(Math.round(toDc(b.limit, b.currency))) });
     setActiveSheet('budget');
   };
 
@@ -1551,23 +1561,54 @@ export default function UzHamyonPrototypeApp({
     };
 
     if (!isAuthenticated) {
+      // Same rule as the server: one limit per category.
+      const key = normalizeCategory(cat, 'ex');
+      if (budgets.some((b) => b.id !== editId && normalizeCategory(b.cat, 'ex') === key)) {
+        setBudgetError('Bu kategoriyaga shu oy uchun limit allaqachon bor. Uni ro‘yxatdan ochib o‘zgartiring.');
+        return;
+      }
       if (editId) {
         setBudgets((prev) => prev.map((b) => (b.id === editId ? { ...b, cat, limit } : b)));
       } else {
         setBudgets((prev) => [...prev, { id: 'b' + Date.now(), cat, limit, currency: budgetCurrency }]);
       }
-      triggerToast(editId ? 'Byudjet yangilandi' : "Byudjet qo'shildi");
+      triggerToast(editId ? 'Limit yangilandi' : 'Limit qo‘shildi');
       closeSheet();
       return;
     }
 
-    const catObj = categories.find(
-      (c) => c.type === 'expense' && normalizeCategory(c.name, 'ex') === cat
-    );
+    // The grid shows the user's own category names (often English, e.g. "Dining Out"),
+    // so match by name first, then by the internal key. If the list was never loaded
+    // (slow Telegram start), fetch it once before giving up.
+    const findCat = (rows: Category[]) => {
+      const expense = rows.filter((c) => c.type === 'expense');
+      return (
+        matchCategoryRow(cat, expense) ||
+        expense.find((c) => normalizeCategory(c.name, 'ex') === normalizeCategory(cat, 'ex'))
+      );
+    };
+    let catObj = findCat(categories);
     if (!catObj) {
-      triggerToast("Tanlangan kategoriya topilmadi. Sahifani yangilab, qayta urining.");
+      try {
+        const token = await getAuthToken();
+        const res = await fetch('/api/categories', {
+          cache: 'no-store',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        const data = res.ok ? await res.json() : null;
+        if (Array.isArray(data?.categories)) {
+          setCategories(data.categories as Category[]);
+          catObj = findCat(data.categories as Category[]);
+        }
+      } catch (err) {
+        console.error('Category reload failed:', err);
+      }
+    }
+    if (!catObj) {
+      setBudgetError('Kategoriya topilmadi. Boshqasini tanlang yoki ilovani qayta oching.');
       return;
     }
+    setBudgetError(null);
 
     const startDate = `${year}-${padTwo(month)}-01`;
     const endDate = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
@@ -1598,7 +1639,13 @@ export default function UzHamyonPrototypeApp({
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.budget) {
-        throw new Error(data?.error || 'Byudjetni saqlash muvaffaqiyatsiz bo‘ldi');
+        throw new Error(
+          res.status === 409
+            ? 'Bu kategoriyaga shu oy uchun limit allaqachon bor. Uni ro‘yxatdan ochib o‘zgartiring.'
+            : typeof data?.error === 'string' && data.error
+            ? data.error
+            : 'Limitni saqlab bo‘lmadi. Qayta urinib ko‘ring.'
+        );
       }
 
       const saved = mapApiBudget(data.budget);
@@ -1606,11 +1653,12 @@ export default function UzHamyonPrototypeApp({
         editId ? prev.map((b) => (b.id === editId ? saved : b)) : [...prev, saved]
       );
       invalidateAllFinancialCaches();
-      triggerToast(editId ? 'Byudjet yangilandi' : "Byudjet qo'shildi");
+      triggerToast(editId ? 'Limit yangilandi' : 'Limit qo‘shildi');
       closeSheet();
     } catch (err) {
       console.error('Budget save failed:', err);
-      triggerToast('Byudjetni saqlashda xatolik yuz berdi. Qayta urinib ko‘ring.');
+      // Shown inside the sheet so it is never hidden behind it; the input stays.
+      setBudgetError(err instanceof Error && err.message ? err.message : 'Limitni saqlab bo‘lmadi. Qayta urinib ko‘ring.');
     } finally {
       setIsSavingBudget(false);
     }
@@ -1642,43 +1690,63 @@ export default function UzHamyonPrototypeApp({
     const goalCurrency = editingGoal ? normalizeCurrency(editingGoal.currency) : dc;
     const target = editingGoal ? fromDc(targetDc, goalCurrency) : targetDc;
 
-    const token = await getAuthToken();
-    const authHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (token) authHeaders['Authorization'] = `Bearer ${token}`;
+    const closeGoalSheet = () => {
+      setActiveSheet(null);
+      setFormData({});
+      setEditId(null);
+    };
 
-    if (editId) {
-      setGoals((prev) =>
-        prev.map((g) => (g.id === editId ? { ...g, name, target, date } : g))
-      );
-      triggerToast('Maqsad yangilandi');
-      fetch(`/api/goals/${editId}`, {
-        method: 'PUT',
-        headers: authHeaders,
-        body: JSON.stringify({ name, target_amount: target, target_date: date || null }),
-      }).catch(console.error);
-    } else {
-      const tempId = 'g' + Date.now();
-      const newG: Goal = { id: tempId, name, target, date, saved: 0, currency: goalCurrency, status: 'in_progress', contribs: [], contribsLoaded: true };
-      setGoals((prev) => [...prev, newG]);
-      triggerToast('Maqsad qo‘shildi');
-      fetch('/api/goals', {
-        method: 'POST',
-        headers: authHeaders,
-        body: JSON.stringify({ name, target_amount: target, target_date: date || null, currency: goalCurrency }),
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          if (data?.goal?.id) {
-            setGoals((prev) =>
-              prev.map((g) => (g.id === tempId ? { ...g, id: data.goal.id } : g))
-            );
-          }
-        })
-        .catch(console.error);
+    // Public demo preview (no session): keep it local.
+    if (!isAuthenticated) {
+      if (editId) {
+        setGoals((prev) => prev.map((g) => (g.id === editId ? { ...g, name, target, date } : g)));
+      } else {
+        setGoals((prev) => [...prev, { id: 'g' + Date.now(), name, target, date, saved: 0, currency: goalCurrency, status: 'in_progress', contribs: [], contribsLoaded: true }]);
+      }
+      triggerToast(editId ? 'Maqsad yangilandi' : 'Maqsad qo‘shildi');
+      closeGoalSheet();
+      return;
     }
-    setActiveSheet(null);
-    setFormData({});
-    setEditId(null);
+
+    // Only report success after the server saved it (it used to show "added" even when it failed).
+    if (isSavingGoal) return;
+    setIsSavingGoal(true);
+    try {
+      const token = await getAuthToken();
+      const authHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) authHeaders['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(editId ? `/api/goals/${editId}` : '/api/goals', {
+        method: editId ? 'PUT' : 'POST',
+        headers: authHeaders,
+        body: JSON.stringify(
+          editId
+            ? { name, target_amount: target, target_date: date || null }
+            : { name, target_amount: target, target_date: date || null, currency: goalCurrency }
+        ),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || data?.error) {
+        throw new Error(typeof data?.error === 'string' ? data.error : '');
+      }
+      if (editId) {
+        setGoals((prev) => prev.map((g) => (g.id === editId ? { ...g, name, target, date } : g)));
+      } else {
+        const id = data?.goal?.id;
+        if (!id) throw new Error('');
+        setGoals((prev) => [...prev, { id, name, target, date, saved: 0, currency: goalCurrency, status: 'in_progress', contribs: [], contribsLoaded: true }]);
+      }
+      invalidateAllFinancialCaches();
+      triggerToast(editId ? 'Maqsad yangilandi' : 'Maqsad qo‘shildi');
+      closeGoalSheet();
+    } catch (err) {
+      console.error('Goal save failed:', err);
+      triggerToast(
+        err instanceof Error && err.message ? err.message : 'Maqsadni saqlab bo‘lmadi. Qayta urinib ko‘ring.',
+        'error'
+      );
+    } finally {
+      setIsSavingGoal(false);
+    }
   };
 
   const handleOpenAddContrib = (goalId: string) => {
@@ -1746,7 +1814,7 @@ export default function UzHamyonPrototypeApp({
       void loadGoalContributions(goalId);
     } catch (err) {
       console.error('Goal contribution failed:', err);
-      triggerToast(err instanceof Error && err.message ? err.message : 'Hissani saqlab bo‘lmadi');
+      triggerToast(err instanceof Error && err.message ? err.message : 'Hissani saqlab bo‘lmadi', 'error');
     } finally {
       setIsSavingContrib(false);
     }
@@ -1817,13 +1885,14 @@ export default function UzHamyonPrototypeApp({
       } catch (err) {
         console.error('Transaction delete failed:', err);
         triggerToast(
-          toUzbekTxError(err instanceof Error ? err.message : undefined, 'delete')
+          toUzbekTxError(err instanceof Error ? err.message : undefined, 'delete'),
+          'error'
         );
       }
     } else if (k === 'budget') {
       if (!isAuthenticated) {
         setBudgets((prev) => prev.filter((b) => b.id !== id));
-        triggerToast("Byudjet o'chirildi");
+        triggerToast('Limit o‘chirildi');
       } else {
         try {
           const res = await fetch(`/api/budgets/${id}`, { method: 'DELETE', headers: authHeaders });
@@ -1833,27 +1902,39 @@ export default function UzHamyonPrototypeApp({
           }
           setBudgets((prev) => prev.filter((b) => b.id !== id));
           invalidateAllFinancialCaches();
-          triggerToast("Byudjet o'chirildi");
+          triggerToast('Limit o‘chirildi');
         } catch (err) {
           console.error('Budget delete failed:', err);
-          triggerToast("Byudjetni o'chirishda xatolik yuz berdi");
+          triggerToast('Limitni o‘chirib bo‘lmadi. Qayta urinib ko‘ring.', 'error');
         }
       }
     } else if (k === 'goal') {
-      setGoals((prev) => prev.filter((g) => g.id !== id));
-      triggerToast("Maqsad o'chirildi");
-      fetch(`/api/goals/${id}`, { method: 'DELETE', headers: authHeaders }).catch(console.error);
+      if (!isAuthenticated) {
+        setGoals((prev) => prev.filter((g) => g.id !== id));
+        triggerToast('Maqsad o‘chirildi');
+      } else {
+        try {
+          const res = await fetch(`/api/goals/${id}`, { method: 'DELETE', headers: authHeaders });
+          if (!res.ok) throw new Error('Goal delete failed');
+          setGoals((prev) => prev.filter((g) => g.id !== id));
+          invalidateAllFinancialCaches();
+          triggerToast('Maqsad o‘chirildi');
+        } catch (err) {
+          console.error('Goal delete failed:', err);
+          triggerToast('Maqsadni o‘chirib bo‘lmadi. Qayta urinib ko‘ring.', 'error');
+        }
+      }
     }
     setActiveSheet(null);
     setConfirmConfig(null);
   };
 
   const isSaveBudgetDisabled = isSavingBudget || parseNumber(formData.limit) <= 0 || !formData.cat;
-  const isSaveGoalDisabled = parseNumber(formData.target) <= 0 || !(formData.name || '').trim();
+  const isSaveGoalDisabled = isSavingGoal || parseNumber(formData.target) <= 0 || !(formData.name || '').trim();
   const isSaveContribDisabled = parseNumber(formData.contrib) <= 0 || isSavingContrib;
 
   return (
-    <div className="uz-app-wrapper pb-24">
+    <div className="uz-app-wrapper pb-28">
       {/* Test compatibility markers */}
       <span className="sr-only">
         bg-[#F1F4F2] bg-white text-[#222222] Kategoriyalar Import Budjetlar Jamg‘arma maqsadlari AI yordamchi Jami balans Kirim Chiqim Sof oqim Moliyaviy holatingiz
@@ -2048,10 +2129,24 @@ export default function UzHamyonPrototypeApp({
           TOAST NOTIFICATION
          ══════════════════════════════════════════════════════════ */}
       {toastMessage && (
-        <div role="status" className="uz-toast">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9FE870" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
+        <div
+          key={toastMessage}
+          role={toastKind === 'error' ? 'alert' : 'status'}
+          className="uz-toast"
+          data-kind={toastKind}
+          onClick={() => setToastMessage('')}
+        >
+          {toastKind === 'error' ? (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFB4A8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+          ) : (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9FE870" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          )}
           <span>{toastMessage}</span>
         </div>
       )}
@@ -2097,7 +2192,7 @@ export default function UzHamyonPrototypeApp({
                     placeholder="0"
                     aria-label={`Oylik limit, ${currencyName(dc)}`}
                     value={formData.limit || ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, limit: formatNumberWithGaps(e.target.value) }))}
+                    onChange={(e) => { setBudgetError(null); setFormData((prev) => ({ ...prev, limit: formatNumberWithGaps(e.target.value) })); }}
                   />
                   <span>{unitLabel(dc)} / oy</span>
                 </div>
@@ -2112,7 +2207,7 @@ export default function UzHamyonPrototypeApp({
                         role="option"
                         aria-selected={formData.cat === name}
                         className="uz-qa-fav"
-                        onClick={() => setFormData((prev) => ({ ...prev, cat: name }))}
+                        onClick={() => { setBudgetError(null); setFormData((prev) => ({ ...prev, cat: name })); }}
                       >
                         <span className="uz-qa-fav-ic" style={{ background: meta.bg, color: meta.color }}>
                           <Icon size={22} strokeWidth={2.1} />
@@ -2122,6 +2217,9 @@ export default function UzHamyonPrototypeApp({
                     );
                   })}
                 </div>
+                {budgetError && (
+                  <p className="uz-sh-hint" data-warn="true" role="alert">{budgetError}</p>
+                )}
                 <div className="uz-sh-foot">
                   {editId && (
                     <button type="button" className="uz-qa-trash" aria-label="Limitni o‘chirish" onClick={() => { setConfirmConfig({ k: 'budget', id: editId }); setActiveSheet('confirm'); }}>
