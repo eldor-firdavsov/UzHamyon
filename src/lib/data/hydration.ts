@@ -1,6 +1,9 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { getStreakForUser } from '@/lib/streak/service';
 import type { StreakSummary } from '@/lib/streak/compute';
+import type { DisplayCurrency, FxRate } from '@/lib/fx/currency';
+import { getUsdUzsRate } from '@/lib/fx/rates';
+import { getPreferredCurrency } from '@/lib/profile/preferredCurrency';
 
 export interface HydratedTransaction {
   id: string;
@@ -16,6 +19,7 @@ export interface HydratedBudget {
   id: string;
   cat: string;
   limit: number;
+  currency?: string;
 }
 
 export interface HydratedGoal {
@@ -38,6 +42,10 @@ export interface DashboardHydrationData {
   initialGoals: HydratedGoal[];
   /** Logging streak; null when it could not be loaded (the client fetches it then). */
   initialStreak: StreakSummary | null;
+  /** Currency the user sees everything in. */
+  initialCurrency: DisplayCurrency;
+  /** USD → UZS rate used to convert between so'm and dollars. */
+  initialFx: FxRate;
 }
 
 /**
@@ -48,7 +56,7 @@ export async function getDashboardHydrationData(
   supabase: SupabaseClient,
   userId: string
 ): Promise<DashboardHydrationData> {
-  const [txRes, budgetsRes, goalsRes, initialStreak] = await Promise.all([
+  const [txRes, budgetsRes, goalsRes, initialStreak, initialCurrency, initialFx] = await Promise.all([
     supabase
       .from('transactions')
       .select('id, type, amount, currency, description, transaction_date, categories(name)')
@@ -59,7 +67,7 @@ export async function getDashboardHydrationData(
       .limit(300),
     supabase
       .from('budgets')
-      .select('id, amount, categories(name)')
+      .select('id, amount, currency, categories(name)')
       .eq('user_id', userId),
     supabase
       .from('financial_goals')
@@ -69,6 +77,8 @@ export async function getDashboardHydrationData(
       console.error('[hydration] streak failed:', err);
       return null;
     }),
+    getPreferredCurrency(supabase, userId),
+    getUsdUzsRate(),
   ]);
 
   let rawTransactions = txRes.data || [];
@@ -96,7 +106,7 @@ export async function getDashboardHydrationData(
             .limit(300),
           adminClient
             .from('budgets')
-            .select('id, amount, categories(name)')
+            .select('id, amount, currency, categories(name)')
             .eq('user_id', userId),
           adminClient
             .from('financial_goals')
@@ -136,6 +146,7 @@ export async function getDashboardHydrationData(
       ? b.categories[0]?.name || 'Umumiy'
       : b.categories?.name || 'Umumiy',
     limit: Number(b.amount) || 0,
+    currency: b.currency || 'UZS',
   }));
 
   const initialGoals: HydratedGoal[] = rawGoals.map((g: any) => ({
@@ -150,5 +161,5 @@ export async function getDashboardHydrationData(
     contribsLoaded: false,
   }));
 
-  return { initialTransactions, initialBudgets, initialGoals, initialStreak };
+  return { initialTransactions, initialBudgets, initialGoals, initialStreak, initialCurrency, initialFx };
 }

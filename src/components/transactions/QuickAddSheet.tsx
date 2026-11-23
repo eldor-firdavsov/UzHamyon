@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { CalendarDays, Check, ChevronDown, Clock, Delete, Loader2, Sparkles, Trash2, X } from 'lucide-react';
+import { ArrowLeftRight, CalendarDays, Check, ChevronDown, Clock, Delete, Loader2, Sparkles, Trash2, X } from 'lucide-react';
+import { convertAmount, formatAmount, formatWithUnit, unitLabel, type DisplayCurrency } from '@/lib/fx/currency';
 import { getCategoryMeta } from '@/components/categories/CategoryIcon';
 import { predictCategoryFromTitle } from '@/lib/categories/predictCategory';
 import { computeQuickPicks, shortAmount, type QuickPick, type QuickPickSource } from '@/lib/transactions/quickPicks';
@@ -18,11 +19,18 @@ export interface QuickAddInput {
   cat: string;
   date: string;
   time: string;
+  /** Currency the amount was typed in (defaults to the user's display currency). */
+  currency?: DisplayCurrency;
 }
 
 /** Mount only while open: every open starts with a fresh form. */
 interface QuickAddSheetProps {
+  /** Amounts already converted to `defaultCurrency`. */
   transactions: QuickPickSource[];
+  /** The user's display currency: new entries start in it. */
+  defaultCurrency?: DisplayCurrency;
+  /** USD → UZS rate for the live equivalent under the amount. */
+  usdUzs?: number;
   /** Category names the user can pick, per type ('Auto' is added automatically). */
   categories: { ex: string[]; in: string[] };
   isSaving: boolean;
@@ -41,11 +49,23 @@ type Panel = 'keys' | 'category' | 'day';
 
 const MAX_DIGITS = 12;
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '000', '0', 'del'] as const;
+/** Dollars need cents more than "000": the bottom-left key becomes a decimal point. */
+const USD_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del'] as const;
+type Key = (typeof KEYS)[number] | (typeof USD_KEYS)[number];
 const SHORT_MONTHS = ['yan', 'fev', 'mar', 'apr', 'may', 'iyn', 'iyl', 'avg', 'sen', 'okt', 'noy', 'dek'];
 
 function groupDigits(digits: string): string {
   if (!digits) return '0';
-  return String(Number(digits)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  const [int, dec] = digits.split('.');
+  const grouped = String(Number(int || '0')).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  return dec === undefined ? grouped : `${grouped}.${dec}`;
+}
+
+/** A number as keypad digits: whole so'm, dollars with up to 2 decimals ("12.5"). */
+function toDigits(n: number, currency: DisplayCurrency): string {
+  if (!(n > 0)) return '';
+  if (currency === 'UZS') return String(Math.round(n));
+  return String(Math.round(n * 100) / 100);
 }
 
 function categoryFor(pickOrDesc: { cat?: string; desc: string }, type: 'in' | 'ex'): string {
@@ -61,6 +81,8 @@ function dayChipLabel(date: string, today: string): string {
 
 export default function QuickAddSheet({
   transactions,
+  defaultCurrency = 'UZS',
+  usdUzs = 0,
   categories,
   isSaving,
   error,
@@ -73,7 +95,10 @@ export default function QuickAddSheet({
   const today = getNowLocalDateString();
   const editing = Boolean(initial);
   const [type, setType] = useState<'in' | 'ex'>(initial?.type ?? 'ex');
-  const [digits, setDigits] = useState(initial ? String(Math.round(Number(initial.amount.replace(/\s/g, '')) || 0) || '') : '');
+  const [currency, setCurrency] = useState<DisplayCurrency>(initial?.currency ?? defaultCurrency);
+  const [digits, setDigits] = useState(() =>
+    initial ? toDigits(Number(initial.amount.replace(/\s/g, '')) || 0, initial.currency ?? defaultCurrency) : ''
+  );
   const [desc, setDesc] = useState(initial?.desc ?? '');
   const [cat, setCat] = useState(initial?.cat ?? 'Auto');
   const [date, setDate] = useState(initial?.date ?? today);
@@ -88,7 +113,18 @@ export default function QuickAddSheet({
   const effectiveCat = categoryFor({ cat, desc }, type);
   const catMeta = getCategoryMeta(effectiveCat, type);
   const CatIcon = catMeta.icon;
-  const canSave = Number(digits) > 0 && desc.trim().length > 0 && !isSaving;
+  const amountValue = Number(digits) || 0;
+  const canSave = amountValue > 0 && desc.trim().length > 0 && !isSaving;
+  const otherCurrency: DisplayCurrency = currency === 'USD' ? 'UZS' : 'USD';
+  const equivalent = usdUzs > 0 && amountValue > 0 ? convertAmount(amountValue, currency, otherCurrency, usdUzs) : 0;
+  const keys = currency === 'USD' ? USD_KEYS : KEYS;
+  /** Pick amounts come in the display currency; show and fill them in the sheet's currency. */
+  const pickAmount = (n: number) => (usdUzs > 0 ? convertAmount(n, defaultCurrency, currency, usdUzs) : n);
+  const pickLabel = (n: number) => {
+    const v = pickAmount(n);
+    if (!(v > 0)) return '';
+    return currency === 'USD' ? (v < 1000 ? `$${formatAmount(v, 'USD')}` : `$${shortAmount(v)}`) : shortAmount(v);
+  };
   const catOptions = ['Auto', ...categories[type].filter((c) => c && c !== 'Auto')];
 
   const choose = (p: QuickPick) => {
@@ -96,17 +132,35 @@ export default function QuickAddSheet({
     setPickedKey(p.key);
     setDesc(p.desc);
     setCat(p.cat || 'Auto');
-    if (p.amount > 0) setDigits(String(Math.round(p.amount)));
+    if (p.amount > 0) setDigits(toDigits(pickAmount(p.amount), currency));
   };
 
-  const press = (k: (typeof KEYS)[number]) => {
+  const press = (k: Key) => {
     haptic('light');
     setDigits((prev) => {
       if (k === 'del') return prev.slice(0, -1);
+      if (k === '.') {
+        if (currency !== 'USD' || prev.includes('.')) return prev;
+        return (prev || '0') + '.';
+      }
+      if (prev.includes('.')) {
+        // At most 2 decimals ("000" makes no sense after the point).
+        const dec = prev.split('.')[1] ?? '';
+        if (k === '000' || dec.length >= 2) return prev;
+        return prev + k;
+      }
       const next = (prev === '0' ? '' : prev) + k;
       const trimmed = next.replace(/^0+/, '');
       return trimmed.length > MAX_DIGITS ? prev : trimmed;
     });
+  };
+
+  /** so'm ⇄ $: changes the unit of what is typed; the equivalent line shows the other one. */
+  const toggleCurrency = () => {
+    haptic('light');
+    const next: DisplayCurrency = currency === 'USD' ? 'UZS' : 'USD';
+    setCurrency(next);
+    if (next === 'UZS') setDigits((prev) => (prev.includes('.') ? toDigits(Number(prev), 'UZS') : prev));
   };
 
   const switchType = (t: 'in' | 'ex') => {
@@ -120,7 +174,8 @@ export default function QuickAddSheet({
     const keepTime = editing && initial && initial.date === date;
     const ok = await onSave({
       type,
-      amount: digits,
+      amount: digits.replace(/\.$/, ''),
+      currency,
       desc: desc.trim(),
       cat,
       date,
@@ -176,9 +231,23 @@ export default function QuickAddSheet({
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }} aria-live="polite">
             <span className="uz-qa-amount" style={{ color: type === 'in' ? '#2E7D32' : '#111511' }}>
               {type === 'in' ? '+' : '−'}
+              {currency === 'USD' ? '$' : ''}
               {groupDigits(digits)}
             </span>
-            <span style={{ fontSize: 18, fontWeight: 700, color: '#6B7068' }}>so‘m</span>
+            <button
+              type="button"
+              className="uz-qa-cur"
+              data-cur={currency}
+              onClick={toggleCurrency}
+              disabled={isSaving}
+              aria-label={`Valyuta: ${currency === 'USD' ? 'dollar' : 'so‘m'}. ${otherCurrency === 'USD' ? 'Dollarga' : 'So‘mga'} o‘tkazish`}
+            >
+              <span>{currency === 'USD' ? 'USD' : unitLabel(currency)}</span>
+              <ArrowLeftRight size={13} strokeWidth={2.6} aria-hidden="true" />
+            </button>
+          </div>
+          <div className="uz-qa-equiv num" aria-live="polite">
+            {equivalent > 0 ? `≈ ${formatWithUnit(equivalent, otherCurrency)}` : usdUzs > 0 ? `1 $ = ${formatAmount(usdUzs, 'UZS')} so‘m` : '\u00a0'}
           </div>
           <label htmlFor="qa-desc" className="sr-only">Nomi</label>
           <input
@@ -279,7 +348,7 @@ export default function QuickAddSheet({
                         <Icon size={24} strokeWidth={2.1} />
                       </span>
                       <span className="uz-qa-fav-name">{p.desc}</span>
-                      <span className="uz-qa-fav-amt">{shortAmount(p.amount)}</span>
+                      <span className="uz-qa-fav-amt">{pickLabel(p.amount)}</span>
                     </button>
                   );
                 })}
@@ -292,15 +361,15 @@ export default function QuickAddSheet({
                 {picks.recents.map((p) => (
                   <button key={p.key} type="button" className="uz-qa-recent" onClick={() => choose(p)}>
                     {p.desc}
-                    <span>{shortAmount(p.amount)}</span>
+                    <span>{pickLabel(p.amount)}</span>
                   </button>
                 ))}
               </div>
             )}
 
             <div className="uz-qa-keys">
-              {KEYS.map((k) => (
-                <button key={k} type="button" className="uz-qa-key" onClick={() => press(k)} aria-label={k === 'del' ? 'Raqamni o‘chirish' : k}>
+              {keys.map((k) => (
+                <button key={k} type="button" className="uz-qa-key" onClick={() => press(k)} aria-label={k === 'del' ? 'Raqamni o‘chirish' : k === '.' ? 'Nuqta (sent)' : k}>
                   {k === 'del' ? <Delete size={24} strokeWidth={2} /> : k}
                 </button>
               ))}

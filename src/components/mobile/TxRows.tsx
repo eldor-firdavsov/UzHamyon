@@ -4,6 +4,7 @@ import React from 'react';
 import { Send } from 'lucide-react';
 import { getCategoryMeta } from '@/components/categories/CategoryIcon';
 import { dayLabel } from '@/lib/time/dayLabel';
+import { formatAmount, formatWithUnit } from '@/lib/fx/currency';
 
 export interface TxRowData {
   id: string;
@@ -13,6 +14,12 @@ export interface TxRowData {
   desc: string;
   date: string;
   currency?: string;
+  /**
+   * Set when the row is shown converted into the display currency:
+   * the amount and currency it was actually saved in.
+   */
+  origAmount?: number;
+  origCurrency?: string;
   /** Logged through the Telegram bot. */
   viaBot?: boolean;
   /** Just saved: the row flashes once. */
@@ -25,11 +32,20 @@ export function groupNumber(n: number): string {
 
 export function signedAmount(t: Pick<TxRowData, 'type' | 'amount' | 'currency'>): string {
   const usd = (t.currency || 'UZS').toUpperCase() === 'USD';
-  return `${t.type === 'in' ? '+' : '−'}${usd ? '$' : ''}${groupNumber(t.amount)}`;
+  return `${t.type === 'in' ? '+' : '−'}${usd ? '$' : ''}${formatAmount(t.amount, usd ? 'USD' : 'UZS')}`;
 }
 
-function TxRow({ t, sub, onOpen }: { t: TxRowData; sub?: string; onOpen: (t: TxRowData) => void }) {
+/** "50 000 so‘m" under a converted row, so the user still sees what was saved. */
+function originalNote(t: TxRowData): string | null {
+  if (!t.origCurrency || t.origAmount === undefined) return null;
+  if ((t.origCurrency || 'UZS').toUpperCase() === (t.currency || 'UZS').toUpperCase()) return null;
+  return formatWithUnit(t.origAmount, t.origCurrency);
+}
+
+function TxRow({ t, sub: daySub, onOpen }: { t: TxRowData; sub?: string; onOpen: (t: TxRowData) => void }) {
   const meta = getCategoryMeta(t.cat, t.type);
+  const note = originalNote(t);
+  const sub = [daySub, note].filter(Boolean).join(' · ') || undefined;
   const Icon = meta.icon;
   return (
     <button type="button" className="uz-m-row" data-fresh={t.fresh ? 'true' : undefined} onClick={() => onOpen(t)}>
@@ -59,7 +75,7 @@ export function TxFlatList({ rows, today, onOpen }: { rows: TxRowData[]; today: 
   );
 }
 
-/** Rows grouped by day; the header shows the day and its net total (UZS only). */
+/** Rows grouped by day; the header shows the day and its net total (rows' own display currency). */
 export function TxDayGroups({ rows, today, onOpen }: { rows: TxRowData[]; today: string; onOpen: (t: TxRowData) => void }) {
   const groups: Array<{ date: string; rows: TxRowData[] }> = [];
   for (const t of rows) {
@@ -70,14 +86,15 @@ export function TxDayGroups({ rows, today, onOpen }: { rows: TxRowData[]; today:
   return (
     <div className="uz-m-groups">
       {groups.map((g) => {
+        const cur = (g.rows[0]?.currency || 'UZS').toUpperCase();
         const net = g.rows
-          .filter((t) => (t.currency || 'UZS').toUpperCase() !== 'USD')
+          .filter((t) => (t.currency || 'UZS').toUpperCase() === cur)
           .reduce((s, t) => s + (t.type === 'in' ? t.amount : -t.amount), 0);
         return (
           <section key={g.date} className="uz-m-group">
             <header className="uz-m-group-hd">
               <span>{dayLabel(g.date, today)}</span>
-              <span className="num">{net === 0 ? '0' : `${net > 0 ? '+' : '−'}${groupNumber(net)}`}</span>
+              <span className="num">{net === 0 ? '0' : `${net > 0 ? '+' : '−'}${cur === 'USD' ? '$' : ''}${formatAmount(net, cur)}`}</span>
             </header>
             <div className="uz-m-list">
               {g.rows.map((t) => (

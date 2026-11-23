@@ -17,6 +17,7 @@ import {
   AMOUNT_TOO_LARGE_MESSAGE,
 } from './limits.ts';
 import { formatMoney } from '../formatters/money.ts';
+import { mentionedCurrency, type DisplayCurrency } from '../fx/currency.ts';
 
 export type FinancialIntentType =
   | 'action_proposal'
@@ -29,6 +30,11 @@ export interface ExtractedActionItem {
   transactionType?: 'expense' | 'income';
   amount: number;
   currency: string;
+  /**
+   * false = the user did not name a currency, so `currency` is a default that may be
+   * replaced by the user's display currency (applyDefaultCurrency).
+   */
+  currencyExplicit?: boolean;
   description: string;
   /** Category name as chosen by the AI (one of the allowed names), later the DB row name. */
   categoryName?: string;
@@ -71,6 +77,11 @@ export interface ExtractionOptions {
   /** Clock override for tests. */
   now?: Date;
   /**
+   * The user's display currency: used for new transactions and goals when the message
+   * names no currency. Omit when unknown yet (the bot applies it after sign-in).
+   */
+  defaultCurrency?: DisplayCurrency;
+  /**
    * Voice input (Phase 2): the audio is sent inline to Gemini together with the SAME
    * system prompt; Gemini also returns a `transcript`. Then the same validation runs.
    */
@@ -109,7 +120,7 @@ function buildExtractionSystemPrompt(
   categories: { expense: string[]; income: string[] }
 ): string {
   return `Siz UzHamyon moliyaviy platformasi uchun foydalanuvchi xabarlarini tahlil qiluvchi va strukturaviy amallarni ajratuvchi AI yordamchisiz.
-Bugungi sana: ${todayDate}. Hozirgi vaqt: ${currentTime}. Asosiy valyuta: UZS (so'm).
+Bugungi sana: ${todayDate}. Hozirgi vaqt: ${currentTime}.
 
 Vazifangiz: Foydalanuvchi xabarini diqqat bilan o'qib, qat'iy JSON formatida quyidagi sxemaga mos javob qaytarish:
 {
@@ -119,7 +130,7 @@ Vazifangiz: Foydalanuvchi xabarini diqqat bilan o'qib, qat'iy JSON formatida quy
       "actionType": "create_transaction" | "create_goal" | "update_goal" | "contribute_goal",
       "transactionType": "expense" | "income",
       "amount": number,
-      "currency": "UZS" | "USD",
+      "currency": "UZS" | "USD" | null,
       "description": string,
       "categoryName": string | null,
       "date": "YYYY-MM-DD",
@@ -138,6 +149,7 @@ QOIDALAR:
    - Foydalanuvchi xarajat qilganini, daromad olganini, maqsad yaratishni, maqsadini o'zgartirishni yoki jamg'armaga pul qo'shganini aytganda.
    - Bitta xabarda bir nechta tranzaksiya bo'lsa (masalan: "Tushlik 45000 va taksi 15000"), "actions" massivida har biri uchun alohida element yarating!
    - 1 mln = 1 000 000, 50 ming / 50k = 50 000, 2.5 mln = 2 500 000.
+   - "currency": foydalanuvchi aniq aytgan valyuta ("$", "dollar", "usd" -> "USD"; "so'm", "sum", "ming", "mln" -> "UZS"). Valyuta aytilmagan bo'lsa: null. Summani hech qachon boshqa valyutaga o'girmang.
    - "kecha" desa: kechagi sana (${yesterdayDate}), "bugun" desa: ${todayDate}. Vaqt zonasi: Asia/Tashkent.
    - "categoryName" FAQAT quyidagi ro'yxatdagi nomlardan biri bo'lsin (aynan shu yozilishda). Mos keladigani bo'lmasa: null.
      Xarajat kategoriyalari: ${categories.expense.length ? categories.expense.join(', ') : '(yo‘q)'}
@@ -161,6 +173,56 @@ QOIDALAR:
 6. "summaryUzbek":
    - Foydalanuvchiga amallarni tasdiqlash uchun aniq, chiroyli va tushunarli o'zbekcha xulosa (preview).
    - Masalan: "Quyidagi 2 ta xarajatni qayd etishni tasdiqlaysizmi?\\n• Tushlik: 45 000 so‘m\\n• Taksi: 15 000 so‘m"`;
+}
+
+/** Deterministic Uzbek confirmation text for the extracted actions. */
+export function buildActionSummary(actions: ExtractedActionItem[]): string {
+  if (actions.length === 1) {
+    const a = actions[0];
+    if (a.actionType === 'create_transaction') {
+      return `${formatMoney(a.amount, a.currency)} miqdorida ${a.transactionType === 'income' ? 'daromadni' : 'xarajatni'} («${a.description}») qayd etishni tasdiqlaysizmi?`;
+    } else if (a.actionType === 'create_goal') {
+      return `«${a.goalName}» uchun ${formatMoney(a.targetAmount || a.amount, a.currency)} jamg‘arma maqsadini yaratishni tasdiqlaysizmi?`;
+    } else if (a.actionType === 'update_goal') {
+      return `«${a.goalName}» maqsadi miqdorini ${formatMoney(a.targetAmount || a.amount, a.currency)}ga o‘zgartirishni tasdiqlaysizmi?`;
+    } else if (a.actionType === 'contribute_goal') {
+      return `«${a.goalName || 'Jamg‘arma'}» maqsadiga ${formatMoney(a.amount, a.currency)} qo‘shishni tasdiqlaysizmi?`;
+    }
+  } else if (actions.length > 1) {
+    const lines = actions.map((a, i) => {
+      const typeText = a.transactionType === 'income' ? 'Daromad' : 'Xarajat';
+      return `${i + 1}. ${a.description} (${typeText}): ${formatMoney(a.amount, a.currency)}`;
+    });
+    return `Quyidagi ${actions.length} ta operatsiyani qayd etishni tasdiqlaysizmi?\n\n` + lines.join('\n');
+  }
+  return '';
+}
+
+/**
+ * Without a named currency, a plain amount below this is read as dollars for a
+ * dollar user ("kofe 4"); a bigger one ("taksi 20000") is clearly so'm.
+ */
+const USD_DEFAULT_MAX = 10_000;
+
+/**
+ * Puts the user's display currency on new transactions and goals whose currency the
+ * message did not name. Goal updates/contributions keep the goal's own currency rules.
+ * Rebuilds the confirmation text when anything changed.
+ */
+export function applyDefaultCurrency(result: ExtractionResult, defaultCurrency: DisplayCurrency): ExtractionResult {
+  if (defaultCurrency !== 'USD' || !result.actions.length) return result;
+  let changed = false;
+  const actions = result.actions.map((a) => {
+    if (a.currencyExplicit !== false) return a;
+    if (a.actionType !== 'create_transaction' && a.actionType !== 'create_goal') return a;
+    const amount = Number(a.targetAmount || a.amount);
+    if (!(amount > 0) || amount >= USD_DEFAULT_MAX || !isAmountWithinLimit(amount, 'USD')) return a;
+    if (a.currency === 'USD') return a;
+    changed = true;
+    return { ...a, currency: 'USD' };
+  });
+  if (!changed) return result;
+  return { ...result, actions, summaryUzbek: buildActionSummary(actions) || result.summaryUzbek };
 }
 
 /**
@@ -269,10 +331,22 @@ ENG MUHIM QOIDA: faqat audioda HAQIQATAN eshitilgan inson nutqini yozing. Hech n
 
     let amountTooLarge = false;
 
+    // Did the user name a currency at all? If not, the AI's guess is ignored and the
+    // default (so'm, or the user's display currency) is used instead.
+    const namedCurrency = mentionedCurrency(options.audio ? transcript : trimmed);
+    let currencyReplaced = false;
+
     if (Array.isArray(parsed.actions) && parsed.actions.length > 0) {
       for (const act of parsed.actions) {
         const rawAmount = Number(act.amount) || Number(act.targetAmount) || 0;
-        const currency = act.currency === 'USD' ? 'USD' : 'UZS';
+        const aiCurrency = String(act.currency || '').toUpperCase();
+        const currencyExplicit = Boolean(namedCurrency);
+        const currency = currencyExplicit
+          ? aiCurrency === 'USD' || aiCurrency === 'UZS'
+            ? aiCurrency
+            : namedCurrency!
+          : 'UZS';
+        if (aiCurrency && aiCurrency !== currency) currencyReplaced = true;
         const date = act.date && isValidCalendarDate(act.date) ? act.date : todayDate;
         const time = act.time && isValidTimeString(act.time) ? act.time.slice(0, 5) : currentTime;
 
@@ -293,6 +367,7 @@ ENG MUHIM QOIDA: faqat audioda HAQIQATAN eshitilgan inson nutqini yozing. Hech n
               targetAmount,
               amount: targetAmount,
               currency,
+              currencyExplicit,
               description: `Maqsad: ${(act.goalName || 'Jamg‘arma').trim()}`,
               targetDate: act.targetDate && isValidCalendarDate(act.targetDate) ? act.targetDate : undefined,
               date,
@@ -308,6 +383,7 @@ ENG MUHIM QOIDA: faqat audioda HAQIQATAN eshitilgan inson nutqini yozing. Hech n
               targetAmount,
               amount: targetAmount,
               currency,
+              currencyExplicit,
               description: `Maqsadni yangilash: ${(act.goalName || 'Jamg‘arma').trim()}`,
               targetDate: act.targetDate && isValidCalendarDate(act.targetDate) ? act.targetDate : undefined,
               date,
@@ -321,6 +397,7 @@ ENG MUHIM QOIDA: faqat audioda HAQIQATAN eshitilgan inson nutqini yozing. Hech n
               goalName: (act.goalName || '').trim(),
               amount: rawAmount,
               currency,
+              currencyExplicit,
               description: `Hissa: ${(act.goalName || 'Jamg‘arma').trim()}`,
               date,
               time,
@@ -335,6 +412,7 @@ ENG MUHIM QOIDA: faqat audioda HAQIQATAN eshitilgan inson nutqini yozing. Hech n
               transactionType: txType,
               amount: rawAmount,
               currency,
+              currencyExplicit,
               description: (act.description || (txType === 'income' ? 'Daromad' : 'Xarajat')).trim(),
               categoryName: pickAllowedName(act.categoryName, allowedCategories[txType]),
               date,
@@ -364,36 +442,18 @@ ENG MUHIM QOIDA: faqat audioda HAQIQATAN eshitilgan inson nutqini yozing. Hech n
       intent = 'clarification';
     }
 
-    // Build default Uzbek summary preview if Gemini gave empty preview
-    let summaryUzbek = parsed.summaryUzbek?.trim() || '';
-    if (!summaryUzbek) {
-      if (sanitizedActions.length === 1) {
-        const a = sanitizedActions[0];
-        if (a.actionType === 'create_transaction') {
-          summaryUzbek = `${formatMoney(a.amount, a.currency)} miqdorida ${a.transactionType === 'income' ? 'daromadni' : 'xarajatni'} («${a.description}») qayd etishni tasdiqlaysizmi?`;
-        } else if (a.actionType === 'create_goal') {
-          summaryUzbek = `«${a.goalName}» uchun ${formatMoney(a.targetAmount || a.amount, a.currency)} jamg‘arma maqsadini yaratishni tasdiqlaysizmi?`;
-        } else if (a.actionType === 'update_goal') {
-          summaryUzbek = `«${a.goalName}» maqsadi miqdorini ${formatMoney(a.targetAmount || a.amount, a.currency)}ga o‘zgartirishni tasdiqlaysizmi?`;
-        } else if (a.actionType === 'contribute_goal') {
-          summaryUzbek = `«${a.goalName || 'Jamg‘arma'}» maqsadiga ${formatMoney(a.amount, a.currency)} qo‘shishni tasdiqlaysizmi?`;
-        }
-      } else if (sanitizedActions.length > 1) {
-        const lines = sanitizedActions.map((a, i) => {
-          const typeText = a.transactionType === 'income' ? 'Daromad' : 'Xarajat';
-          return `${i + 1}. ${a.description} (${typeText}): ${formatMoney(a.amount, a.currency)}`;
-        });
-        summaryUzbek = `Quyidagi ${sanitizedActions.length} ta operatsiyani qayd etishni tasdiqlaysizmi?\n\n` + lines.join('\n');
-      }
-    }
+    // Gemini's own preview is kept unless we changed a currency it wrote into it.
+    let summaryUzbek = currencyReplaced ? '' : parsed.summaryUzbek?.trim() || '';
+    if (!summaryUzbek) summaryUzbek = buildActionSummary(sanitizedActions);
 
-    return {
+    const result: ExtractionResult = {
       intent,
       actions: sanitizedActions,
       clarificationQuestion: parsed.clarificationQuestion || undefined,
       transcript,
       summaryUzbek: summaryUzbek || 'Iltimos, ma’lumotingizni tasdiqlang.',
     };
+    return options.defaultCurrency ? applyDefaultCurrency(result, options.defaultCurrency) : result;
   } catch (err: unknown) {
     const budgetExceeded = isAiBudgetExceeded(err);
     console.error(

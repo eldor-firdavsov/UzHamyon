@@ -45,7 +45,18 @@ import {
   CalendarDays,
 } from 'lucide-react';
 import { invalidateAllFinancialCaches } from '@/lib/cache/clientCache';
-import { computeBalances, normalizeCurrency, PRIMARY_CURRENCY } from '@/lib/finance/balance';
+import { computeBalances, normalizeCurrency } from '@/lib/finance/balance';
+import {
+  convertAmount,
+  currencyName,
+  FALLBACK_USD_UZS,
+  formatAmount,
+  formatWithUnit,
+  toDisplayCurrency,
+  unitLabel,
+  type DisplayCurrency,
+  type FxRate,
+} from '@/lib/fx/currency';
 import { getNowLocalDateString, getNowLocalTimeString, isValidCalendarDate, isValidTimeString } from '@/lib/transactions/dateTime';
 
 // ── Types & Interfaces ──
@@ -118,6 +129,10 @@ export interface UzHamyonPrototypeAppProps {
   initialGoals?: Goal[];
   /** Logging streak from the server (null/undefined → fetched on the client). */
   initialStreak?: StreakSummary | null;
+  /** Currency the user sees everything in (undefined → fetched on the client). */
+  initialCurrency?: DisplayCurrency;
+  /** USD → UZS rate (undefined → fetched on the client). */
+  initialFx?: FxRate;
   initialSheet?: SheetType;
   allowDemoFallback?: boolean;
   syncBrowserUrl?: boolean;
@@ -217,13 +232,6 @@ function goalDeadlineLabel(iso: string): string {
   return m ? `${Number(iso.slice(8, 10))}-${m} ${iso.slice(0, 4)}` : iso;
 }
 
-function formatNumber(n: number): string {
-  if (n === 0 || !n) return '0';
-  const isNeg = n < 0;
-  const absFormatted = Math.abs(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-  return isNeg ? `−${absFormatted}` : absFormatted;
-}
-
 /** 'YYYY-MM-DD HH:mm' in Tashkent time for an ISO timestamp. */
 function formatTashkentDate(iso: string): string {
   const d = new Date(iso);
@@ -240,6 +248,18 @@ function padTwo(n: number): string {
 function parseNumber(s: string | number | undefined): number {
   const str = String(s || '').replace(/\s/g, '');
   return /^\d+$/.test(str) ? parseInt(str, 10) : 0;
+}
+
+/** Like parseNumber, but also accepts cents ("12.5", "12,50") for dollar amounts. */
+function parseAmount(s: string | number | undefined): number {
+  const str = String(s || '').replace(/\s/g, '').replace(',', '.');
+  return /^\d+(\.\d{1,2})?$/.test(str) ? Math.round(parseFloat(str) * 100) / 100 : 0;
+}
+
+/** Rows in currencies the switch can convert (so'm and dollars). */
+function isConvertible(currency?: string | null): boolean {
+  const c = normalizeCurrency(currency);
+  return c === 'UZS' || c === 'USD';
 }
 
 // Maps backend category strings into standardized prototype categories
@@ -384,6 +404,8 @@ export default function UzHamyonPrototypeApp({
   initialBudgets,
   initialGoals,
   initialStreak = null,
+  initialCurrency,
+  initialFx,
   initialSheet = null,
   allowDemoFallback = false,
   syncBrowserUrl = true,
@@ -413,6 +435,23 @@ export default function UzHamyonPrototypeApp({
     initialGoals || (allowDemoFallback ? DEMO_GOALS : [])
   );
   const [loading, setLoading] = useState<boolean>(!initialTransactions);
+
+  // ── Display currency (so'm ⇄ dollar) ──
+  // Rows keep the currency they were saved in; everything on screen is converted into `dc`.
+  const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>(initialCurrency ?? 'UZS');
+  const [fx, setFx] = useState<FxRate>(initialFx ?? { usdUzs: FALLBACK_USD_UZS, date: '', source: 'fallback' });
+  const [isSavingCurrency, setIsSavingCurrency] = useState<boolean>(false);
+  const dc = displayCurrency;
+  const usdUzs = fx.usdUzs;
+  const toDc = useCallback(
+    (amount: number, currency?: string | null) => convertAmount(Number(amount) || 0, normalizeCurrency(currency), dc, usdUzs),
+    [dc, usdUzs]
+  );
+  /** Display-currency amount → the currency a row/goal/budget is stored in. */
+  const fromDc = useCallback(
+    (amount: number, currency?: string | null) => convertAmount(Number(amount) || 0, dc, normalizeCurrency(currency), usdUzs),
+    [dc, usdUzs]
+  );
 
   // ── Persistence State ──
   // Only a real authenticated session may write to the database. The public
@@ -594,6 +633,41 @@ export default function UzHamyonPrototypeApp({
       return undefined;
     }
   }, []);
+
+  // Exchange rate: from the server render, otherwise fetched once here.
+  useEffect(() => {
+    if (initialFx) return;
+    let alive = true;
+    fetch('/api/fx')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((rate: FxRate | null) => {
+        if (alive && rate && Number(rate.usdUzs) > 0) setFx(rate);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [initialFx]);
+
+  // Saved currency choice, when the page was not rendered with it (e.g. /prototype after sign-in).
+  useEffect(() => {
+    if (initialCurrency || !isAuthenticated || allowDemoFallback) return;
+    let alive = true;
+    (async () => {
+      try {
+        const token = await getAuthToken();
+        const res = await fetch('/api/profile/currency', {
+          cache: 'no-store',
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+        const data = res.ok ? await res.json() : null;
+        if (alive && data?.currency) setDisplayCurrency(toDisplayCurrency(data.currency));
+      } catch {}
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [initialCurrency, isAuthenticated, allowDemoFallback, getAuthToken]);
 
   // Load real backend data on mount & whenever auth synchronizes
   useEffect(() => {
@@ -860,21 +934,25 @@ export default function UzHamyonPrototypeApp({
     return transactions.filter((t) => t.date && t.date.startsWith(prefix));
   }, [transactions, year, month, availableMonths.length]);
 
-  // Totals are in so'm only: amounts in other currencies are never added in (#28).
+  // Totals are in the display currency: so'm and dollar rows are converted at the current rate.
+  // Rows in other currencies (no rate for them) are left out of totals.
   const currentMonthUzsTransactions = useMemo(
-    () => currentMonthTransactions.filter((t) => normalizeCurrency(t.currency) === PRIMARY_CURRENCY),
-    [currentMonthTransactions]
+    () =>
+      currentMonthTransactions
+        .filter((t) => isConvertible(t.currency))
+        .map((t) => ({ ...t, amount: toDc(t.amount, t.currency), currency: dc })),
+    [currentMonthTransactions, toDc, dc]
   );
 
-  // Last month's so'm spending, for the change badge on the phone Tahlil ring.
+  // Last month's spending (display currency), for the change badge on the phone Tahlil ring.
   const prevMonthExpense = useMemo(() => {
     const pm = month === 1 ? 12 : month - 1;
     const py = month === 1 ? year - 1 : year;
     const prefix = `${py}-${padTwo(pm)}`;
     return transactions
-      .filter((t) => t.type === 'ex' && t.date?.startsWith(prefix) && normalizeCurrency(t.currency) === PRIMARY_CURRENCY)
-      .reduce((sum, t) => sum + t.amount, 0);
-  }, [transactions, year, month]);
+      .filter((t) => t.type === 'ex' && t.date?.startsWith(prefix) && isConvertible(t.currency))
+      .reduce((sum, t) => sum + toDc(t.amount, t.currency), 0);
+  }, [transactions, year, month, toDc]);
 
   // Income / Expense sums for currently active month
   const monthIncome = useMemo(() => {
@@ -899,11 +977,17 @@ export default function UzHamyonPrototypeApp({
     [transactions, goals]
   );
 
-  // Savings set aside in so'm goals
-  const totalGoalsSaved = balanceSummary.primary.goalSavings;
+  // Per-currency balances (#28) added together only after converting to the display currency.
+  const sumInDc = (pick: 'goalSavings' | 'balance') =>
+    Object.values(balanceSummary.byCurrency)
+      .filter((b) => isConvertible(b.currency))
+      .reduce((sum, b) => sum + toDc(b[pick], b.currency), 0);
 
-  // Free cash in so'm right now; can be negative, like a real card
-  const currentBalance = balanceSummary.primary.balance;
+  // Savings set aside in goals
+  const totalGoalsSaved = sumInDc('goalSavings');
+
+  // Free cash right now, in the display currency; can be negative, like a real card
+  const currentBalance = Math.round(sumInDc('balance') * 100) / 100;
 
   // Expenses grouped by category for active month
   const categoryExpenses = useMemo(() => {
@@ -988,67 +1072,79 @@ export default function UzHamyonPrototypeApp({
     const keys = Object.keys(categoryExpenses).sort((a, b) => categoryExpenses[b] - categoryExpenses[a]);
     const top4 = keys.slice(0, 4).map((c) => ({
       name: c,
-      amt: `${formatNumber(categoryExpenses[c])} so'm`,
+      amt: formatWithUnit(categoryExpenses[c], dc),
       pct: monthExpense > 0 ? Math.round((categoryExpenses[c] / monthExpense) * 100) : 0,
     }));
     if (keys.length > 4) {
       const rest = keys.slice(4).reduce((sum, c) => sum + categoryExpenses[c], 0);
       top4.push({
         name: 'Boshqalar',
-        amt: `${formatNumber(rest)} so'm`,
+        amt: formatWithUnit(rest, dc),
         pct: monthExpense > 0 ? Math.round((rest / monthExpense) * 100) : 0,
       });
     }
     return top4;
-  }, [categoryExpenses, monthExpense]);
+  }, [categoryExpenses, monthExpense, dc]);
+
+  /** Limit and spending of a budget in the display currency. */
+  const budgetInDc = useCallback(
+    (b: Budget) => ({
+      limit: toDc(b.limit, b.currency),
+      // The server's `spent` is in the budget's currency; the local fallback is already converted.
+      spent: typeof b.spent === 'number' ? toDc(b.spent, b.currency) : categoryExpenses[b.cat] || 0,
+    }),
+    [toDc, categoryExpenses]
+  );
 
   // Budget status cards
   const budgetStatusList = useMemo(() => {
-    return budgets.map((b) => {
-      const spent = typeof b.spent === 'number' ? b.spent : categoryExpenses[b.cat] || 0;
+    return budgets.map((raw) => {
+      const b = { ...raw, ...budgetInDc(raw) };
+      const spent = b.spent;
       const pct = b.limit > 0 ? Math.round((spent / b.limit) * 100) : 0;
       const over = spent > b.limit;
       const near = !over && pct >= 80;
       return {
         id: b.id,
         cat: b.cat,
-        limit: formatNumber(b.limit),
-        spent: formatNumber(spent),
+        limit: formatAmount(b.limit, dc),
+        spent: formatAmount(spent, dc),
         pct,
         barWidth: Math.min(pct, 100),
         color: over ? '#D64D4D' : near ? '#B77A12' : '#26834A',
         msg: over
-          ? `limitdan ${formatNumber(spent - b.limit)} oshdi`
+          ? `limitdan ${formatAmount(spent - b.limit, dc)} oshdi`
           : near
-          ? `limitga yaqin, qoldi ${formatNumber(b.limit - spent)}`
-          : `qoldi ${formatNumber(b.limit - spent)}`,
+          ? `limitga yaqin, qoldi ${formatAmount(b.limit - spent, dc)}`
+          : `qoldi ${formatAmount(b.limit - spent, dc)}`,
       };
     });
-  }, [budgets, categoryExpenses]);
+  }, [budgets, budgetInDc, dc]);
 
   // Goals summary
   const getGoalSaved = (g: Goal) => Number(g.saved) || 0;
 
-  // So'm goals only; goals in other currencies are not added to this total (#28).
+  // All so'm and dollar goals, converted to the display currency.
   const totalSavedAcrossGoals = useMemo(() => {
     return goals
-      .filter((g) => normalizeCurrency(g.currency) === PRIMARY_CURRENCY)
-      .reduce((sum, g) => sum + getGoalSaved(g), 0);
-  }, [goals]);
+      .filter((g) => isConvertible(g.currency))
+      .reduce((sum, g) => sum + toDc(getGoalSaved(g), g.currency), 0);
+  }, [goals, toDc]);
 
   const goalsList = useMemo(() => {
     return goals.map((g) => {
-      const sv = getGoalSaved(g);
+      const sv = toDc(getGoalSaved(g), g.currency);
+      const target = toDc(g.target, g.currency);
       return {
         id: g.id,
         name: g.name,
-        saved: formatNumber(sv),
-        target: formatNumber(g.target),
-        pct: g.target > 0 ? Math.min(100, Math.round((sv / g.target) * 100)) : 0,
+        saved: formatAmount(sv, dc),
+        target: formatAmount(target, dc),
+        pct: g.target > 0 ? Math.min(100, Math.round((getGoalSaved(g) / g.target) * 100)) : 0,
         rawGoal: g,
       };
     });
-  }, [goals]);
+  }, [goals, toDc, dc]);
 
   const activeGoal = useMemo(() => {
     return goals.find((g) => g.id === activeGoalId) || null;
@@ -1093,6 +1189,11 @@ export default function UzHamyonPrototypeApp({
     const timer = window.setTimeout(() => setFreshIds(new Set()), 1600);
     return () => window.clearTimeout(timer);
   }, [transactions, loading]);
+  /** A row as shown: amount in the display currency, plus what was actually saved. */
+  const toRow = (t: Transaction) =>
+    isConvertible(t.currency) && normalizeCurrency(t.currency) !== dc
+      ? { ...t, amount: toDc(t.amount, t.currency), currency: dc, origAmount: t.amount, origCurrency: normalizeCurrency(t.currency) }
+      : t;
   const withFresh = (rows: Transaction[]) => (freshIds.size ? rows.map((t) => (freshIds.has(t.id) ? { ...t, fresh: true } : t)) : rows);
 
   /** Category names for the quick sheet: the user's own list, falling back to the built-in one. */
@@ -1133,6 +1234,33 @@ export default function UzHamyonPrototypeApp({
     () => filteredActivityGroups.filter((g) => !g.isHead).map((g) => g.tx!),
     [filteredActivityGroups],
   );
+
+  /** Profile switch: everything re-renders in the new currency at once; the choice is saved in the background. */
+  const handleCurrencyChange = async (next: DisplayCurrency) => {
+    if (next === dc || isSavingCurrency) return;
+    const prev = dc;
+    setDisplayCurrency(next);
+    if (!isAuthenticated) {
+      triggerToast(`Endi hammasi ${currencyName(next)}da`);
+      return;
+    }
+    setIsSavingCurrency(true);
+    try {
+      const token = await getAuthToken();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch('/api/profile/currency', { method: 'PUT', headers, body: JSON.stringify({ currency: next }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof data?.error === 'string' ? data.error : 'Valyutani saqlab bo‘lmadi');
+      triggerToast(`Endi hammasi ${currencyName(next)}da`);
+    } catch (err) {
+      console.error('Currency save failed:', err);
+      setDisplayCurrency(prev);
+      triggerToast('Valyutani saqlab bo‘lmadi. Qayta urinib ko‘ring.');
+    } finally {
+      setIsSavingCurrency(false);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -1210,7 +1338,8 @@ export default function UzHamyonPrototypeApp({
 
   const handleOpenEditTx = (t: Transaction) => {
     setTxError(null);
-    setQuickEdit(t);
+    // Lists show converted copies; edit the row as it was saved (its own amount and currency).
+    setQuickEdit(transactions.find((x) => x.id === t.id) ?? t);
     setQuickOpen(true);
   };
 
@@ -1226,7 +1355,8 @@ export default function UzHamyonPrototypeApp({
     const fd: Record<string, string> = quick ? { ...quick } : formData;
     const isNew = quick ? !quickEditId : !editId;
     const targetEditId = quick ? quickEditId ?? null : editId;
-    const amt = parseNumber(fd.amount);
+    const amt = parseAmount(fd.amount);
+    const currency = toDisplayCurrency(fd.currency || dc);
     const date = fd.date || getNowLocalDateString();
     const time = fd.time || getNowLocalTimeString();
     const desc = (fd.desc || '').trim();
@@ -1261,12 +1391,12 @@ export default function UzHamyonPrototypeApp({
     if (!isAuthenticated) {
       if (targetEditId) {
         setTransactions((prev) =>
-          prev.map((t) => (t.id === targetEditId ? { ...t, type, amount: amt, cat, desc, date, time } : t))
+          prev.map((t) => (t.id === targetEditId ? { ...t, type, amount: amt, cat, desc, date, time, currency } : t))
         );
       } else {
         const nextRows = [
           ...transactions,
-          { id: `demo-${Date.now()}`, type, amount: amt, cat, desc, date, time },
+          { id: `demo-${Date.now()}`, type, amount: amt, cat, desc, date, time, currency },
         ];
         setTransactions(nextRows);
         setYear(parseInt(date.slice(0, 4), 10));
@@ -1293,7 +1423,7 @@ export default function UzHamyonPrototypeApp({
         description: desc,
         amount: amt,
         type: targetType,
-        currency: 'UZS',
+        currency,
         transaction_date: date,
         transaction_time: time,
       };
@@ -1375,12 +1505,16 @@ export default function UzHamyonPrototypeApp({
 
   const handleOpenEditBudget = (b: Budget) => {
     setEditId(b.id);
-    setFormData({ cat: b.cat, limit: formatNumberWithGaps(b.limit) });
+    setFormData({ cat: b.cat, limit: formatNumberWithGaps(Math.round(toDc(b.limit, b.currency))) });
     setActiveSheet('budget');
   };
 
   const handleSaveBudget = async () => {
-    const limit = parseNumber(formData.limit);
+    // Typed in the display currency. A new limit is saved in it; an edited one keeps its own currency.
+    const limitDc = parseNumber(formData.limit);
+    const editing = editId ? budgets.find((b) => b.id === editId) : undefined;
+    const budgetCurrency = editing ? normalizeCurrency(editing.currency) : dc;
+    const limit = editing ? fromDc(limitDc, budgetCurrency) : limitDc;
     const cat = formData.cat;
     if (limit <= 0 || !cat || isSavingBudget) return;
 
@@ -1394,7 +1528,7 @@ export default function UzHamyonPrototypeApp({
       if (editId) {
         setBudgets((prev) => prev.map((b) => (b.id === editId ? { ...b, cat, limit } : b)));
       } else {
-        setBudgets((prev) => [...prev, { id: 'b' + Date.now(), cat, limit }]);
+        setBudgets((prev) => [...prev, { id: 'b' + Date.now(), cat, limit, currency: budgetCurrency }]);
       }
       triggerToast(editId ? 'Byudjet yangilandi' : "Byudjet qo'shildi");
       closeSheet();
@@ -1420,7 +1554,7 @@ export default function UzHamyonPrototypeApp({
         : {
             name: catObj.name,
             amount: limit,
-            currency: 'UZS',
+            currency: budgetCurrency,
             period_type: 'monthly',
             start_date: startDate,
             end_date: endDate,
@@ -1466,7 +1600,7 @@ export default function UzHamyonPrototypeApp({
     setEditId(g.id);
     setFormData({
       name: g.name,
-      target: formatNumberWithGaps(g.target),
+      target: formatNumberWithGaps(Math.round(toDc(g.target, g.currency))),
       date: g.date,
     });
     setActiveSheet('goal');
@@ -1474,9 +1608,13 @@ export default function UzHamyonPrototypeApp({
 
   const handleSaveGoal = async () => {
     const name = (formData.name || '').trim();
-    const target = parseNumber(formData.target);
+    const targetDc = parseNumber(formData.target);
     const date = formData.date;
-    if (!name || target <= 0) return;
+    if (!name || targetDc <= 0) return;
+    // An edited goal keeps its own currency (its saved money is in it); a new one uses the display currency.
+    const editingGoal = editId ? goals.find((g) => g.id === editId) : undefined;
+    const goalCurrency = editingGoal ? normalizeCurrency(editingGoal.currency) : dc;
+    const target = editingGoal ? fromDc(targetDc, goalCurrency) : targetDc;
 
     const token = await getAuthToken();
     const authHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -1494,13 +1632,13 @@ export default function UzHamyonPrototypeApp({
       }).catch(console.error);
     } else {
       const tempId = 'g' + Date.now();
-      const newG: Goal = { id: tempId, name, target, date, saved: 0, currency: 'UZS', status: 'in_progress', contribs: [], contribsLoaded: true };
+      const newG: Goal = { id: tempId, name, target, date, saved: 0, currency: goalCurrency, status: 'in_progress', contribs: [], contribsLoaded: true };
       setGoals((prev) => [...prev, newG]);
       triggerToast('Maqsad qo‘shildi');
       fetch('/api/goals', {
         method: 'POST',
         headers: authHeaders,
-        body: JSON.stringify({ name, target_amount: target, target_date: date || null }),
+        body: JSON.stringify({ name, target_amount: target, target_date: date || null, currency: goalCurrency }),
       })
         .then((res) => res.json())
         .then((data) => {
@@ -1524,8 +1662,11 @@ export default function UzHamyonPrototypeApp({
   };
 
   const handleSaveContribution = async () => {
-    const contribAmt = parseNumber(formData.contrib);
-    if (contribAmt <= 0 || !activeGoalId || isSavingContrib) return;
+    const contribDc = parseNumber(formData.contrib);
+    if (contribDc <= 0 || !activeGoalId || isSavingContrib) return;
+    // Typed in the display currency; goals hold money in their own currency.
+    const goalForContrib = goals.find((g) => g.id === activeGoalId);
+    const contribAmt = fromDc(contribDc, goalForContrib?.currency);
 
     // Public demo preview (no session): keep it local.
     if (!isAuthenticated) {
@@ -1734,10 +1875,11 @@ export default function UzHamyonPrototypeApp({
         {tab === 'dash' && (
           <HomeMobile
             balance={currentBalance}
+            currency={dc}
             monthIncome={monthIncome}
             monthExpense={monthExpense}
             streak={streak}
-            recent={withFresh(sortedTransactions.slice(0, 4))}
+            recent={withFresh(sortedTransactions.slice(0, 4).map(toRow))}
             today={getNowLocalDateString()}
             loading={loading}
             onOpenTx={(t) => handleOpenEditTx(t as Transaction)}
@@ -1749,7 +1891,7 @@ export default function UzHamyonPrototypeApp({
         {/* ── TAB 2: FAOLIYAT (ACTIVITY) ── */}
         {tab === 'act' && (
           <ActivityMobile
-            rows={withFresh(activityRows)}
+            rows={withFresh(activityRows.map(toRow))}
             hasAny={transactions.length > 0}
             today={getNowLocalDateString()}
             loading={loading}
@@ -1775,18 +1917,14 @@ export default function UzHamyonPrototypeApp({
         {tab === 'tahlil' && (
           <TahlilMobile
             loading={loading}
+            currency={dc}
             byCategory={categoryExpenses}
             monthExpense={monthExpense}
             prevMonthExpense={prevMonthExpense}
-            budgets={budgets.map((b) => ({
-              id: b.id,
-              cat: b.cat,
-              limit: b.limit,
-              spent: typeof b.spent === 'number' ? b.spent : categoryExpenses[b.cat] || 0,
-            }))}
+            budgets={budgets.map((b) => ({ id: b.id, cat: b.cat, ...budgetInDc(b) }))}
             goals={goals
-              .filter((g) => normalizeCurrency(g.currency) === PRIMARY_CURRENCY)
-              .map((g) => ({ id: g.id, name: g.name, target: g.target, saved: getGoalSaved(g) }))}
+              .filter((g) => isConvertible(g.currency))
+              .map((g) => ({ id: g.id, name: g.name, target: toDc(g.target, g.currency), saved: toDc(getGoalSaved(g), g.currency) }))}
             onAddBudget={handleOpenAddBudget}
             onOpenBudget={(id) => {
               const found = budgets.find((b) => b.id === id);
@@ -1821,7 +1959,9 @@ export default function UzHamyonPrototypeApp({
 
       {quickOpen && (
         <QuickAddSheet
-          transactions={transactions}
+          transactions={transactions.filter((t) => isConvertible(t.currency)).map((t) => ({ ...t, amount: toDc(t.amount, t.currency) }))}
+          defaultCurrency={dc}
+          usdUzs={usdUzs}
           categories={quickCategories}
           isSaving={isSavingTx}
           error={txError}
@@ -1830,6 +1970,7 @@ export default function UzHamyonPrototypeApp({
               ? {
                   type: quickEdit.type,
                   amount: String(quickEdit.amount),
+                  currency: toDisplayCurrency(quickEdit.currency),
                   desc: quickEdit.desc || '',
                   cat: quickEdit.cat,
                   date: quickEdit.date,
@@ -1928,11 +2069,11 @@ export default function UzHamyonPrototypeApp({
                     className="uz-big-input"
                     inputMode="numeric"
                     placeholder="0"
-                    aria-label="Oylik limit, so‘m"
+                    aria-label={`Oylik limit, ${currencyName(dc)}`}
                     value={formData.limit || ''}
                     onChange={(e) => setFormData((prev) => ({ ...prev, limit: formatNumberWithGaps(e.target.value) }))}
                   />
-                  <span>so‘m / oy</span>
+                  <span>{unitLabel(dc)} / oy</span>
                 </div>
                 <div className="uz-qa-catgrid" role="listbox" aria-label="Kategoriya">
                   {Array.from(new Set([...quickCategories.ex, formData.cat].filter((c): c is string => Boolean(c) && c !== 'Auto'))).map((name) => {
@@ -1987,11 +2128,11 @@ export default function UzHamyonPrototypeApp({
                     className="uz-big-input"
                     inputMode="numeric"
                     placeholder="0"
-                    aria-label="Kerakli summa, so‘m"
+                    aria-label={`Kerakli summa, ${currencyName(dc)}`}
                     value={formData.target || ''}
                     onChange={(e) => setFormData((prev) => ({ ...prev, target: formatNumberWithGaps(e.target.value) }))}
                   />
-                  <span>so‘m kerak</span>
+                  <span>{unitLabel(dc)} kerak</span>
                 </div>
                 <div className="uz-m-list">
                   <label className="uz-sh-row">
@@ -2031,21 +2172,21 @@ export default function UzHamyonPrototypeApp({
                     className="uz-big-input"
                     inputMode="numeric"
                     placeholder="0"
-                    aria-label="Qo‘shiladigan summa, so‘m"
+                    aria-label={`Qo‘shiladigan summa, ${currencyName(dc)}`}
                     value={formData.contrib || ''}
                     onChange={(e) => setFormData((prev) => ({ ...prev, contrib: formatNumberWithGaps(e.target.value) }))}
                   />
-                  <span>so‘m</span>
+                  <span>{unitLabel(dc)}</span>
                 </div>
                 <div className="uz-sh-hint" data-warn={currentBalance - parseNumber(formData.contrib) < 0}>
                   {currentBalance - parseNumber(formData.contrib) < 0
-                    ? `Balans ${formatNumber(Math.abs(currentBalance - parseNumber(formData.contrib)))} so‘m minusga tushadi`
-                    : `Balansda qoladi: ${formatNumber(currentBalance - parseNumber(formData.contrib))} so‘m`}
+                    ? `Balans ${formatWithUnit(currentBalance - parseNumber(formData.contrib), dc)} minusga tushadi`
+                    : `Balansda qoladi: ${formatWithUnit(currentBalance - parseNumber(formData.contrib), dc)}`}
                 </div>
                 {currentBalance > 0 && (
                   <div className="uz-qa-days">
                     {[25, 50, 100].map((pct) => {
-                      const amt = Math.round((currentBalance * pct) / 100);
+                      const amt = Math.floor((currentBalance * pct) / 100);
                       return (
                         <button
                           key={pct}
@@ -2070,18 +2211,19 @@ export default function UzHamyonPrototypeApp({
 
             {/* ── Goal detail ── */}
             {activeSheet === 'detail' && activeGoal && (() => {
-              const saved = getGoalSaved(activeGoal);
-              const pct = activeGoal.target > 0 ? Math.min(100, Math.round((saved / activeGoal.target) * 100)) : 0;
-              const cur = normalizeCurrency(activeGoal.currency) === 'USD' ? '$' : 'so‘m';
+              const gc = activeGoal.currency;
+              const saved = toDc(getGoalSaved(activeGoal), gc);
+              const target = toDc(activeGoal.target, gc);
+              const pct = activeGoal.target > 0 ? Math.min(100, Math.round((getGoalSaved(activeGoal) / activeGoal.target) * 100)) : 0;
               return (
                 <>
                   <div className="uz-sh-goal">
                     <div className="uz-sh-goal-ring" style={{ background: `conic-gradient(#9FE870 0 ${pct}%, #E6EAE2 ${pct}% 100%)` }}>
                       <span className="num">{pct}%</span>
                     </div>
-                    <div className="uz-sh-goal-num num">{formatNumber(saved)}</div>
+                    <div className="uz-sh-goal-num num">{dc === 'USD' ? '$' : ''}{formatAmount(saved, dc)}</div>
                     <div className="uz-m-row-sub num">
-                      / {formatNumber(activeGoal.target)} {cur}
+                      / {formatWithUnit(target, dc)}
                       {activeGoal.date ? ` · ${goalDeadlineLabel(activeGoal.date)} gacha` : ''}
                     </div>
                   </div>
@@ -2101,7 +2243,7 @@ export default function UzHamyonPrototypeApp({
                             )}
                           </span>
                           <span className="uz-m-row-amt" data-in={c.a >= 0}>
-                            {c.a < 0 ? '−' : '+'}{formatNumber(Math.abs(c.a))}
+                            {c.a < 0 ? '−' : '+'}{dc === 'USD' ? '$' : ''}{formatAmount(toDc(Math.abs(c.a), gc), dc)}
                           </span>
                         </div>
                       ))}
@@ -2163,7 +2305,16 @@ export default function UzHamyonPrototypeApp({
             )}
 
             {activeSheet === 'user' && (
-              <ProfileSheetBody userName={userName} userEmail={userEmail} streak={streak} onLogout={handleLogout} />
+              <ProfileSheetBody
+                userName={userName}
+                userEmail={userEmail}
+                streak={streak}
+                currency={dc}
+                fx={fx}
+                currencyBusy={isSavingCurrency}
+                onCurrencyChange={handleCurrencyChange}
+                onLogout={handleLogout}
+              />
             )}
           </div>
         </div>

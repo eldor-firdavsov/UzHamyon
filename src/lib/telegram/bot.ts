@@ -1,7 +1,8 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { getSupabaseUrl, getSupabaseAnonKey, getSupabaseServiceRoleKey } from '../supabase/config.ts';
 import { getOrCreateTelegramUser } from './auth.ts';
-import { extractFinancialActions } from '../ai/actionExtractionEngine.ts';
+import { applyDefaultCurrency, extractFinancialActions } from '../ai/actionExtractionEngine.ts';
+import { getPreferredCurrency } from '../profile/preferredCurrency.ts';
 import {
   savePendingAction,
   getPendingAction,
@@ -767,7 +768,13 @@ async function processFinancialMessage(input: FinancialMessageInput): Promise<vo
         return opts;
       });
 
-  const [extracted, categoryOptions] = await Promise.all([extractionPromise, categoriesPromise]);
+  const [rawExtracted, categoryOptions, preferredCurrency] = await Promise.all([
+    extractionPromise,
+    categoriesPromise,
+    getPreferredCurrency(userAuth.client, userAuth.userId),
+  ]);
+  // No currency named in the message → the user's chosen display currency (so'm or dollar).
+  const extracted = applyDefaultCurrency(rawExtracted, preferredCurrency);
   const tAi = Date.now() - t0;
 
   const finish = (outcome: string) =>

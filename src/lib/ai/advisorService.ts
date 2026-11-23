@@ -666,12 +666,16 @@ export async function askFinancialAdvisor(
     const { loadCategoryOptions, categoryNamesByType, attachCategoryIds } = await import(
       '../categories/catalog.ts'
     );
-    const categoryOptions = isTelegram ? [] : await loadCategoryOptions(supabase);
+    const { getPreferredCurrency } = await import('../profile/preferredCurrency.ts');
+    const [categoryOptions, defaultCurrency] = isTelegram
+      ? [[], 'UZS' as const]
+      : await Promise.all([loadCategoryOptions(supabase), getPreferredCurrency(supabase, user.id)]);
     const extraction = isTelegram
       ? { intent: 'financial_query' as const, actions: [], summaryUzbek: '', clarificationQuestion: undefined }
       : await extractFinancialActions(question, {
           userFinancialContextText: verified.text,
           categories: categoryOptions.length ? categoryNamesByType(categoryOptions) : undefined,
+          defaultCurrency,
         });
 
     if (extraction.intent === 'action_proposal' && extraction.actions.length > 0) {

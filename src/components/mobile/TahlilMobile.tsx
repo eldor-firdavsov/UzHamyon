@@ -4,7 +4,7 @@ import React from 'react';
 import { ArrowDown, ArrowUp, Plus, Target } from 'lucide-react';
 import { getCategoryMeta } from '@/components/categories/CategoryIcon';
 import { shortAmount } from '@/lib/transactions/quickPicks';
-import { groupNumber } from './TxRows';
+import { formatAmount, formatWithUnit, type DisplayCurrency } from '@/lib/fx/currency';
 
 const RING_COLORS = ['#2457C5', '#E8930C', '#3E8E0A', '#7A5AE0', '#C9CFC4'];
 
@@ -24,7 +24,9 @@ export interface TahlilGoal {
 
 interface TahlilMobileProps {
   loading?: boolean;
-  /** So'm spent per category this month. */
+  /** Currency all amounts below are in (already converted). */
+  currency?: DisplayCurrency;
+  /** Spent per category this month, in `currency`. */
   byCategory: Record<string, number>;
   monthExpense: number;
   prevMonthExpense: number;
@@ -36,13 +38,19 @@ interface TahlilMobileProps {
   onOpenGoal: (id: string) => void;
 }
 
-function compact(n: number): string {
+function compact(n: number, currency: DisplayCurrency): string {
+  if (currency === 'USD') {
+    // Dollars: "$850", "$1.2k"; cents only below $100.
+    if (n > 0 && n < 100) return `$${formatAmount(n, 'USD')}`;
+    return `$${shortAmount(n) || '0'}`;
+  }
   return shortAmount(n) || '0';
 }
 
 /** Phone analytics: one ring, limits as bars, goals as rings. */
 export default function TahlilMobile({
   loading = false,
+  currency = 'UZS',
   byCategory,
   monthExpense,
   prevMonthExpense,
@@ -75,6 +83,7 @@ export default function TahlilMobile({
   }
   const ring = slices.length ? `conic-gradient(${stops.join(',')})` : '#ECEFE8';
 
+  const cur = currency === 'USD' ? '$' : '';
   const change = prevMonthExpense > 0 ? Math.round(((monthExpense - prevMonthExpense) / prevMonthExpense) * 100) : null;
 
   return (
@@ -91,9 +100,9 @@ export default function TahlilMobile({
           </>
         ) : (
         <>
-        <div className="uz-t-ring" style={{ background: ring }} role="img" aria-label={`Shu oy chiqim ${groupNumber(monthExpense)} so‘m`}>
+        <div className="uz-t-ring" style={{ background: ring }} role="img" aria-label={`Shu oy chiqim ${formatWithUnit(monthExpense, currency)}`}>
           <div className="uz-t-ring-hole">
-            <span className="uz-t-ring-total num">{compact(monthExpense)}</span>
+            <span className="uz-t-ring-total num">{compact(monthExpense, currency)}</span>
             {change !== null && change !== 0 && (
               <span
                 className="uz-t-ring-change"
@@ -149,9 +158,9 @@ export default function TahlilMobile({
                       <span
                         className="num"
                         style={{ color: over ? '#C62F21' : '#6B7068' }}
-                        aria-label={over ? `Limitdan ${groupNumber(b.spent - b.limit)} oshdi` : `Qoldi ${groupNumber(b.limit - b.spent)}`}
+                        aria-label={over ? `Limitdan ${formatWithUnit(b.spent - b.limit, currency)} oshdi` : `Qoldi ${formatWithUnit(b.limit - b.spent, currency)}`}
                       >
-                        {over ? `−${groupNumber(b.spent - b.limit)}` : groupNumber(b.limit - b.spent)}
+                        {over ? `−${cur}${formatAmount(b.spent - b.limit, currency)}` : `${cur}${formatAmount(b.limit - b.spent, currency)}`}
                       </span>
                     </span>
                     <span className="uz-t-bar"><span style={{ width: `${Math.min(100, Math.round(r * 100))}%`, background: bar }} /></span>
@@ -183,7 +192,7 @@ export default function TahlilMobile({
                     <span className="uz-t-goal-pct num">{p}%</span>
                   </span>
                   <span className="uz-t-goal-name">{g.name}</span>
-                  <span className="uz-m-row-sub num">{compact(g.saved)} / {compact(g.target)}</span>
+                  <span className="uz-m-row-sub num">{compact(g.saved, currency)} / {compact(g.target, currency)}</span>
                 </button>
               );
             })}
