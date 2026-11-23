@@ -1561,6 +1561,12 @@ export default function UzHamyonPrototypeApp({
     };
 
     if (!isAuthenticated) {
+      // Same rule as the server: one limit per category.
+      const key = normalizeCategory(cat, 'ex');
+      if (budgets.some((b) => b.id !== editId && normalizeCategory(b.cat, 'ex') === key)) {
+        setBudgetError('Bu kategoriyaga shu oy uchun limit allaqachon bor. Uni ro‘yxatdan ochib o‘zgartiring.');
+        return;
+      }
       if (editId) {
         setBudgets((prev) => prev.map((b) => (b.id === editId ? { ...b, cat, limit } : b)));
       } else {
