@@ -85,3 +85,34 @@ test('buildActionSummary lists several actions with their currencies', () => {
   assert.match(text, /Kofe \(Xarajat\): 4 dollar/);
   assert.match(text, /Taksi \(Xarajat\): 20 000 so‘m/);
 });
+
+import { alignGoalActions } from '../src/lib/ai/goalCurrency.ts';
+
+const GOALS = [
+  { id: 'g1', name: 'Noutbuk', currency: 'UZS', status: 'in_progress', updated_at: '2026-11-01T00:00:00Z' },
+  { id: 'g2', name: 'Safar', currency: 'USD', status: 'in_progress', updated_at: '2026-10-01T00:00:00Z' },
+];
+const contrib = (goalName, amount, currency, currencyExplicit) => ({
+  actionType: 'contribute_goal', goalName, amount, currency, currencyExplicit, description: 'Hissa',
+});
+
+test('goal contribution without a named currency takes the goal currency', () => {
+  const r = alignGoalActions([contrib('Safar', 50, 'UZS', false)], GOALS, RATE);
+  assert.equal(r.actions[0].currency, 'USD');
+  assert.equal(r.actions[0].amount, 50);
+  assert.equal(r.converted, false);
+});
+
+test('goal contribution in another named currency is converted at the rate', () => {
+  const r = alignGoalActions([contrib('Noutbuk', 10, 'USD', true)], GOALS, RATE);
+  assert.equal(r.actions[0].currency, 'UZS');
+  assert.equal(r.actions[0].amount, 126_500);
+  assert.equal(r.converted, true);
+});
+
+test('matching currency and plain transactions are untouched', () => {
+  const same = alignGoalActions([contrib('Noutbuk', 500_000, 'UZS', true)], GOALS, RATE);
+  assert.equal(same.changed, false);
+  const txOnly = alignGoalActions([tx(4, { currency: 'USD' })], GOALS, RATE);
+  assert.equal(txOnly.changed, false);
+});

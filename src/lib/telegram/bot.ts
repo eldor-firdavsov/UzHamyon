@@ -3,6 +3,7 @@ import { getSupabaseUrl, getSupabaseAnonKey, getSupabaseServiceRoleKey } from '.
 import { getOrCreateTelegramUser } from './auth.ts';
 import { applyDefaultCurrency, extractFinancialActions } from '../ai/actionExtractionEngine.ts';
 import { getPreferredCurrency } from '../profile/preferredCurrency.ts';
+import { alignGoalCurrencies } from '../ai/goalCurrency.ts';
 import {
   savePendingAction,
   getPendingAction,
@@ -802,11 +803,13 @@ async function processFinancialMessage(input: FinancialMessageInput): Promise<vo
 
   if (extracted.intent === 'action_proposal' && extracted.actions.length > 0) {
     const source = isVoice ? 'telegram_voice' : 'telegram_ai';
-    const actions = attachCategoryIds(extracted.actions, categoryOptions).map((a) => ({ ...a, source }));
+    // Goal contributions/updates go in the goal's own currency (converted when another one was named).
+    const proposal = await alignGoalCurrencies(extracted, userAuth.userId, userAuth.client);
+    const actions = attachCategoryIds(proposal.actions, categoryOptions).map((a) => ({ ...a, source }));
     const saveRes = await savePendingAction(
       userAuth.userId,
       actions,
-      extracted.summaryUzbek,
+      proposal.summaryUzbek,
       {
         telegramUserId: from.id,
         telegramChatId: chatId,
@@ -827,7 +830,7 @@ async function processFinancialMessage(input: FinancialMessageInput): Promise<vo
     }
 
     // The confirmation (preview + ✅/❌) — nothing is written to transactions before ✅.
-    await deliver(chatId, placeholderId, voicePrefix + escapeHtml(extracted.summaryUzbek), {
+    await deliver(chatId, placeholderId, voicePrefix + escapeHtml(proposal.summaryUzbek), {
       keyboard: buildConfirmKeyboard(saveRes.record.actionId),
     });
     finish('proposal');

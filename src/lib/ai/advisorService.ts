@@ -1,10 +1,13 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { generateAIContent } from './geminiClient.ts';
 import type { AiBudget } from './aiBudget.ts';
-import { computeBalances, normalizeCurrency, PRIMARY_CURRENCY } from '../finance/balance.ts';
+import { computeBalances, normalizeCurrency } from '../finance/balance.ts';
 import type { AIConversation, AIMessage } from '../../types/database.ts';
 import { todayTashkent, addDaysToDate } from '../time/tashkent.ts';
 import { formatMoney } from '../formatters/money.ts';
+import { convertAmount, formatAmount } from '../fx/currency.ts';
+import { getUsdUzsRate } from '../fx/rates.ts';
+import { getPreferredCurrency } from '../profile/preferredCurrency.ts';
 
 export interface ServiceResult<T> {
   data: T | null;
@@ -82,13 +85,34 @@ async function gatherUserFinancialContext(
   ]);
 
   const profile = profileRes.data;
-  const allTxs = allTxRes.data || [];
-  const budgets = budgetsRes.data || [];
-  const goals = goalsRes.data || [];
-  // UZS is the main currency; other currencies are reported separately and never added in (#28).
-  const primaryCurrency = PRIMARY_CURRENCY;
+  const rawTxs = allTxRes.data || [];
+  const rawBudgets = budgetsRes.data || [];
+  const rawGoals = goalsRes.data || [];
+
+  // Everything is reported in the user's chosen currency (so'm or dollar), the same way the
+  // Mini App shows it: so'm and dollar amounts are converted at today's rate (#28 still holds
+  // for currencies without a rate — those stay separate and are never added in).
+  const primaryCurrency = await getPreferredCurrency(supabase, userId);
+  const hasUsd = [...rawTxs, ...rawBudgets, ...rawGoals].some((r) => normalizeCurrency(r.currency) === 'USD');
+  const fx = hasUsd || primaryCurrency === 'USD' ? await getUsdUzsRate() : null;
+  const usdUzs = fx?.usdUzs ?? 0;
+  const convertible = (c?: string | null) => ['UZS', 'USD'].includes(normalizeCurrency(c));
+  const toDc = (n: unknown, c?: string | null) =>
+    convertible(c) ? convertAmount(Number(n) || 0, normalizeCurrency(c), primaryCurrency, usdUzs) : Number(n) || 0;
+  const inDc = <T extends { currency?: string | null }>(row: T, fields: Array<keyof T>): T => {
+    if (!convertible(row.currency)) return row;
+    const out = { ...row, currency: primaryCurrency } as T;
+    for (const f of fields) (out as Record<keyof T, unknown>)[f] = toDc(row[f], row.currency);
+    return out;
+  };
+  const allTxs = rawTxs.map((t) => inDc(t, ['amount']));
+  const budgets = rawBudgets.map((b) => inDc(b, ['amount']));
+  const goals = rawGoals.map((g) => inDc(g, ['target_amount', 'current_amount']));
   const balances = computeBalances(allTxs, goals);
+  const primary = balances.byCurrency[primaryCurrency] ?? balances.primary;
   const primaryTxs = allTxs.filter((t) => normalizeCurrency(t.currency) === primaryCurrency);
+  /** "Small" expense threshold: 100 000 so'm, or the same in dollars. */
+  const smallLimit = primaryCurrency === 'USD' && usdUzs > 0 ? 100000 / usdUzs : 100000;
 
   // Lifetime aggregates
   let totalLifetimeIncome = 0;
@@ -145,8 +169,8 @@ async function gatherUserFinancialContext(
       }
     }
 
-    // Track small recurring expenses (<= 100,000 UZS)
-    if (!isIncome && amt <= 100000) {
+    // Track small recurring expenses (<= 100,000 UZS, or its dollar equivalent)
+    if (!isIncome && amt <= smallLimit) {
       const groupKey = catName;
       if (!smallExpenses[groupKey]) {
         smallExpenses[groupKey] = { total: 0, count: 0, merchants: {} };
@@ -161,13 +185,19 @@ async function gatherUserFinancialContext(
   // Generate verified context lines
   const lines: string[] = [];
   lines.push('=== FOYDALANUVCHINING ANIQ TASDIQLANGAN MOLIYAVIY FAKTLARI (VERIFIED CONTEXT) ===');
-  lines.push(`- Asosiy hisob valyutasi: ${primaryCurrency} (boshqa valyutalar alohida, hech qachon qo‘shilmaydi)`);
-  lines.push(`- Joriy balans (daromad − xarajat − jamg‘armadagi pul): ${formatMoney(balances.primary.balance, primaryCurrency)}`);
-  lines.push(`- Jamg‘arma maqsadlarida saqlanayotgan pul: ${formatMoney(balances.primary.goalSavings, primaryCurrency)}`);
+  lines.push(
+    `- Foydalanuvchi tanlagan valyuta: ${primaryCurrency}. Javobdagi BARCHA summalarni shu valyutada yozing.` +
+      (usdUzs > 0
+        ? ` So‘m va dollardagi summalar 1 $ = ${formatAmount(usdUzs, 'UZS')} so‘m kursi bo‘yicha ${primaryCurrency} ga o‘girilgan.`
+        : '')
+  );
+  lines.push(`- Joriy balans (daromad − xarajat − jamg‘armadagi pul): ${formatMoney(primary.balance, primaryCurrency)}`);
+  lines.push(`- Jamg‘arma maqsadlarida saqlanayotgan pul: ${formatMoney(primary.goalSavings, primaryCurrency)}`);
   lines.push(`- Jami daromadlar (barcha): ${formatMoney(totalLifetimeIncome, primaryCurrency)}`);
   lines.push(`- Jami xarajatlar (barcha): ${formatMoney(totalLifetimeExpense, primaryCurrency)}`);
-  for (const cur of balances.otherCurrencies) {
+  for (const cur of Object.keys(balances.byCurrency).filter((c) => c !== primaryCurrency && !convertible(c))) {
     const b = balances.byCurrency[cur];
+    if (!b.income && !b.expense && !b.goalSavings) continue;
     lines.push(`- ${cur} hisobi (alohida): balans ${formatMoney(b.balance, cur)}, daromad ${formatMoney(b.income, cur)}, xarajat ${formatMoney(b.expense, cur)}, jamg‘armada ${formatMoney(b.goalSavings, cur)}`);
   }
   lines.push(`- Jami tranzaksiyalar soni: ${allTxs.length} ta`);
@@ -250,7 +280,7 @@ async function gatherUserFinancialContext(
 
   if (goals.length > 0) {
     const activeMonthsCount = sortedMonths.length || 1;
-    const avgMonthlyNet = Math.round((totalLifetimeIncome - totalLifetimeExpense) / activeMonthsCount);
+    const avgMonthlyNet = Math.round(((totalLifetimeIncome - totalLifetimeExpense) / activeMonthsCount) * 100) / 100;
     lines.push(`\n--- Jamg'arma Maqsadlari ---`);
     for (const g of goals) {
       const goalCurrency = normalizeCurrency(g.currency);
@@ -280,16 +310,16 @@ async function gatherUserFinancialContext(
     lines.push(`\n=== FOYDALANUVCHINING REJALASHTIRILGAN ONBOARDING MA’LUMOTLARI (PLANNING ESTIMATES) ===`);
     lines.push(`- DIQQAT: Ushbu raqamlar ro‘yxatdan o‘tishda rejalashtirish uchun kiritilgan baholashlar (taxminlar) bo‘lib, haqiqiy hisob balansi yoki tranzaksiya hisoblanmaydi.`);
     if (profile.declared_monthly_income !== null && profile.declared_monthly_income !== undefined) {
-      lines.push(`- Rejalashtirilgan oylik daromad (taxmin): ${formatMoney(Number(profile.declared_monthly_income), 'UZS')}`);
+      lines.push(`- Rejalashtirilgan oylik daromad (taxmin): ${formatMoney(toDc(profile.declared_monthly_income, 'UZS'), primaryCurrency)}`);
     }
     if (profile.declared_monthly_expenses !== null && profile.declared_monthly_expenses !== undefined) {
-      lines.push(`- Rejalashtirilgan oylik xarajat (taxmin): ${formatMoney(Number(profile.declared_monthly_expenses), 'UZS')}`);
+      lines.push(`- Rejalashtirilgan oylik xarajat (taxmin): ${formatMoney(toDc(profile.declared_monthly_expenses, 'UZS'), primaryCurrency)}`);
     }
     if (profile.target_expense_reduction_percent !== null && profile.target_expense_reduction_percent !== undefined) {
       lines.push(`- Xarajatlarni kamaytirish maqsadi: ${profile.target_expense_reduction_percent}%`);
     }
     if (profile.target_monthly_expenses !== null && profile.target_monthly_expenses !== undefined) {
-      lines.push(`- Maqsadli oylik xarajat (rejada): ${formatMoney(Number(profile.target_monthly_expenses), 'UZS')}`);
+      lines.push(`- Maqsadli oylik xarajat (rejada): ${formatMoney(toDc(profile.target_monthly_expenses, 'UZS'), primaryCurrency)}`);
     }
   }
 
@@ -303,8 +333,8 @@ async function gatherUserFinancialContext(
 
   const facts: VerifiedFinancialFacts = {
     primaryCurrency,
-    balance: balances.primary.balance,
-    goalSavings: balances.primary.goalSavings,
+    balance: primary.balance,
+    goalSavings: primary.goalSavings,
     transactionCount: allTxs.length,
     totalIncome: totalLifetimeIncome,
     totalExpense: totalLifetimeExpense,
@@ -679,6 +709,10 @@ export async function askFinancialAdvisor(
         });
 
     if (extraction.intent === 'action_proposal' && extraction.actions.length > 0) {
+      const { alignGoalCurrencies } = await import('./goalCurrency.ts');
+      const aligned = await alignGoalCurrencies(extraction, user.id, supabase);
+      extraction.actions = aligned.actions;
+      extraction.summaryUzbek = aligned.summaryUzbek;
       const actionsWithCategories = attachCategoryIds(extraction.actions, categoryOptions);
       const saveRes = await savePendingAction(user.id, actionsWithCategories, extraction.summaryUzbek);
       const pending = saveRes.record;
@@ -796,7 +830,7 @@ Asosiy vazifalar va javob tuzilishi:
    - Foydalanuvchi batafsil so'rasa, 4 jumlagacha yozish mumkin.
 
 3. FAKTIK ANIKLIK VA VALYUTA:
-   - Barcha pul summalarini so'mda (masalan: 6 000 000 soʻm) ko'rsating.
+   - Barcha pul summalarini kontekstda ko'rsatilgan "Foydalanuvchi tanlagan valyuta"da yozing (UZS bo'lsa: 6 000 000 soʻm; USD bo'lsa: 475 dollar). Valyutani o'zingiz almashtirmang.
    - Raqamlarni aslo o'ylab topmang, faqat berilgan kontekst faktlaridan oling. Agar ma'lumot yetishmasa yoki baza bo'sh bo'lsa, buni ochiq ayting.
    - ONBOARDING VA REJALASHTIRISH FAKTLARI:
      * Foydalanuvchining onboardingda ko‘rsatgan oylik daromadi yoki xarajati — bu REJA VA TAXMIN (PLANNING ESTIMATE).
