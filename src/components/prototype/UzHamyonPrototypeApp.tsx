@@ -1934,7 +1934,7 @@ export default function UzHamyonPrototypeApp({
   const isSaveContribDisabled = parseNumber(formData.contrib) <= 0 || isSavingContrib;
 
   return (
-    <div className="uz-app-wrapper pb-24">
+    <div className="uz-app-wrapper pb-28">
       {/* Test compatibility markers */}
       <span className="sr-only">
         bg-[#F1F4F2] bg-white text-[#222222] Kategoriyalar Import Budjetlar Jamg‘arma maqsadlari AI yordamchi Jami balans Kirim Chiqim Sof oqim Moliyaviy holatingiz

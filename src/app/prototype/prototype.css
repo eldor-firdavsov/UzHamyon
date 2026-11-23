@@ -1298,7 +1298,7 @@ button:focus-visible {
 .uz-nudge-bubble {
   position: fixed; z-index: 55;
   right: 16px;
-  bottom: calc(env(safe-area-inset-bottom, 12px) + 0.5rem + 76px);
+  bottom: calc(env(safe-area-inset-bottom, 12px) + 0.5rem + 84px);
   max-width: 240px;
   display: flex; align-items: center; gap: 10px;
   padding: 12px 14px;
@@ -1534,7 +1534,7 @@ div.uz-m-empty { cursor: default; color: var(--uz-muted); }
 .uz-ai-typing span { width: 7px; height: 7px; border-radius: 50%; background: #AEB4AA; animation: uz-blink 1s ease-in-out infinite; }
 .uz-ai-typing span:nth-child(2) { animation-delay: .15s; }
 .uz-ai-typing span:nth-child(3) { animation-delay: .3s; }
-.uz-ai-dock { position: sticky; bottom: calc(env(safe-area-inset-bottom, 12px) + 84px); display: flex; flex-direction: column; gap: 10px; padding-top: 8px; background: linear-gradient(to bottom, transparent, var(--uz-ground) 30%); }
+.uz-ai-dock { position: sticky; bottom: calc(env(safe-area-inset-bottom, 12px) + 92px); display: flex; flex-direction: column; gap: 10px; padding-top: 8px; background: linear-gradient(to bottom, transparent, var(--uz-ground) 30%); }
 @media (min-width: 1024px) { .uz-ai-dock { bottom: 16px; } }
 .uz-ai-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .uz-ai-chip { height: 38px; padding: 0 14px; border-radius: 19px; background: #fff; border: 1px solid #DDE2D8; font: inherit; font-size: 14px; font-weight: 600; color: var(--uz-ink); display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
@@ -1811,6 +1811,17 @@ nav[aria-label="Mobil navigatsiya"] > button.liquid-glass-primary {
 
 /* Bottom buttons get breathing room (Telegram often reports a 0 safe-area) */
 .uz-sh, .uz-qa-sheet { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 28px); }
+
+/* Add-transaction sheet: always full height, so it no longer jumps when switching
+   Xarajat/Daromad or when the category list or an error changes its content. */
+.uz-qa-sheet {
+  height: 100dvh; max-height: 100dvh; border-radius: 0;
+  padding-top: calc(env(safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px) + 12px);
+}
+.uz-qa-actions { display: flex; gap: 10px; margin-top: auto; flex-shrink: 0; }
+@media (min-width: 1024px) {
+  .uz-qa-sheet { height: min(880px, 94dvh); max-height: 94dvh; border-radius: 28px; padding-top: 8px; }
+}
 .uz-sk-btn, .uz-cele-btn { height: 58px; margin-top: 10px; padding: 0 24px; font-size: 18px; }
 .uz-cele { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 36px); }
 

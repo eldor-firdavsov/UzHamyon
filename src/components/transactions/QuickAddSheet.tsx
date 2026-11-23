@@ -379,7 +379,7 @@ export default function QuickAddSheet({
 
         {error && <div className="uz-qa-error" role="alert">{error}</div>}
 
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div className="uz-qa-actions">
           {editing && onDelete && (
             <button type="button" className="uz-qa-trash" aria-label="Amalni o‘chirish" onClick={onDelete} disabled={isSaving}>
               <Trash2 size={22} strokeWidth={2.2} />
