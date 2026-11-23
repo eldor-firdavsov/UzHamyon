@@ -203,7 +203,7 @@ describe('Phase C — Transaction CRUD Implementation and Verification', () => {
       );
 
       assert.strictEqual(res.status, 400);
-      assert.ok(res.error.includes('Description is required'));
+      assert.ok(res.error.includes('Izoh kiritilishi shart'));
     });
 
     test('4. Invalid amount (zero or negative) is rejected', async () => {
@@ -364,7 +364,7 @@ describe('Phase C — Transaction CRUD Implementation and Verification', () => {
         clientA
       );
       assert.strictEqual(res.status, 400);
-      assert.ok(res.error.includes('incompatible with transaction type'));
+      assert.ok(res.error.includes('tranzaksiyaga mos emas'));
     });
 
     test('12. Unauthenticated request is rejected', async () => {
@@ -560,7 +560,7 @@ describe('Phase C — Transaction CRUD Implementation and Verification', () => {
         clientA
       );
       assert.strictEqual(res.status, 400);
-      assert.ok(res.error.includes('End date must be on or after start date'));
+      assert.ok(res.error.includes('Tugash sanasi boshlanish sanasidan oldin bo‘lmasligi kerak'));
     });
 
     test('Filter by type: income only', async () => {
@@ -677,7 +677,7 @@ describe('Phase C — Transaction CRUD Implementation and Verification', () => {
       );
 
       assert.strictEqual(res.status, 400);
-      assert.ok(res.error.includes('incompatible with transaction type'));
+      assert.ok(res.error.includes('tranzaksiyaga mos emas'));
     });
 
     test("Category reassignment to another user's category is rejected", async () => {

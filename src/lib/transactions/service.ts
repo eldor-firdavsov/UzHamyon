@@ -47,7 +47,7 @@ export async function createTransaction(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     // 1. Validate input schema
@@ -57,7 +57,7 @@ export async function createTransaction(
       const firstError =
         parseResult.error.issues?.[0]?.message ||
         fallbackErrors?.[0]?.message ||
-        'Invalid input';
+        'Kiritilgan ma’lumotlar noto‘g‘ri';
       return { data: null, error: firstError, status: 400 };
     }
 
@@ -72,20 +72,20 @@ export async function createTransaction(
         .maybeSingle();
 
       if (catError || !category) {
-        return { data: null, error: 'Referenced category does not exist or is inaccessible', status: 400 };
+        return { data: null, error: 'Ko‘rsatilgan kategoriya mavjud emas yoki unga ruxsat yo‘q', status: 400 };
       }
 
       // Check ownership (system category OR owned by current user)
       const isOwner = category.is_system || category.user_id === user.id;
       if (!isOwner) {
-        return { data: null, error: 'Referenced category does not belong to you', status: 403 };
+        return { data: null, error: 'Ko‘rsatilgan kategoriya sizga tegishli emas', status: 403 };
       }
 
       // Check type compatibility
       if (category.type !== validData.type) {
         return {
           data: null,
-          error: `Category '${category.name}' (${category.type}) is incompatible with transaction type '${validData.type}'`,
+          error: `«${category.name}» kategoriyasi (${category.type === 'income' ? 'daromad' : 'xarajat'}) bu turdagi tranzaksiyaga mos emas (${validData.type === 'income' ? 'daromad' : 'xarajat'})`,
           status: 400,
         };
       }
@@ -134,7 +134,7 @@ export async function createTransaction(
     if (insertError) {
       return {
         data: null,
-        error: insertError.message || 'Database error creating transaction',
+        error: insertError.message || 'Tranzaksiyani saqlashda baza xatoligi',
         status: 500,
       };
     }
@@ -155,7 +155,7 @@ export async function createTransaction(
 
     return { data: created as TransactionWithCategory, error: null, status: 201 };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
+    const message = err instanceof Error ? err.message : 'Serverda ichki xatolik yuz berdi';
     return { data: null, error: message, status: 500 };
   }
 }
@@ -175,7 +175,7 @@ export async function listTransactions(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     const parseResult = transactionFilterSchema.safeParse(filterParams || {});
@@ -184,7 +184,7 @@ export async function listTransactions(
       const firstError =
         parseResult.error.issues?.[0]?.message ||
         fallbackErrors?.[0]?.message ||
-        'Invalid filter parameters';
+        'Filtr parametrlari noto‘g‘ri';
       return { data: null, error: firstError, status: 400 };
     }
 
@@ -255,7 +255,7 @@ export async function listTransactions(
     if (fetchError) {
       return {
         data: null,
-        error: fetchError.message || 'Database error fetching transactions',
+        error: fetchError.message || 'Tranzaksiyalarni olishda baza xatoligi',
         status: 500,
       };
     }
@@ -275,7 +275,7 @@ export async function listTransactions(
       status: 200,
     };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
+    const message = err instanceof Error ? err.message : 'Serverda ichki xatolik yuz berdi';
     return { data: null, error: message, status: 500 };
   }
 }
@@ -295,11 +295,11 @@ export async function getTransaction(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     if (!id || typeof id !== 'string') {
-      return { data: null, error: 'Transaction ID is required', status: 400 };
+      return { data: null, error: 'Tranzaksiya ID si kiritilishi shart', status: 400 };
     }
 
     const { data, error } = await supabase
@@ -314,12 +314,12 @@ export async function getTransaction(
     }
 
     if (!data) {
-      return { data: null, error: 'Transaction not found', status: 404 };
+      return { data: null, error: 'Tranzaksiya topilmadi', status: 404 };
     }
 
     return { data: data as TransactionWithCategory, error: null, status: 200 };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
+    const message = err instanceof Error ? err.message : 'Serverda ichki xatolik yuz berdi';
     return { data: null, error: message, status: 500 };
   }
 }
@@ -340,11 +340,11 @@ export async function updateTransaction(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     if (!id || typeof id !== 'string') {
-      return { data: null, error: 'Transaction ID is required', status: 400 };
+      return { data: null, error: 'Tranzaksiya ID si kiritilishi shart', status: 400 };
     }
 
     // 1. Fetch existing transaction to verify ownership
@@ -360,7 +360,7 @@ export async function updateTransaction(
     }
 
     if (!existing) {
-      return { data: null, error: 'Transaction not found or inaccessible', status: 404 };
+      return { data: null, error: 'Tranzaksiya topilmadi yoki unga ruxsat yo‘q', status: 404 };
     }
 
     // 2. Validate input schema
@@ -370,7 +370,7 @@ export async function updateTransaction(
       const firstError =
         parseResult.error.issues?.[0]?.message ||
         fallbackErrors?.[0]?.message ||
-        'Invalid input';
+        'Kiritilgan ma’lumotlar noto‘g‘ri';
       return { data: null, error: firstError, status: 400 };
     }
 
@@ -388,18 +388,18 @@ export async function updateTransaction(
         .maybeSingle();
 
       if (catError || !category) {
-        return { data: null, error: 'Referenced category does not exist or is inaccessible', status: 400 };
+        return { data: null, error: 'Ko‘rsatilgan kategoriya mavjud emas yoki unga ruxsat yo‘q', status: 400 };
       }
 
       const isOwner = category.is_system || category.user_id === user.id;
       if (!isOwner) {
-        return { data: null, error: 'Referenced category does not belong to you', status: 403 };
+        return { data: null, error: 'Ko‘rsatilgan kategoriya sizga tegishli emas', status: 403 };
       }
 
       if (category.type !== targetType) {
         return {
           data: null,
-          error: `Category '${category.name}' (${category.type}) is incompatible with transaction type '${targetType}'`,
+          error: `«${category.name}» kategoriyasi (${category.type === 'income' ? 'daromad' : 'xarajat'}) bu turdagi tranzaksiyaga mos emas (${targetType === 'income' ? 'daromad' : 'xarajat'})`,
           status: 400,
         };
       }
@@ -433,14 +433,14 @@ export async function updateTransaction(
     if (updateError) {
       return {
         data: null,
-        error: updateError.message || 'Database error updating transaction',
+        error: updateError.message || 'Tranzaksiyani yangilashda baza xatoligi',
         status: 500,
       };
     }
 
     return { data: updated as TransactionWithCategory, error: null, status: 200 };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
+    const message = err instanceof Error ? err.message : 'Serverda ichki xatolik yuz berdi';
     return { data: null, error: message, status: 500 };
   }
 }
@@ -460,11 +460,11 @@ export async function deleteTransaction(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     if (!id || typeof id !== 'string') {
-      return { data: null, error: 'Transaction ID is required', status: 400 };
+      return { data: null, error: 'Tranzaksiya ID si kiritilishi shart', status: 400 };
     }
 
     const { data: deletedRows, error: deleteError } = await supabase
@@ -477,18 +477,18 @@ export async function deleteTransaction(
     if (deleteError) {
       return {
         data: null,
-        error: deleteError.message || 'Database error deleting transaction',
+        error: deleteError.message || 'Tranzaksiyani o‘chirishda baza xatoligi',
         status: 500,
       };
     }
 
     if (!deletedRows || deletedRows.length === 0) {
-      return { data: null, error: 'Transaction not found or inaccessible', status: 404 };
+      return { data: null, error: 'Tranzaksiya topilmadi yoki unga ruxsat yo‘q', status: 404 };
     }
 
     return { data: { success: true, id }, error: null, status: 200 };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
+    const message = err instanceof Error ? err.message : 'Serverda ichki xatolik yuz berdi';
     return { data: null, error: message, status: 500 };
   }
 }

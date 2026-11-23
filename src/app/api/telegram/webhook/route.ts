@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   try {
     const update = await req.json();
     if (!update || typeof update.update_id !== 'number') {
-      return NextResponse.json({ ok: false, error: 'Invalid update payload' }, { status: 400 });
+      return NextResponse.json({ ok: false, error: 'Yangilanish ma’lumotlari noto‘g‘ri' }, { status: 400 });
     }
 
     updateId = update.update_id;
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
       await failWebhookUpdate(updateId, detail).catch(() => {});
     }
     // Never echo internal error details back to the caller.
-    return NextResponse.json({ ok: false, error: 'Internal error' }, { status: 200 });
+    return NextResponse.json({ ok: false, error: 'Ichki xatolik yuz berdi' }, { status: 200 });
   }
 }
 

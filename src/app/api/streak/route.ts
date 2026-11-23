@@ -20,7 +20,7 @@ export async function GET() {
       headers: { 'Cache-Control': 'no-store' },
     });
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error fetching streak';
+    const msg = err instanceof Error ? err.message : 'Seriya ma’lumotlarini olishda xatolik';
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

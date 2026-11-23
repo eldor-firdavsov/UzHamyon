@@ -150,7 +150,7 @@ export async function listBudgets(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     const { data: rawBudgets, error: budgetError } = await supabase
@@ -169,7 +169,7 @@ export async function listBudgets(
 
     return { data: budgetsWithProgress, error: null, status: 200 };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error fetching budgets';
+    const msg = err instanceof Error ? err.message : 'Limitlarni olishda xatolik';
     return { data: null, error: msg, status: 500 };
   }
 }
@@ -189,7 +189,7 @@ export async function getBudget(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     const { data: rawBudget, error } = await supabase
@@ -204,13 +204,13 @@ export async function getBudget(
     }
 
     if (!rawBudget) {
-      return { data: null, error: 'Budget not found', status: 404 };
+      return { data: null, error: 'Limit topilmadi', status: 404 };
     }
 
     const computed = await computeBudgetProgress(rawBudget, supabase);
     return { data: computed, error: null, status: 200 };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error fetching budget';
+    const msg = err instanceof Error ? err.message : 'Limitni olishda xatolik';
     return { data: null, error: msg, status: 500 };
   }
 }
@@ -230,12 +230,12 @@ export async function createBudget(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     const parseResult = createBudgetSchema.safeParse(input);
     if (!parseResult.success) {
-      const err = parseResult.error.issues?.[0]?.message || 'Invalid budget data';
+      const err = parseResult.error.issues?.[0]?.message || 'Limit ma’lumotlari noto‘g‘ri';
       return { data: null, error: err, status: 400 };
     }
 
@@ -250,13 +250,13 @@ export async function createBudget(
         .maybeSingle();
 
       if (!cat) {
-        return { data: null, error: 'Referenced category not found', status: 400 };
+        return { data: null, error: 'Ko‘rsatilgan kategoriya topilmadi', status: 400 };
       }
       if (!cat.is_system && cat.user_id !== user.id) {
-        return { data: null, error: 'Cannot use another user private category', status: 400 };
+        return { data: null, error: 'Boshqa foydalanuvchining kategoriyasidan foydalanib bo‘lmaydi', status: 400 };
       }
       if (cat.type !== 'expense') {
-        return { data: null, error: 'Budgets can only be assigned to expense categories', status: 400 };
+        return { data: null, error: 'Limit faqat xarajat kategoriyalariga qo‘yiladi', status: 400 };
       }
     }
 
@@ -296,7 +296,7 @@ export async function createBudget(
     const computed = await computeBudgetProgress(created, supabase);
     return { data: computed, error: null, status: 201 };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error creating budget';
+    const msg = err instanceof Error ? err.message : 'Limit yaratishda xatolik';
     return { data: null, error: msg, status: 500 };
   }
 }
@@ -317,12 +317,12 @@ export async function updateBudget(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     const parseResult = updateBudgetSchema.safeParse(input);
     if (!parseResult.success) {
-      const err = parseResult.error.issues?.[0]?.message || 'Invalid budget update data';
+      const err = parseResult.error.issues?.[0]?.message || 'Limitni yangilash ma’lumotlari noto‘g‘ri';
       return { data: null, error: err, status: 400 };
     }
 
@@ -337,7 +337,7 @@ export async function updateBudget(
       .maybeSingle();
 
     if (!existing) {
-      return { data: null, error: 'Budget not found', status: 404 };
+      return { data: null, error: 'Limit topilmadi', status: 404 };
     }
 
     if (validated.category_id) {
@@ -348,13 +348,13 @@ export async function updateBudget(
         .maybeSingle();
 
       if (!cat) {
-        return { data: null, error: 'Referenced category not found', status: 400 };
+        return { data: null, error: 'Ko‘rsatilgan kategoriya topilmadi', status: 400 };
       }
       if (!cat.is_system && cat.user_id !== user.id) {
-        return { data: null, error: 'Cannot use another user private category', status: 400 };
+        return { data: null, error: 'Boshqa foydalanuvchining kategoriyasidan foydalanib bo‘lmaydi', status: 400 };
       }
       if (cat.type !== 'expense') {
-        return { data: null, error: 'Budgets can only be assigned to expense categories', status: 400 };
+        return { data: null, error: 'Limit faqat xarajat kategoriyalariga qo‘yiladi', status: 400 };
       }
     }
 
@@ -402,7 +402,7 @@ export async function updateBudget(
     const computed = await computeBudgetProgress(updated, supabase);
     return { data: computed, error: null, status: 200 };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error updating budget';
+    const msg = err instanceof Error ? err.message : 'Limitni yangilashda xatolik';
     return { data: null, error: msg, status: 500 };
   }
 }
@@ -422,7 +422,7 @@ export async function deleteBudget(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     const { data: existing } = await supabase
@@ -433,7 +433,7 @@ export async function deleteBudget(
       .maybeSingle();
 
     if (!existing) {
-      return { data: null, error: 'Budget not found', status: 404 };
+      return { data: null, error: 'Limit topilmadi', status: 404 };
     }
 
     const { error } = await supabase
@@ -448,7 +448,7 @@ export async function deleteBudget(
 
     return { data: { success: true, id }, error: null, status: 200 };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error deleting budget';
+    const msg = err instanceof Error ? err.message : 'Limitni o‘chirishda xatolik';
     return { data: null, error: msg, status: 500 };
   }
 }

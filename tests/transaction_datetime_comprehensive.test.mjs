@@ -140,7 +140,7 @@ describe('Task 1 — Transaction Date and Time Validation & Timezone Integrity',
     assert.strictEqual(isValidCalendarDate('2026-02-28'), true, '2026 is non-leap year (28 days)');
     assert.strictEqual(isValidCalendarDate('2026-04-30'), true, 'April has 30 days');
 
-    // Invalid calendar dates
+    // Bunday sana mavjud emass
     assert.strictEqual(isValidCalendarDate('2026-02-29'), false, '2026-02-29 does not exist');
     assert.strictEqual(isValidCalendarDate('2026-04-31'), false, 'April 31 does not exist');
     assert.strictEqual(isValidCalendarDate('2026-13-01'), false, 'Month 13 does not exist');

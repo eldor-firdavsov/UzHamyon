@@ -146,7 +146,7 @@ async function computeGoalProgress(
       feasibilityStatus = 'unlikely';
       monthlyNeeded = remaining;
       explanation = goal.currency === 'USD'
-        ? `"${goal.name}": The target date for this goal has already passed (Needed: ${formatMoney(remaining, goal.currency)}).`
+        ? `«${goal.name}»: belgilangan muddat o‘tib ketgan (yana ${formatMoney(remaining, goal.currency)} kerak). Yangi muddat belgilang.`
         : 'Belgilangan muddat o‘tib ketgan. Yangi muddat belgilash kerak.';
     } else {
       monthlyNeeded = Math.round((remaining / monthsRemaining) * 100) / 100;
@@ -158,17 +158,17 @@ async function computeGoalProgress(
       if (avgMonthlyNet >= monthlyNeeded) {
         feasibilityStatus = 'feasible';
         explanation = goal.currency === 'USD'
-          ? `"${goal.name}": Based on your monthly net savings of ${formatMoney(avgMonthlyNet, goal.currency)}/mo, you are on track to save ${formatMoney(monthlyNeeded, goal.currency)}/mo needed by ${goal.target_date}.`
+          ? `«${goal.name}»: ${goal.target_date} gacha oyiga ${formatMoney(monthlyNeeded, goal.currency)} yig‘ish kerak. Oylik erkin mablag‘ingiz (${formatMoney(avgMonthlyNet, goal.currency)}) yetarli.`
           : `Maqsadga yetish uchun oyiga ${formatMoney(monthlyNeeded, goal.currency)} yig‘ing. Oylik erkin mablag‘ingiz (${formatMoney(avgMonthlyNet, goal.currency)}) yetarli.`;
       } else if (avgMonthlyNet > 0 && monthlyNeeded <= avgMonthlyNet * 1.5) {
         feasibilityStatus = 'challenging';
         explanation = goal.currency === 'USD'
-          ? `"${goal.name}": You need ${formatMoney(monthlyNeeded, goal.currency)}/mo, but your average savings is ${formatMoney(avgMonthlyNet, goal.currency)}/mo. Consider extending your target date or trimming discretionary spending.`
+          ? `«${goal.name}»: oyiga ${formatMoney(monthlyNeeded, goal.currency)} kerak, o‘rtacha jamg‘armangiz esa oyiga ${formatMoney(avgMonthlyNet, goal.currency)}. Muddatni uzaytirish yoki ixtiyoriy xarajatlarni kamaytirish tavsiya etiladi.`
           : `Oyiga ${formatMoney(monthlyNeeded, goal.currency)} jamg‘arish kerak. Xarajatlarni optimallashtirish tavsiya etiladi.`;
       } else {
         feasibilityStatus = 'unlikely';
         explanation = goal.currency === 'USD'
-          ? `"${goal.name}": You need ${formatMoney(monthlyNeeded, goal.currency)}/mo, but your current net cashflow is insufficient (${formatMoney(avgMonthlyNet, goal.currency)}/mo). Consider extending your target date.`
+          ? `«${goal.name}»: oyiga ${formatMoney(monthlyNeeded, goal.currency)} kerak, hozirgi erkin mablag‘ingiz yetarli emas (oyiga ${formatMoney(avgMonthlyNet, goal.currency)}). Muddatni uzaytirish tavsiya etiladi.`
           : `Hozirgi jamg‘arish sur’ati bilan muddatni uzaytirish yoki xarajatlarni kamaytirish kerak (Oyiga ${formatMoney(monthlyNeeded, goal.currency)} kerak, erkin mablag‘: ${formatMoney(avgMonthlyNet, goal.currency)}).`;
       }
     }
@@ -212,7 +212,7 @@ export async function listGoals(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     const { data: rawGoals, error } = await supabase
@@ -231,7 +231,7 @@ export async function listGoals(
 
     return { data: goalsWithProgress, error: null, status: 200 };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error fetching goals';
+    const msg = err instanceof Error ? err.message : 'Maqsadlarni olishda xatolik';
     return { data: null, error: msg, status: 500 };
   }
 }
@@ -251,7 +251,7 @@ export async function getGoal(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     const { data: rawGoal, error } = await supabase
@@ -266,13 +266,13 @@ export async function getGoal(
     }
 
     if (!rawGoal) {
-      return { data: null, error: 'Financial goal not found', status: 404 };
+      return { data: null, error: 'Moliyaviy maqsad topilmadi', status: 404 };
     }
 
     const computed = await computeGoalProgress(rawGoal, supabase);
     return { data: computed, error: null, status: 200 };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error fetching goal';
+    const msg = err instanceof Error ? err.message : 'Maqsadni olishda xatolik';
     return { data: null, error: msg, status: 500 };
   }
 }
@@ -292,12 +292,12 @@ export async function createGoal(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     const parseResult = createGoalSchema.safeParse(input);
     if (!parseResult.success) {
-      const err = parseResult.error.issues?.[0]?.message || 'Invalid goal data';
+      const err = parseResult.error.issues?.[0]?.message || 'Maqsad ma’lumotlari noto‘g‘ri';
       return { data: null, error: err, status: 400 };
     }
 
@@ -330,7 +330,7 @@ export async function createGoal(
     const computed = await computeGoalProgress(created, supabase);
     return { data: computed, error: null, status: 201 };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error creating goal';
+    const msg = err instanceof Error ? err.message : 'Maqsad yaratishda xatolik';
     return { data: null, error: msg, status: 500 };
   }
 }
@@ -351,12 +351,12 @@ export async function updateGoal(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     const parseResult = updateGoalSchema.safeParse(input);
     if (!parseResult.success) {
-      const err = parseResult.error.issues?.[0]?.message || 'Invalid goal update data';
+      const err = parseResult.error.issues?.[0]?.message || 'Maqsadni yangilash ma’lumotlari noto‘g‘ri';
       return { data: null, error: err, status: 400 };
     }
 
@@ -370,7 +370,7 @@ export async function updateGoal(
       .maybeSingle();
 
     if (!existing) {
-      return { data: null, error: 'Financial goal not found', status: 404 };
+      return { data: null, error: 'Moliyaviy maqsad topilmadi', status: 404 };
     }
 
     const effectiveTarget = validated.target_amount !== undefined ? validated.target_amount : Number(existing.target_amount);
@@ -408,7 +408,7 @@ export async function updateGoal(
     const computed = await computeGoalProgress(updated, supabase);
     return { data: computed, error: null, status: 200 };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error updating goal';
+    const msg = err instanceof Error ? err.message : 'Maqsadni yangilashda xatolik';
     return { data: null, error: msg, status: 500 };
   }
 }
@@ -464,12 +464,12 @@ export async function contributeToGoal(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     const parseResult = contributeGoalSchema.safeParse(input);
     if (!parseResult.success) {
-      const err = parseResult.error.issues?.[0]?.message || 'Invalid contribution data';
+      const err = parseResult.error.issues?.[0]?.message || 'Hissa ma’lumotlari noto‘g‘ri';
       return { data: null, error: err, status: 400 };
     }
 
@@ -483,7 +483,7 @@ export async function contributeToGoal(
       .maybeSingle();
 
     if (!existing) {
-      return { data: null, error: 'Financial goal not found', status: 404 };
+      return { data: null, error: 'Moliyaviy maqsad topilmadi', status: 404 };
     }
 
     // 1. Preferred path: history row; the DB trigger moves the money atomically.
@@ -540,7 +540,7 @@ export async function contributeToGoal(
     const computed = await computeGoalProgress(updated, supabase);
     return { data: computed, error: null, status: 200 };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error contributing to goal';
+    const msg = err instanceof Error ? err.message : 'Maqsadga hissa qo‘shishda xatolik';
     return { data: null, error: msg, status: 500 };
   }
 }
@@ -562,7 +562,7 @@ export async function listGoalContributions(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     const { data, error } = await supabase
@@ -583,7 +583,7 @@ export async function listGoalContributions(
     const contributions = (data || []).map((r) => ({ ...r, amount: Number(r.amount) })) as GoalContributionRow[];
     return { data: { contributions, available: true }, error: null, status: 200 };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error listing contributions';
+    const msg = err instanceof Error ? err.message : 'Hissalar ro‘yxatini olishda xatolik';
     return { data: null, error: msg, status: 500 };
   }
 }
@@ -603,7 +603,7 @@ export async function deleteGoal(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     const { data: existing } = await supabase
@@ -614,7 +614,7 @@ export async function deleteGoal(
       .maybeSingle();
 
     if (!existing) {
-      return { data: null, error: 'Financial goal not found', status: 404 };
+      return { data: null, error: 'Moliyaviy maqsad topilmadi', status: 404 };
     }
 
     const { error } = await supabase
@@ -629,7 +629,7 @@ export async function deleteGoal(
 
     return { data: { success: true, id }, error: null, status: 200 };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error deleting goal';
+    const msg = err instanceof Error ? err.message : 'Maqsadni o‘chirishda xatolik';
     return { data: null, error: msg, status: 500 };
   }
 }

@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ result: result.data }, { status: result.status });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Server error committing import';
+    const message = err instanceof Error ? err.message : 'Importni saqlashda server xatoligi';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

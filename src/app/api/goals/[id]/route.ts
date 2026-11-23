@@ -17,7 +17,7 @@ export async function GET(
 
     return NextResponse.json({ goal: result.data }, { status: 200 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Server error fetching goal';
+    const message = err instanceof Error ? err.message : 'Maqsadni olishda server xatoligi';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -41,7 +41,7 @@ export async function PUT(
 
     return NextResponse.json({ goal: result.data }, { status: 200 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Server error updating goal';
+    const message = err instanceof Error ? err.message : 'Maqsadni yangilashda server xatoligi';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -60,7 +60,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true, id: result.data?.id }, { status: 200 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Server error deleting goal';
+    const message = err instanceof Error ? err.message : 'Maqsadni o‘chirishda server xatoligi';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

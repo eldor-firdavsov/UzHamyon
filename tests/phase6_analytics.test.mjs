@@ -215,7 +215,7 @@ describe('Phase 6 — Deterministic Financial Analytics Backend Tests', () => {
     // Uncategorized: 300 / 500 = 60.00%
     const uncat = expenses.find((e) => e.categoryId === null);
     assert.ok(uncat);
-    assert.strictEqual(uncat.categoryName, 'Uncategorized');
+    assert.strictEqual(uncat.categoryName, 'Kategoriyasiz');
     assert.strictEqual(uncat.totalAmount, 300.0);
     assert.strictEqual(uncat.percentage, 60.0);
     assert.strictEqual(uncat.count, 1);

@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
       const { categoryName, percentageReduction } = body;
       if (!categoryName || percentageReduction === undefined) {
         return NextResponse.json(
-          { error: 'categoryName and percentageReduction are required for simulation' },
+          { error: 'Simulyatsiya uchun kategoriya nomi va kamaytirish foizi kiritilishi shart' },
           { status: 400 }
         );
       }
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     const question = (body.question || body.message || body.prompt || '').trim();
     const conversationId = body.conversationId;
     if (!question) {
-      return NextResponse.json({ error: 'question is required' }, { status: 400 });
+      return NextResponse.json({ error: 'Savol kiritilishi shart' }, { status: 400 });
     }
 
     const result = await askFinancialAdvisor(question, conversationId);
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Server error in AI Advisor';
+    const message = err instanceof Error ? err.message : 'AI yordamchida server xatoligi';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

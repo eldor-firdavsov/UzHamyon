@@ -19,7 +19,7 @@ export async function GET(
 
     return NextResponse.json({ category: result.data }, { status: 200 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
+    const message = err instanceof Error ? err.message : 'Serverda ichki xatolik yuz berdi';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -39,7 +39,7 @@ export async function PUT(
 
     return NextResponse.json({ category: result.data }, { status: 200 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
+    const message = err instanceof Error ? err.message : 'Serverda ichki xatolik yuz berdi';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -58,7 +58,7 @@ export async function DELETE(
 
     return NextResponse.json(result.data, { status: 200 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
+    const message = err instanceof Error ? err.message : 'Serverda ichki xatolik yuz berdi';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -3,11 +3,11 @@ import { z } from 'zod';
 export const analyticsQuerySchema = z.object({
   startDate: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'startDate must be YYYY-MM-DD')
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Boshlanish sanasi YYYY-MM-DD formatida bo‘lishi kerak')
     .optional(),
   endDate: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'endDate must be YYYY-MM-DD')
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Tugash sanasi YYYY-MM-DD formatida bo‘lishi kerak')
     .optional(),
   currency: z
     .string()
@@ -23,7 +23,7 @@ export const analyticsQuerySchema = z.object({
     return true;
   },
   {
-    message: 'startDate cannot be after endDate',
+    message: 'Boshlanish sanasi tugash sanasidan keyin bo‘lmasligi kerak',
     path: ['endDate'],
   }
 );

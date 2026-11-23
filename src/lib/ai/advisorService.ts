@@ -921,7 +921,7 @@ export async function simulateBudgetScenario(
     let currentSpending = 0;
     for (const t of txs || []) {
       const cat = Array.isArray(t.categories) ? t.categories[0] : t.categories;
-      const name = cat?.name || 'Uncategorized';
+      const name = cat?.name || 'Kategoriyasiz';
       if (name.toLowerCase() === categoryName.toLowerCase()) {
         currentSpending += Number(t.amount);
       }
@@ -948,7 +948,7 @@ export async function simulateBudgetScenario(
       status: 200,
     };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error simulating scenario';
+    const msg = err instanceof Error ? err.message : 'Ssenariyni hisoblashda xatolik';
     return { data: null, error: msg, status: 500 };
   }
 }
@@ -967,7 +967,7 @@ export async function listAIConversations(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     const { data, error } = await supabase
@@ -982,7 +982,7 @@ export async function listAIConversations(
 
     return { data: (data || []) as AIConversation[], error: null, status: 200 };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error fetching conversations';
+    const msg = err instanceof Error ? err.message : 'Suhbatlarni olishda xatolik';
     return { data: null, error: msg, status: 500 };
   }
 }
@@ -1002,7 +1002,7 @@ export async function getConversationMessages(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     const { data: conv, error: convErr } = await supabase
@@ -1013,7 +1013,7 @@ export async function getConversationMessages(
       .maybeSingle();
 
     if (convErr || !conv) {
-      return { data: null, error: 'Conversation not found', status: 404 };
+      return { data: null, error: 'Suhbat topilmadi', status: 404 };
     }
 
     const { data: msgs, error: msgsErr } = await supabase
@@ -1036,7 +1036,7 @@ export async function getConversationMessages(
       status: 200,
     };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error fetching messages';
+    const msg = err instanceof Error ? err.message : 'Xabarlarni olishda xatolik';
     return { data: null, error: msg, status: 500 };
   }
 }

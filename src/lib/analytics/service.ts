@@ -36,12 +36,12 @@ export async function getAnalyticsSummary(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     const parseResult = analyticsQuerySchema.safeParse(queryParams || {});
     if (!parseResult.success) {
-      const err = parseResult.error.issues?.[0]?.message || 'Invalid analytics query parameters';
+      const err = parseResult.error.issues?.[0]?.message || 'Tahlil parametrlari noto‘g‘ri';
       return { data: null, error: err, status: 400 };
     }
 
@@ -134,7 +134,7 @@ export async function getAnalyticsSummary(
       const amt = Number(tx.amount) || 0;
       const cat = Array.isArray(tx.categories) ? tx.categories[0] : tx.categories;
       const catId = tx.category_id || '__uncategorized__';
-      const catName = cat?.name || 'Uncategorized';
+      const catName = cat?.name || 'Kategoriyasiz';
       const catIcon = cat?.icon || null;
       const catColor = cat?.color || null;
 
@@ -300,7 +300,7 @@ export async function getAnalyticsSummary(
           description: t.description,
           amount: Number(t.amount),
           transaction_date: t.transaction_date,
-          category_name: cat?.name || 'Uncategorized',
+          category_name: cat?.name || 'Kategoriyasiz',
         };
       });
 
@@ -315,7 +315,7 @@ export async function getAnalyticsSummary(
           description: t.description,
           amount: Number(t.amount),
           transaction_date: t.transaction_date,
-          category_name: cat?.name || 'Uncategorized',
+          category_name: cat?.name || 'Kategoriyasiz',
         };
       });
 
@@ -342,7 +342,7 @@ export async function getAnalyticsSummary(
       status: 200,
     };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error generating analytics summary';
+    const msg = err instanceof Error ? err.message : 'Tahlilni tayyorlashda xatolik';
     return { data: null, error: msg, status: 500 };
   }
 }

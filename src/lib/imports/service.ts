@@ -66,17 +66,17 @@ export async function previewImport(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     if (!buffer || buffer.length === 0) {
-      return { data: null, error: 'Uploaded file is empty', status: 400 };
+      return { data: null, error: 'Yuklangan fayl bo‘sh', status: 400 };
     }
 
     // 1. Parse spreadsheet structure
     const { headers, rows } = parseSpreadsheetBuffer(buffer);
     if (headers.length === 0 || rows.length === 0) {
-      return { data: null, error: 'File contains no data rows or headers', status: 400 };
+      return { data: null, error: 'Faylda sarlavha yoki ma’lumot qatorlari yo‘q', status: 400 };
     }
 
     // 2. Resolve mapping
@@ -85,7 +85,7 @@ export async function previewImport(
 
     const parseMappingResult = importColumnMappingSchema.safeParse(mapping);
     if (!parseMappingResult.success) {
-      const err = parseMappingResult.error.issues?.[0]?.message || 'Invalid column mapping';
+      const err = parseMappingResult.error.issues?.[0]?.message || 'Ustunlar noto‘g‘ri moslashtirilgan';
       return { data: null, error: err, status: 400 };
     }
     const finalMapping = parseMappingResult.data;
@@ -148,7 +148,7 @@ export async function previewImport(
       status: 200,
     };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error previewing spreadsheet';
+    const msg = err instanceof Error ? err.message : 'Jadvalni oldindan ko‘rishda xatolik';
     return { data: null, error: msg, status: 500 };
   }
 }
@@ -168,12 +168,12 @@ export async function commitImport(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     const parseResult = importCommitSchema.safeParse(input);
     if (!parseResult.success) {
-      const err = parseResult.error.issues?.[0]?.message || 'Invalid commit payload';
+      const err = parseResult.error.issues?.[0]?.message || 'Import ma’lumotlari noto‘g‘ri';
       return { data: null, error: err, status: 400 };
     }
 
@@ -192,7 +192,7 @@ export async function commitImport(
       .single();
 
     if (jobErr || !job) {
-      return { data: null, error: jobErr?.message || 'Failed to initialize import job', status: 500 };
+      return { data: null, error: jobErr?.message || 'Importni boshlab bo‘lmadi', status: 500 };
     }
 
     // 2. Duplicate detection check if strategy is 'skip'
@@ -269,7 +269,7 @@ export async function commitImport(
 
         return {
           data: null,
-          error: `Transaction insertion failed: ${insertErr.message}`,
+          error: `Tranzaksiyalarni saqlab bo‘lmadi: ${insertErr.message}`,
           status: 500,
         };
       }
@@ -324,7 +324,7 @@ export async function commitImport(
       status: 201,
     };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error committing import';
+    const msg = err instanceof Error ? err.message : 'Importni saqlashda xatolik';
     return { data: null, error: msg, status: 500 };
   }
 }
@@ -343,7 +343,7 @@ export async function listImportJobs(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     const { data, error } = await supabase
@@ -358,7 +358,7 @@ export async function listImportJobs(
 
     return { data: (data || []) as ImportJob[], error: null, status: 200 };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error fetching import jobs';
+    const msg = err instanceof Error ? err.message : 'Importlar ro‘yxatini olishda xatolik';
     return { data: null, error: msg, status: 500 };
   }
 }
@@ -378,7 +378,7 @@ export async function getImportJob(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     const { data, error } = await supabase
@@ -393,12 +393,12 @@ export async function getImportJob(
     }
 
     if (!data) {
-      return { data: null, error: 'Import job not found', status: 404 };
+      return { data: null, error: 'Import topilmadi', status: 404 };
     }
 
     return { data: data as ImportJob, error: null, status: 200 };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error fetching import job';
+    const msg = err instanceof Error ? err.message : 'Import ma’lumotini olishda xatolik';
     return { data: null, error: msg, status: 500 };
   }
 }

@@ -244,7 +244,7 @@ describe('Phase D — Category Management Live Database & RLS Tests', () => {
       clientA
     );
     assert.strictEqual(dupRes.status, 409);
-    assert.ok(dupRes.error.includes('already exists'));
+    assert.ok(dupRes.error.includes('allaqachon mavjud'));
 
     // Case-insensitive duplicate name check
     const caseInsensitiveDup = await createCategory(
@@ -352,7 +352,7 @@ describe('Phase D — Category Management Live Database & RLS Tests', () => {
       clientA
     );
     assert.strictEqual(res.status, 403);
-    assert.ok(res.error.includes('System categories cannot be modified'));
+    assert.ok(res.error.includes('Tizim kategoriyalarini o‘zgartirib bo‘lmaydi'));
   });
 
   test('D3.5 Changing category type is rejected if transactions reference it', async () => {
@@ -380,7 +380,7 @@ describe('Phase D — Category Management Live Database & RLS Tests', () => {
       clientA
     );
     assert.strictEqual(updateRes.status, 400);
-    assert.ok(updateRes.error.includes('Cannot change category type'));
+    assert.ok(updateRes.error.includes('Kategoriya turini o‘zgartirib bo‘lmaydi'));
 
     // 3. Delete the transaction
     const { error: delTxErr } = await clientA.from('transactions').delete().eq('id', txRes.data.id);
@@ -391,7 +391,7 @@ describe('Phase D — Category Management Live Database & RLS Tests', () => {
   test('D4.1 Deleting a system category is strictly forbidden with HTTP 403', async () => {
     const res = await deleteCategory(systemExpenseCategory.id, clientA);
     assert.strictEqual(res.status, 403);
-    assert.ok(res.error.includes('System categories cannot be deleted'));
+    assert.ok(res.error.includes('Tizim kategoriyalarini o‘chirib bo‘lmaydi'));
   });
 
   test('D4.2 User A cannot delete User B custom category (returns HTTP 404)', async () => {

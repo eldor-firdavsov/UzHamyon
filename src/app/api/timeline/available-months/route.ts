@@ -18,7 +18,7 @@ export async function GET() {
 
     return NextResponse.json(timeline, { status: 200 });
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error fetching financial timeline';
+    const msg = err instanceof Error ? err.message : 'Moliyaviy tarixni olishda xatolik';
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

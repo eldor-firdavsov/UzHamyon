@@ -60,7 +60,7 @@ export function verifyTelegramWebAppData(
   botToken?: string
 ): TelegramVerificationResult {
   if (!initData || typeof initData !== 'string') {
-    return { valid: false, error: 'Initialization data is missing or empty' };
+    return { valid: false, error: 'Telegram ma’lumotlari topilmadi yoki bo‘sh' };
   }
 
   let resolvedBotToken: string;
@@ -74,7 +74,7 @@ export function verifyTelegramWebAppData(
     const urlParams = new URLSearchParams(initData);
     const hash = urlParams.get('hash');
     if (!hash) {
-      return { valid: false, error: 'Authentication hash is missing' };
+      return { valid: false, error: 'Telegram tasdiqlash kodi topilmadi' };
     }
 
     urlParams.delete('hash');
@@ -97,17 +97,17 @@ export function verifyTelegramWebAppData(
     const now = Math.floor(Date.now() / 1000);
     // Disallow timestamps older than 24 hours (86,400s) to prevent replay attacks
     if (now - authDate > 86400 || authDate > now + 300) {
-      return { valid: false, error: 'Authentication session has expired' };
+      return { valid: false, error: 'Sessiya muddati tugagan. Ilovani qayta oching' };
     }
 
     const rawUser = urlParams.get('user');
     if (!rawUser) {
-      return { valid: false, error: 'User data not found in Telegram payload' };
+      return { valid: false, error: 'Telegram ma’lumotlarida foydalanuvchi topilmadi' };
     }
 
     const user: TelegramUser = JSON.parse(rawUser);
     if (!user || !user.id) {
-      return { valid: false, error: 'Invalid user payload' };
+      return { valid: false, error: 'Foydalanuvchi ma’lumotlari noto‘g‘ri' };
     }
 
     return {
@@ -118,7 +118,7 @@ export function verifyTelegramWebAppData(
     };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    return { valid: false, error: `Failed to verify Telegram payload: ${message}` };
+    return { valid: false, error: `Telegram ma’lumotlarini tekshirib bo‘lmadi: ${message}` };
   }
 }
 

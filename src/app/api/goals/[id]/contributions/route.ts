@@ -18,7 +18,7 @@ export async function GET(
     return NextResponse.json(result.data, { status: 200 });
   } catch (err: unknown) {
     console.error('[api/goals/contributions] GET error:', err);
-    return NextResponse.json({ error: 'Server error listing contributions' }, { status: 500 });
+    return NextResponse.json({ error: 'Hissalar ro‘yxatini olishda server xatoligi' }, { status: 500 });
   }
 }
 
@@ -43,6 +43,6 @@ export async function POST(
     return NextResponse.json({ goal: result.data }, { status: 200 });
   } catch (err: unknown) {
     console.error('[api/goals/contributions] POST error:', err);
-    return NextResponse.json({ error: 'Server error contributing to goal' }, { status: 500 });
+    return NextResponse.json({ error: 'Maqsadga hissa qo‘shishda server xatoligi' }, { status: 500 });
   }
 }

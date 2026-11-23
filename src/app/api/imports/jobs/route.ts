@@ -11,7 +11,7 @@ export async function GET() {
 
     return NextResponse.json({ jobs: result.data }, { status: 200 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Server error fetching import jobs';
+    const message = err instanceof Error ? err.message : 'Importlar ro‘yxatini olishda server xatoligi';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

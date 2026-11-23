@@ -11,7 +11,7 @@ export async function GET() {
 
     return NextResponse.json({ budgets: result.data }, { status: 200 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Server error fetching budgets';
+    const message = err instanceof Error ? err.message : 'Limitlarni olishda server xatoligi';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ budget: result.data }, { status: result.status });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Server error creating budget';
+    const message = err instanceof Error ? err.message : 'Limit yaratishda server xatoligi';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

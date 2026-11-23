@@ -4,22 +4,22 @@ export const createCategorySchema = z.object({
   name: z
     .string()
     .trim()
-    .min(1, 'Category name is required')
-    .max(100, 'Category name cannot exceed 100 characters'),
+    .min(1, 'Kategoriya nomi kiritilishi shart')
+    .max(100, 'Kategoriya nomi 100 belgidan oshmasligi kerak'),
   type: z.enum(['income', 'expense'], {
-    message: "Category type must be 'income' or 'expense'",
+    message: 'Kategoriya turi daromad yoki xarajat bo‘lishi kerak',
   }),
   description: z
     .string()
     .trim()
-    .max(255, 'Description cannot exceed 255 characters')
+    .max(255, 'Izoh 255 belgidan oshmasligi kerak')
     .optional()
     .nullable()
     .transform((val) => (val === '' || val === undefined ? null : val)),
   icon: z
     .string()
     .trim()
-    .max(50, 'Icon name cannot exceed 50 characters')
+    .max(50, 'Ikonka nomi 50 belgidan oshmasligi kerak')
     .optional()
     .nullable()
     .transform((val) => (val === '' || val === undefined ? null : val)),
@@ -30,7 +30,7 @@ export const createCategorySchema = z.object({
     .nullable()
     .transform((val) => (val === '' || val === undefined ? null : val))
     .refine((val) => val === null || /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(val), {
-      message: 'Color must be a valid hex code (e.g. #10b981)',
+      message: 'Rang to‘g‘ri hex kod bo‘lishi kerak (masalan, #10b981)',
     }),
 });
 

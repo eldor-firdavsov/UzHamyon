@@ -15,7 +15,7 @@ export async function GET(
 
     return NextResponse.json({ budget: result.data }, { status: 200 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Server error fetching budget';
+    const message = err instanceof Error ? err.message : 'Limitni olishda server xatoligi';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -35,7 +35,7 @@ export async function PUT(
 
     return NextResponse.json({ budget: result.data }, { status: 200 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Server error updating budget';
+    const message = err instanceof Error ? err.message : 'Limitni yangilashda server xatoligi';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -54,7 +54,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true, id: result.data?.id }, { status: 200 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Server error deleting budget';
+    const message = err instanceof Error ? err.message : 'Limitni o‘chirishda server xatoligi';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

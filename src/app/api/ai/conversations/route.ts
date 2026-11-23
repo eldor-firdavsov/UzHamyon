@@ -9,7 +9,7 @@ export async function GET() {
     }
     return NextResponse.json({ conversations: result.data }, { status: 200 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Server error fetching conversations';
+    const message = err instanceof Error ? err.message : 'Suhbatlarni olishda server xatoligi';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

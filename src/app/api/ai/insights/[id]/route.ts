@@ -13,7 +13,7 @@ export async function PUT(
 
     if (!status || !['new', 'viewed', 'dismissed', 'resolved'].includes(status)) {
       return NextResponse.json(
-        { error: "status must be one of 'new', 'viewed', 'dismissed', 'resolved'" },
+        { error: 'Holat quyidagilardan biri bo‘lishi kerak: new, viewed, dismissed, resolved' },
         { status: 400 }
       );
     }
@@ -25,7 +25,7 @@ export async function PUT(
 
     return NextResponse.json({ insight: result.data }, { status: 200 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Server error updating insight';
+    const message = err instanceof Error ? err.message : 'Xulosani yangilashda server xatoligi';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

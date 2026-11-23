@@ -13,7 +13,7 @@ export async function GET() {
 
     return NextResponse.json({ goals: result.data }, { status: 200 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Server error fetching goals';
+    const message = err instanceof Error ? err.message : 'Maqsadlarni olishda server xatoligi';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ goal: result.data }, { status: result.status });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Server error creating goal';
+    const message = err instanceof Error ? err.message : 'Maqsad yaratishda server xatoligi';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

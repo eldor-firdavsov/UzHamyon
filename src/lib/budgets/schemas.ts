@@ -4,34 +4,34 @@ export const createBudgetSchema = z.object({
   name: z
     .string()
     .trim()
-    .min(1, 'Budget name is required')
-    .max(100, 'Budget name cannot exceed 100 characters'),
+    .min(1, 'Limit nomi kiritilishi shart')
+    .max(100, 'Limit nomi 100 belgidan oshmasligi kerak'),
   amount: z
-    .number({ message: 'Amount must be a valid number' })
-    .positive('Budget amount must be positive')
+    .number({ message: 'Summa to‘g‘ri son bo‘lishi kerak' })
+    .positive('Limit summasi musbat bo‘lishi kerak')
     .refine((val) => {
       const decimals = String(val).split('.')[1];
       return !decimals || decimals.length <= 2;
-    }, 'Amount cannot have more than 2 decimal places'),
+    }, 'Summada verguldan keyin 2 tadan ortiq raqam bo‘lmasligi kerak'),
   currency: z
     .string()
     .trim()
-    .length(3, 'Currency must be a 3-letter ISO code')
+    .length(3, 'Valyuta 3 harfli ISO kod bo‘lishi kerak (masalan, UZS)')
     .transform((s) => s.toUpperCase())
     .default('UZS'),
   period_type: z.enum(['monthly', 'weekly', 'custom']).default('monthly'),
-  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Start date must be YYYY-MM-DD'),
-  end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'End date must be YYYY-MM-DD'),
+  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Boshlanish sanasi YYYY-MM-DD formatida bo‘lishi kerak'),
+  end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Tugash sanasi YYYY-MM-DD formatida bo‘lishi kerak'),
   category_id: z
     .string()
-    .uuid('Category ID must be a valid UUID')
+    .uuid('Kategoriya ID si noto‘g‘ri')
     .optional()
     .nullable()
     .transform((val) => (val === '' || val === undefined ? null : val)),
 }).refine(
   (data) => data.end_date >= data.start_date,
   {
-    message: 'End date must be on or after start date',
+    message: 'Tugash sanasi boshlanish sanasidan oldin bo‘lmasligi kerak',
     path: ['end_date'],
   }
 );
@@ -40,11 +40,11 @@ export const updateBudgetSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
   amount: z
     .number()
-    .positive('Budget amount must be positive')
+    .positive('Limit summasi musbat bo‘lishi kerak')
     .refine((val) => {
       const decimals = String(val).split('.')[1];
       return !decimals || decimals.length <= 2;
-    }, 'Amount cannot have more than 2 decimal places')
+    }, 'Summada verguldan keyin 2 tadan ortiq raqam bo‘lmasligi kerak')
     .optional(),
   currency: z
     .string()
@@ -69,7 +69,7 @@ export const updateBudgetSchema = z.object({
     return true;
   },
   {
-    message: 'End date must be on or after start date',
+    message: 'Tugash sanasi boshlanish sanasidan oldin bo‘lmasligi kerak',
     path: ['end_date'],
   }
 );

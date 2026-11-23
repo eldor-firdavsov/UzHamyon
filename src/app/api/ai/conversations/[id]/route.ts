@@ -13,7 +13,7 @@ export async function GET(
     }
     return NextResponse.json(result.data, { status: 200 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Server error fetching messages';
+    const message = err instanceof Error ? err.message : 'Xabarlarni olishda server xatoligi';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

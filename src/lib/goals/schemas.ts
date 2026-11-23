@@ -4,18 +4,18 @@ export const createGoalSchema = z.object({
   name: z
     .string()
     .trim()
-    .min(1, 'Goal name is required')
-    .max(100, 'Goal name cannot exceed 100 characters'),
+    .min(1, 'Maqsad nomi kiritilishi shart')
+    .max(100, 'Maqsad nomi 100 belgidan oshmasligi kerak'),
   target_amount: z
-    .number({ message: 'Target amount must be a number' })
-    .positive('Target amount must be positive')
+    .number({ message: 'Maqsad summasi son bo‘lishi kerak' })
+    .positive('Maqsad summasi musbat bo‘lishi kerak')
     .refine((val) => {
       const decimals = String(val).split('.')[1];
       return !decimals || decimals.length <= 2;
-    }, 'Amount cannot have more than 2 decimal places'),
+    }, 'Summada verguldan keyin 2 tadan ortiq raqam bo‘lmasligi kerak'),
   current_amount: z
-    .number({ message: 'Current amount must be a number' })
-    .nonnegative('Current amount cannot be negative')
+    .number({ message: 'Joriy summa son bo‘lishi kerak' })
+    .nonnegative('Joriy summa manfiy bo‘lishi mumkin emas')
     .default(0.0),
   currency: z
     .string()
@@ -25,7 +25,7 @@ export const createGoalSchema = z.object({
     .default('UZS'),
   target_date: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Target date must be YYYY-MM-DD')
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Maqsad sanasi YYYY-MM-DD formatida bo‘lishi kerak')
     .optional()
     .nullable()
     .transform((val) => (val === '' || val === undefined ? null : val)),
@@ -45,7 +45,7 @@ export const updateGoalSchema = z.object({
     .refine((val) => {
       const decimals = String(val).split('.')[1];
       return !decimals || decimals.length <= 2;
-    }, 'Amount cannot have more than 2 decimal places')
+    }, 'Summada verguldan keyin 2 tadan ortiq raqam bo‘lmasligi kerak')
     .optional(),
   current_amount: z
     .number()
@@ -53,7 +53,7 @@ export const updateGoalSchema = z.object({
     .refine((val) => {
       const decimals = String(val).split('.')[1];
       return !decimals || decimals.length <= 2;
-    }, 'Amount cannot have more than 2 decimal places')
+    }, 'Summada verguldan keyin 2 tadan ortiq raqam bo‘lmasligi kerak')
     .optional(),
   currency: z.string().trim().length(3).transform((s) => s.toUpperCase()).optional(),
   target_date: z
@@ -71,11 +71,11 @@ export const updateGoalSchema = z.object({
 export const contributeGoalSchema = z.object({
   amount: z
     .number()
-    .refine((val) => val !== 0, 'Contribution amount cannot be zero')
+    .refine((val) => val !== 0, 'Hissa summasi nol bo‘lishi mumkin emas')
     .refine((val) => {
       const decimals = String(val).split('.')[1];
       return !decimals || decimals.length <= 2;
-    }, 'Amount cannot have more than 2 decimal places'),
+    }, 'Summada verguldan keyin 2 tadan ortiq raqam bo‘lmasligi kerak'),
   note: z.string().max(255).optional(),
 });
 

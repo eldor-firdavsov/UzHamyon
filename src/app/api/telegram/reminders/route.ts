@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (err) {
     console.error('[Reminders] Status view error:', err);
-    return NextResponse.json({ ok: false, error: 'Internal error' }, { status: 500 });
+    return NextResponse.json({ ok: false, error: 'Ichki xatolik yuz berdi' }, { status: 500 });
   }
 }
 

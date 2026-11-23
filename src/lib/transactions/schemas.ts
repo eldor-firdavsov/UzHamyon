@@ -7,8 +7,8 @@ export const createTransactionSchema = z.object({
   description: z
     .string()
     .trim()
-    .min(1, 'Description is required')
-    .max(255, 'Description cannot exceed 255 characters'),
+    .min(1, 'Izoh kiritilishi shart')
+    .max(255, 'Izoh 255 belgidan oshmasligi kerak'),
   amount: z
     .union([z.number(), z.string()])
     .transform((val, ctx) => {
@@ -16,7 +16,7 @@ export const createTransactionSchema = z.object({
       if (isNaN(num)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: 'Amount must be a valid number',
+          message: 'Summa to‘g‘ri son bo‘lishi kerak',
         });
         return z.NEVER;
       }
@@ -25,28 +25,28 @@ export const createTransactionSchema = z.object({
     .pipe(
       z
         .number()
-        .positive('Amount must be a positive monetary magnitude')
+        .positive('Summa musbat bo‘lishi kerak')
         .refine(
           (val) => {
             const str = val.toFixed(10).replace(/0+$/, '');
             const decimals = str.split('.')[1];
             return !decimals || decimals.length <= 2;
           },
-          { message: 'Amount cannot have more than 2 decimal places' }
+          { message: 'Summada verguldan keyin 2 tadan ortiq raqam bo‘lmasligi kerak' }
         )
     ),
   type: z.enum(['income', 'expense'], {
-    message: "Transaction type must be 'income' or 'expense'",
+    message: 'Tranzaksiya turi daromad yoki xarajat bo‘lishi kerak',
   }),
   currency: z
     .string()
     .trim()
     .toUpperCase()
-    .regex(currencyRegex, 'Currency must be a 3-letter uppercase ISO code')
+    .regex(currencyRegex, 'Valyuta 3 ta katta harfli ISO kod bo‘lishi kerak (masalan, UZS)')
     .default('UZS'),
   transaction_date: z
     .string()
-    .regex(dateRegex, 'Date must be formatted as YYYY-MM-DD')
+    .regex(dateRegex, 'Sana YYYY-MM-DD formatida bo‘lishi kerak')
     .refine(
       (val) => {
         const parts = val.split('-').map(Number);
@@ -59,11 +59,11 @@ export const createTransactionSchema = z.object({
           d.getUTCDate() === day
         );
       },
-      { message: 'Invalid calendar date' }
+      { message: 'Bunday sana mavjud emas' }
     ),
   transaction_time: z
     .string()
-    .regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/, 'Time must be formatted as HH:mm')
+    .regex(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/, 'Vaqt HH:mm formatida bo‘lishi kerak')
     .optional()
     .nullable()
     .transform((val) => (val === '' || val === undefined ? null : val)),
@@ -74,14 +74,14 @@ export const createTransactionSchema = z.object({
   merchant: z
     .string()
     .trim()
-    .max(255, 'Merchant cannot exceed 255 characters')
+    .max(255, 'Do‘kon nomi 255 belgidan oshmasligi kerak')
     .optional()
     .nullable()
     .transform((val) => (val === '' || val === undefined ? null : val)),
   notes: z
     .string()
     .trim()
-    .max(1000, 'Notes cannot exceed 1000 characters')
+    .max(1000, 'Izoh 1000 belgidan oshmasligi kerak')
     .optional()
     .nullable()
     .transform((val) => (val === '' || val === undefined ? null : val)),
@@ -94,12 +94,12 @@ export const transactionFilterSchema = z
   .object({
     startDate: z
       .string()
-      .regex(dateRegex, 'Start date must be formatted as YYYY-MM-DD')
+      .regex(dateRegex, 'Boshlanish sanasi YYYY-MM-DD formatida bo‘lishi kerak')
       .optional()
       .nullable(),
     endDate: z
       .string()
-      .regex(dateRegex, 'End date must be formatted as YYYY-MM-DD')
+      .regex(dateRegex, 'Tugash sanasi YYYY-MM-DD formatida bo‘lishi kerak')
       .optional()
       .nullable(),
     type: z.enum(['income', 'expense', 'all']).default('all'),
@@ -118,7 +118,7 @@ export const transactionFilterSchema = z
       return true;
     },
     {
-      message: 'End date must be on or after start date',
+      message: 'Tugash sanasi boshlanish sanasidan oldin bo‘lmasligi kerak',
       path: ['endDate'],
     }
   );

@@ -28,7 +28,7 @@ export async function generateAndSaveInsights(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     const today = todayTashkent();
@@ -52,7 +52,7 @@ export async function generateAndSaveInsights(
     for (const t of transactions) {
       if (t.type === 'expense') {
         const cat = Array.isArray(t.categories) ? t.categories[0] : t.categories;
-        const catName = cat?.name || 'Uncategorized';
+        const catName = cat?.name || 'Kategoriyasiz';
         const key = t.category_id || '__uncat__';
         if (!categorySums[key]) categorySums[key] = { total: 0, count: 0, name: catName };
         categorySums[key].total += Number(t.amount);
@@ -263,7 +263,7 @@ export async function listInsights(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     let query = supabase
@@ -304,7 +304,7 @@ export async function updateInsightStatus(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     const { data, error } = await supabase

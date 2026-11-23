@@ -1,9 +1,9 @@
 import { z } from 'zod';
 
 export const importColumnMappingSchema = z.object({
-  dateColumn: z.string().min(1, 'Date column is required'),
-  descriptionColumn: z.string().min(1, 'Description column is required'),
-  amountColumn: z.string().min(1, 'Amount column is required'),
+  dateColumn: z.string().min(1, 'Sana ustunini tanlang'),
+  descriptionColumn: z.string().min(1, 'Izoh ustunini tanlang'),
+  amountColumn: z.string().min(1, 'Summa ustunini tanlang'),
   typeColumn: z.string().optional(),
   categoryColumn: z.string().optional(),
   merchantColumn: z.string().optional(),
@@ -35,20 +35,20 @@ export const importPreviewRowSchema = z.object({
 
 export const importCommitSchema = z.object({
   jobId: z.string().uuid().nullable().optional().or(z.literal('')),
-  filename: z.string().min(1, 'Filename is required').max(255),
+  filename: z.string().min(1, 'Fayl nomi kiritilishi shart').max(255),
   duplicateStrategy: z.enum(['skip', 'import_all']).default('skip'),
   rows: z.array(
     z.object({
-      transaction_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
-      description: z.string().min(1, 'Description is required').max(255),
-      amount: z.number().positive('Amount must be positive'),
+      transaction_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Sana YYYY-MM-DD formatida bo‘lishi kerak'),
+      description: z.string().min(1, 'Izoh kiritilishi shart').max(255),
+      amount: z.number().positive('Summa musbat bo‘lishi kerak'),
       currency: z.string().length(3).transform((s) => s.toUpperCase()),
       type: z.enum(['income', 'expense']),
       category_id: z.string().uuid().nullable().optional(),
       merchant: z.string().max(255).nullable().optional(),
       notes: z.string().max(1000).nullable().optional(),
     })
-  ).min(1, 'At least one valid row is required to commit'),
+  ).min(1, 'Import uchun kamida bitta to‘g‘ri qator kerak'),
 });
 
 export type ImportColumnMapping = z.infer<typeof importColumnMappingSchema>;

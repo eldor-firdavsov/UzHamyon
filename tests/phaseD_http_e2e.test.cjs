@@ -218,7 +218,7 @@ describe('Phase D — HTTP & SSR E2E Server Tests', () => {
     });
     assert.strictEqual(res.status, 403);
     const body = await res.json();
-    assert.ok(body.error.includes('System categories cannot be deleted'));
+    assert.ok(body.error.includes('Tizim kategoriyalarini o‘chirib bo‘lmaydi'));
   });
 
   test('Authenticated HTTP API: delete custom category via DELETE /api/categories/[id]', async () => {

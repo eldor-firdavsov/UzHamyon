@@ -39,7 +39,7 @@ export async function listCategories(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     const parseResult = categoryFilterSchema.safeParse(filters || {});
@@ -48,7 +48,7 @@ export async function listCategories(
       const firstError =
         parseResult.error.issues?.[0]?.message ||
         fallbackErrors?.[0]?.message ||
-        'Invalid filter parameters';
+        'Filtr parametrlari noto‘g‘ri';
       return { data: null, error: firstError, status: 400 };
     }
 
@@ -68,12 +68,12 @@ export async function listCategories(
     const { data, error } = await query;
 
     if (error) {
-      return { data: null, error: error.message || 'Database error fetching categories', status: 500 };
+      return { data: null, error: error.message || 'Kategoriyalarni olishda baza xatoligi', status: 500 };
     }
 
     return { data: (data || []) as Category[], error: null, status: 200 };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
+    const message = err instanceof Error ? err.message : 'Serverda ichki xatolik yuz berdi';
     return { data: null, error: message, status: 500 };
   }
 }
@@ -93,11 +93,11 @@ export async function getCategory(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     if (!id || typeof id !== 'string') {
-      return { data: null, error: 'Category ID is required', status: 400 };
+      return { data: null, error: 'Kategoriya ID si kiritilishi shart', status: 400 };
     }
 
     const { data, error } = await supabase
@@ -111,17 +111,17 @@ export async function getCategory(
     }
 
     if (!data) {
-      return { data: null, error: 'Category not found', status: 404 };
+      return { data: null, error: 'Kategoriya topilmadi', status: 404 };
     }
 
     // Must be either system category or owned by user
     if (!data.is_system && data.user_id !== user.id) {
-      return { data: null, error: 'Category not found', status: 404 };
+      return { data: null, error: 'Kategoriya topilmadi', status: 404 };
     }
 
     return { data: data as Category, error: null, status: 200 };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
+    const message = err instanceof Error ? err.message : 'Serverda ichki xatolik yuz berdi';
     return { data: null, error: message, status: 500 };
   }
 }
@@ -141,7 +141,7 @@ export async function createCategory(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     const parseResult = createCategorySchema.safeParse(input);
@@ -150,7 +150,7 @@ export async function createCategory(
       const firstError =
         parseResult.error.issues?.[0]?.message ||
         fallbackErrors?.[0]?.message ||
-        'Invalid input';
+        'Kiritilgan ma’lumotlar noto‘g‘ri';
       return { data: null, error: firstError, status: 400 };
     }
 
@@ -176,20 +176,20 @@ export async function createCategory(
       if (insertError.code === '23505' || insertError.message.includes('unique constraint') || insertError.message.includes('already exists')) {
         return {
           data: null,
-          error: `A category with the name '${validData.name}' already exists for type '${validData.type}'`,
+          error: `«${validData.name}» nomli ${validData.type === 'income' ? 'daromad' : 'xarajat'} kategoriyasi allaqachon mavjud`,
           status: 409,
         };
       }
       return {
         data: null,
-        error: insertError.message || 'Database error creating category',
+        error: insertError.message || 'Kategoriya yaratishda baza xatoligi',
         status: 500,
       };
     }
 
     return { data: created as Category, error: null, status: 201 };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
+    const message = err instanceof Error ? err.message : 'Serverda ichki xatolik yuz berdi';
     return { data: null, error: message, status: 500 };
   }
 }
@@ -212,11 +212,11 @@ export async function updateCategory(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     if (!id || typeof id !== 'string') {
-      return { data: null, error: 'Category ID is required', status: 400 };
+      return { data: null, error: 'Kategoriya ID si kiritilishi shart', status: 400 };
     }
 
     // 1. Fetch existing category to verify ownership and system status
@@ -231,17 +231,17 @@ export async function updateCategory(
     }
 
     if (!existing) {
-      return { data: null, error: 'Category not found or inaccessible', status: 404 };
+      return { data: null, error: 'Kategoriya topilmadi yoki unga ruxsat yo‘q', status: 404 };
     }
 
     // System categories must never be updated
     if (existing.is_system) {
-      return { data: null, error: 'System categories cannot be modified', status: 403 };
+      return { data: null, error: 'Tizim kategoriyalarini o‘zgartirib bo‘lmaydi', status: 403 };
     }
 
     // Another user's category must not be updated
     if (existing.user_id !== user.id) {
-      return { data: null, error: 'Category not found or inaccessible', status: 404 };
+      return { data: null, error: 'Kategoriya topilmadi yoki unga ruxsat yo‘q', status: 404 };
     }
 
     // 2. Validate input schema
@@ -251,7 +251,7 @@ export async function updateCategory(
       const firstError =
         parseResult.error.issues?.[0]?.message ||
         fallbackErrors?.[0]?.message ||
-        'Invalid input';
+        'Kiritilgan ma’lumotlar noto‘g‘ri';
       return { data: null, error: firstError, status: 400 };
     }
 
@@ -272,7 +272,7 @@ export async function updateCategory(
       if (txCount && txCount > 0) {
         return {
           data: null,
-          error: `Cannot change category type because ${txCount} existing transaction(s) are assigned to this category. Reassign or remove those transactions first.`,
+          error: `Kategoriya turini o‘zgartirib bo‘lmaydi: unga ${txCount} ta tranzaksiya biriktirilgan. Avval ularni boshqa kategoriyaga o‘tkazing yoki o‘chiring.`,
           status: 400,
         };
       }
@@ -299,20 +299,20 @@ export async function updateCategory(
       if (updateError.code === '23505' || updateError.message.includes('unique constraint') || updateError.message.includes('already exists')) {
         return {
           data: null,
-          error: `A category with this name and type already exists`,
+          error: `Bu nom va turdagi kategoriya allaqachon mavjud`,
           status: 409,
         };
       }
       return {
         data: null,
-        error: updateError.message || 'Database error updating category',
+        error: updateError.message || 'Kategoriyani yangilashda baza xatoligi',
         status: 500,
       };
     }
 
     return { data: updated as Category, error: null, status: 200 };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
+    const message = err instanceof Error ? err.message : 'Serverda ichki xatolik yuz berdi';
     return { data: null, error: message, status: 500 };
   }
 }
@@ -334,11 +334,11 @@ export async function deleteCategory(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { data: null, error: 'Unauthorized: Authentication required', status: 401 };
+      return { data: null, error: 'Ruxsat yo‘q: avval tizimga kiring', status: 401 };
     }
 
     if (!id || typeof id !== 'string') {
-      return { data: null, error: 'Category ID is required', status: 400 };
+      return { data: null, error: 'Kategoriya ID si kiritilishi shart', status: 400 };
     }
 
     // 1. Fetch existing category to check system status and ownership
@@ -353,17 +353,17 @@ export async function deleteCategory(
     }
 
     if (!existing) {
-      return { data: null, error: 'Category not found or inaccessible', status: 404 };
+      return { data: null, error: 'Kategoriya topilmadi yoki unga ruxsat yo‘q', status: 404 };
     }
 
     // System categories must never be deleted
     if (existing.is_system) {
-      return { data: null, error: 'System categories cannot be deleted', status: 403 };
+      return { data: null, error: 'Tizim kategoriyalarini o‘chirib bo‘lmaydi', status: 403 };
     }
 
     // Another user's category must not be deleted
     if (existing.user_id !== user.id) {
-      return { data: null, error: 'Category not found or inaccessible', status: 404 };
+      return { data: null, error: 'Kategoriya topilmadi yoki unga ruxsat yo‘q', status: 404 };
     }
 
     // 2. Perform delete
@@ -378,18 +378,18 @@ export async function deleteCategory(
     if (deleteError) {
       return {
         data: null,
-        error: deleteError.message || 'Database error deleting category',
+        error: deleteError.message || 'Kategoriyani o‘chirishda baza xatoligi',
         status: 500,
       };
     }
 
     if (!deletedRows || deletedRows.length === 0) {
-      return { data: null, error: 'Category not found or inaccessible', status: 404 };
+      return { data: null, error: 'Kategoriya topilmadi yoki unga ruxsat yo‘q', status: 404 };
     }
 
     return { data: { success: true, id }, error: null, status: 200 };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
+    const message = err instanceof Error ? err.message : 'Serverda ichki xatolik yuz berdi';
     return { data: null, error: message, status: 500 };
   }
 }

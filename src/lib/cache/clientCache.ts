@@ -91,7 +91,7 @@ export async function cachedFetch<T = unknown>(
       const message =
         (typeof errJson?.error === 'string' && errJson.error) ||
         (typeof errJson?.message === 'string' && errJson.message) ||
-        `Request failed with status ${res.status}`;
+        `So‘rov bajarilmadi (status ${res.status})`;
       const error = Object.assign(new Error(message), { status: res.status });
       throw error;
     }
@@ -153,7 +153,7 @@ async function executeNetworkFetch<T>(
       const message =
         (typeof errJson?.error === 'string' && errJson.error) ||
         (typeof errJson?.message === 'string' && errJson.message) ||
-        `Request failed with status ${res.status}`;
+        `So‘rov bajarilmadi (status ${res.status})`;
       const error = Object.assign(new Error(message), { status: res.status, data: errJson });
       throw error;
     }
