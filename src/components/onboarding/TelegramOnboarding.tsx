@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ArrowRight,
   BarChart3,
@@ -20,22 +20,29 @@ import {
 } from 'lucide-react';
 import { completeOnboardingAction } from '@/app/onboarding/actions';
 import { createClient } from '@/lib/supabase/client';
+import { useI18n } from '@/lib/i18n/client';
+import { LANG_OPTIONS, langFromTelegram, type Lang } from '@/lib/i18n/config';
 
 interface TelegramOnboardingProps {
   initialFirstName?: string;
+  /** Language already saved on the profile (e.g. picked in the bot); null = not chosen yet. */
+  savedLanguage?: Lang | null;
   onCompleted?: () => void;
 }
 
 const TELEGRAM_FINANCIAL_GOALS = [
-  { id: 'track_expenses', label: 'Xarajatni kuzatish', icon: BarChart3 },
-  { id: 'save_more', label: 'Pul jamg‘arish', icon: PiggyBank },
-  { id: 'reduce_debt', label: 'Qarzdan chiqish', icon: TrendingDown },
-  { id: 'understand_flow', label: 'Pul qayerga ketadi', icon: Search },
-  { id: 'emergency_fund', label: 'Zaxira yig‘ish', icon: Shield },
-  { id: 'big_purchase', label: 'Katta xarid, safar', icon: Plane },
-  { id: 'balance_flow', label: 'Kirim-chiqim muvozanati', icon: Scale },
-  { id: 'better_habits', label: 'Yaxshi odatlar', icon: Sprout },
-];
+  { id: 'track_expenses', icon: BarChart3 },
+  { id: 'save_more', icon: PiggyBank },
+  { id: 'reduce_debt', icon: TrendingDown },
+  { id: 'understand_flow', icon: Search },
+  { id: 'emergency_fund', icon: Shield },
+  { id: 'big_purchase', icon: Plane },
+  { id: 'balance_flow', icon: Scale },
+  { id: 'better_habits', icon: Sprout },
+] as const;
+
+/** Screens: 0 language → 1 welcome → 2 name → 3 goals. */
+const LAST_STEP = 3;
 
 /** Re-creates the session from Telegram initData. True when a fresh session was set. */
 async function reauthWithTelegram(): Promise<boolean> {
@@ -62,14 +69,31 @@ async function reauthWithTelegram(): Promise<boolean> {
 
 export default function TelegramOnboarding({
   initialFirstName = '',
+  savedLanguage = null,
   onCompleted,
 }: TelegramOnboardingProps) {
-  const [step, setStep] = useState<number>(1);
+  const { t, lang, setLang } = useI18n();
+  const [step, setStep] = useState<number>(0);
   const [preferredName, setPreferredName] = useState<string>(initialFirstName || '');
   const [selectedGoals, setSelectedGoals] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [dir, setDir] = useState<'fwd' | 'back'>('fwd');
+
+  // Nothing chosen yet: pre-select Telegram's app language so the first screen already reads right.
+  useEffect(() => {
+    if (savedLanguage) return;
+    const code = window.Telegram?.WebApp?.initDataUnsafe?.user?.language_code;
+    if (!code) return;
+    const guess = langFromTelegram(code);
+    if (guess !== lang) void setLang(guess, { persist: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const pickLanguage = (next: Lang) => {
+    if (isSubmitting) return;
+    void setLang(next);
+  };
 
   const toggleGoal = (id: string) => {
     setSelectedGoals((prev) =>
@@ -90,7 +114,8 @@ export default function TelegramOnboarding({
 
     try {
       const input = {
-        first_name: preferredName.trim() || initialFirstName || 'Foydalanuvchi',
+        first_name: preferredName.trim() || initialFirstName || t.common.user,
+        language: lang,
         declared_monthly_income: 0,
         declared_monthly_expenses: 0,
         goals: goalsToSave,
@@ -124,11 +149,12 @@ export default function TelegramOnboarding({
           const { error: clientErr } = await supabase
             .from('profiles')
             .update({
-              first_name: preferredName.trim() || initialFirstName || 'Foydalanuvchi',
+              first_name: preferredName.trim() || initialFirstName || t.common.user,
               onboarding_completed: true,
               onboarding_step: 8,
               onboarding_data: {
                 ...existingData,
+                language: lang,
                 goals: goalsToSave,
                 completed_at: new Date().toISOString(),
               },
@@ -137,12 +163,13 @@ export default function TelegramOnboarding({
             .eq('id', user.id);
 
           if (clientErr) {
-            setErrorMsg(res.error || clientErr.message);
+            console.error('Onboarding save failed:', res.error, clientErr.message);
+            setErrorMsg(lang === 'uz' ? res.error || clientErr.message : t.onboarding.saveError);
             setIsSubmitting(false);
             return;
           }
         } else {
-          setErrorMsg(res.error || 'Saqlashda xatolik yuz berdi');
+          setErrorMsg(lang === 'uz' && res.error ? res.error : t.onboarding.saveError);
           setIsSubmitting(false);
           return;
         }
@@ -155,8 +182,8 @@ export default function TelegramOnboarding({
         window.location.replace('/dashboard?sheet=tx&first=1');
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Kutilmagan xatolik';
-      setErrorMsg(msg);
+      console.error('Onboarding failed:', err);
+      setErrorMsg(lang === 'uz' && err instanceof Error ? err.message : t.onboarding.unexpected);
       setIsSubmitting(false);
     }
   };
@@ -167,10 +194,10 @@ export default function TelegramOnboarding({
     <div className="uz-ob" data-step={step}>
       {step > 1 && (
         <header className="uz-ob-top">
-          <button type="button" className="uz-ob-back" aria-label="Orqaga" onClick={() => go(step - 1)} disabled={isSubmitting}>
+          <button type="button" className="uz-ob-back" aria-label={t.common.back} onClick={() => go(step - 1)} disabled={isSubmitting}>
             <ChevronLeft size={24} strokeWidth={2.4} />
           </button>
-          <div className="uz-ob-dots" aria-label={`${step - 1}-qadam, jami 2`}>
+          <div className="uz-ob-dots" aria-label={t.onboarding.stepOf(step - 1, LAST_STEP - 1)}>
             <i data-on={step >= 2} />
             <i data-on={step >= 3} />
           </div>
@@ -179,25 +206,65 @@ export default function TelegramOnboarding({
       )}
 
       <main key={step} className="uz-ob-step" data-dir={dir}>
+        {step === 0 && (
+          <>
+            <div className="uz-ob-title">
+              <h1>{t.language.pickTitle}</h1>
+              <p>{t.language.pickHint}</p>
+            </div>
+            <div className="uz-ob-langs" role="radiogroup" aria-label={t.language.title}>
+              {LANG_OPTIONS.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={lang === o.id}
+                  lang={o.id}
+                  className="uz-ob-lang"
+                  onClick={() => pickLanguage(o.id)}
+                >
+                  <span className="uz-ob-lang-flag" aria-hidden="true">{o.flag}</span>
+                  {o.native}
+                  <span className="uz-ob-lang-ck" aria-hidden="true">{lang === o.id && <Check size={15} strokeWidth={3.2} />}</span>
+                </button>
+              ))}
+            </div>
+            <div className="uz-ob-foot">
+              <button
+                type="button"
+                className="uz-ob-cta"
+                data-tone="lime"
+                onClick={() => {
+                  // Save the shown language even when the pre-selected one was kept.
+                  void setLang(lang);
+                  go(1);
+                }}
+              >
+                {t.language.continue} <ArrowRight size={20} strokeWidth={2.6} />
+              </button>
+            </div>
+          </>
+        )}
+
         {step === 1 && (
           <>
             <div className="uz-ob-hero">
               <span className="uz-ob-mark" aria-hidden="true">
                 <span />
               </span>
-              <h1>Pulingiz nazoratda</h1>
-              <p>Har kuni bir necha soniya.</p>
+              <h1>{t.onboarding.heroTitle}</h1>
+              <p>{t.onboarding.heroSub}</p>
             </div>
             <ul className="uz-ob-feats">
-              <li><span><Zap size={20} strokeWidth={2.4} /></span>Bir bosishda yozing</li>
-              <li><span><Flame size={20} strokeWidth={2.4} /></span>Har kuni seriyani o‘stiring</li>
-              <li><span><Sparkles size={20} strokeWidth={2.4} /></span>AI qisqa maslahat beradi</li>
+              <li><span><Zap size={20} strokeWidth={2.4} /></span>{t.onboarding.feat1}</li>
+              <li><span><Flame size={20} strokeWidth={2.4} /></span>{t.onboarding.feat2}</li>
+              <li><span><Sparkles size={20} strokeWidth={2.4} /></span>{t.onboarding.feat3}</li>
             </ul>
             <div className="uz-ob-foot">
               <button type="button" className="uz-ob-cta" data-tone="lime" onClick={() => go(2)}>
-                Boshlash <ArrowRight size={20} strokeWidth={2.6} />
+                {t.onboarding.start} <ArrowRight size={20} strokeWidth={2.6} />
               </button>
-              <p className="uz-ob-note">Telegram orqali kirasiz — parol kerak emas</p>
+              <p className="uz-ob-note">{t.onboarding.noPassword}</p>
             </div>
           </>
         )}
@@ -205,22 +272,22 @@ export default function TelegramOnboarding({
         {step === 2 && (
           <>
             <div className="uz-ob-title">
-              <h1>Ismingiz?</h1>
-              <p>{fromTelegram ? 'Telegramdan olindi. O‘zgartirish mumkin.' : 'Shunday murojaat qilamiz.'}</p>
+              <h1>{t.onboarding.nameTitle}</h1>
+              <p>{fromTelegram ? t.onboarding.nameFromTelegram : t.onboarding.nameHint}</p>
             </div>
             <input
               className="uz-ob-input uz-big-input"
               value={preferredName}
               maxLength={40}
               autoComplete="given-name"
-              aria-label="Ismingiz"
-              placeholder="Ism"
+              aria-label={t.onboarding.nameTitle}
+              placeholder={t.onboarding.namePlaceholder}
               onChange={(e) => setPreferredName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && preferredName.trim() && go(3)}
             />
             <div className="uz-ob-foot">
               <button type="button" className="uz-ob-cta" onClick={() => go(3)} disabled={!preferredName.trim()}>
-                Davom etish
+                {t.onboarding.continue}
               </button>
             </div>
           </>
@@ -229,8 +296,8 @@ export default function TelegramOnboarding({
         {step === 3 && (
           <>
             <div className="uz-ob-title">
-              <h1>Nima uchun kerak?</h1>
-              <p>Ixtiyoriy. Bir nechtasini tanlang.</p>
+              <h1>{t.onboarding.goalsTitle}</h1>
+              <p>{t.onboarding.goalsHint}</p>
             </div>
             <div className="uz-ob-goals">
               {TELEGRAM_FINANCIAL_GOALS.map((goal, i) => {
@@ -247,7 +314,7 @@ export default function TelegramOnboarding({
                     disabled={isSubmitting}
                   >
                     <span className="uz-ob-goal-ic"><Icon size={22} strokeWidth={2.2} /></span>
-                    <span className="uz-ob-goal-tx">{goal.label}</span>
+                    <span className="uz-ob-goal-tx">{t.onboarding.goals[goal.id]}</span>
                     <span className="uz-ob-goal-ck" aria-hidden="true">{on && <Check size={14} strokeWidth={3.2} />}</span>
                   </button>
                 );
@@ -257,9 +324,9 @@ export default function TelegramOnboarding({
               {errorMsg && <div className="uz-qa-error" role="alert">{errorMsg}</div>}
               <button type="button" className="uz-ob-cta" onClick={handleComplete} disabled={isSubmitting}>
                 {isSubmitting ? (
-                  <><Loader2 size={20} className="animate-spin" /> Tayyorlanmoqda…</>
+                  <><Loader2 size={20} className="animate-spin" /> {t.onboarding.preparing}</>
                 ) : (
-                  'Boshlash'
+                  t.onboarding.start
                 )}
               </button>
             </div>

@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { AlertCircle, Check, ChevronLeft, ChevronRight, FileSpreadsheet, Loader2, SlidersHorizontal, UploadCloud, X } from 'lucide-react';
 import type { ImportPreviewRow, ImportColumnMapping } from '@/lib/imports/schemas';
 import { TxListSkeleton } from '@/components/mobile/TxRows';
+import { useI18n } from '@/lib/i18n/client';
+import { shortDate as shortDateIn } from '@/lib/i18n/format';
 
 interface ImportJob {
   id: string;
@@ -32,6 +34,9 @@ interface PreviewData {
 }
 
 export default function ImportManager() {
+  const { t, lang } = useI18n();
+  /** Server messages are Uzbek: show them as-is only to Uzbek readers. */
+  const serverError = (msg: unknown, fallback: string) => (lang === 'uz' && typeof msg === 'string' && msg ? msg : fallback);
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -111,14 +116,14 @@ export default function ImportManager() {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Faylni ko‘rib chiqishda xatolik yuz berdi');
+        throw new Error(serverError(data.error, t.imports.previewError));
       }
       setPreview(data.preview);
       if (data.preview?.mapping) {
         setMapping(data.preview.mapping);
       }
     } catch (err: unknown) {
-      setUploadError(err instanceof Error ? err.message : 'Yuklash muvaffaqiyatsiz tugadi');
+      setUploadError(err instanceof Error ? err.message : t.imports.uploadFailed);
     } finally {
       setUploading(false);
     }
@@ -143,7 +148,7 @@ export default function ImportManager() {
         }));
 
       if (validRowsToCommit.length === 0) {
-        throw new Error('Saqlash uchun to‘g‘ri qatorlar topilmadi.');
+        throw new Error(t.imports.noValidRows);
       }
 
       const res = await fetch('/api/imports/commit', {
@@ -159,7 +164,7 @@ export default function ImportManager() {
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Ma’lumotlarni saqlashda xatolik yuz berdi');
+        throw new Error(serverError(data.error, t.imports.commitError));
       }
 
       const insertedCount = data.result?.importedRows ?? data.result?.insertedCount ?? 0;
@@ -173,7 +178,7 @@ export default function ImportManager() {
       });
       refreshJobs();
     } catch (err: unknown) {
-      setUploadError(err instanceof Error ? err.message : 'Importni tasdiqlashda xatolik');
+      setUploadError(err instanceof Error ? err.message : t.imports.confirmError);
     } finally {
       setCommitting(false);
     }
@@ -189,25 +194,22 @@ export default function ImportManager() {
   };
 
   const fmt = (n: number) => String(Math.round(Math.abs(n))).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-  const shortDate = (iso: string) => {
-    const m = ['yan', 'fev', 'mar', 'apr', 'may', 'iyn', 'iyl', 'avg', 'sen', 'okt', 'noy', 'dek'][Number(iso.slice(5, 7)) - 1];
-    return m ? `${Number(iso.slice(8, 10))}-${m}` : iso;
-  };
+  const shortDate = (iso: string) => shortDateIn(iso, lang);
   const toImport = preview ? preview.validRows - (duplicateStrategy === 'skip' ? preview.duplicateRows : 0) : 0;
   const mappingFields: Array<[keyof ImportColumnMapping, string]> = [
-    ['dateColumn', 'Sana'],
-    ['descriptionColumn', 'Nomi'],
-    ['amountColumn', 'Summa'],
-    ['typeColumn', 'Turi'],
+    ['dateColumn', t.imports.colDate],
+    ['descriptionColumn', t.imports.colName],
+    ['amountColumn', t.imports.colAmount],
+    ['typeColumn', t.imports.colType],
   ];
 
   return (
     <div className="uz-page">
       <header className="uz-page-head">
-        <Link href="/settings" aria-label="Orqaga" className="uz-page-back">
+        <Link href="/settings" aria-label={t.common.back} className="uz-page-back">
           <ChevronLeft size={22} />
         </Link>
-        <h1>Import</h1>
+        <h1>{t.imports.title}</h1>
       </header>
 
       {/* Done */}
@@ -216,13 +218,13 @@ export default function ImportManager() {
           <span className="uz-imp-done-ic"><Check size={40} strokeWidth={3} /></span>
           <div className="uz-imp-done-num">+{commitResult.insertedCount}</div>
           <div className="uz-sh-hint">
-            amal qo‘shildi{commitResult.skippedCount > 0 ? ` · ${commitResult.skippedCount} ta takror o‘tkazildi` : ''}
+            {t.imports.added}{commitResult.skippedCount > 0 ? t.imports.skipped(commitResult.skippedCount) : ''}
           </div>
           <Link id="view-imported-transactions-link" href="/transactions" className="uz-qa-save" style={{ width: '100%', textDecoration: 'none' }}>
-            Faoliyatni ochish
+            {t.imports.openActivity}
           </Link>
           <button id="import-another-btn" type="button" className="uz-sh-plain" onClick={resetAll}>
-            Yana fayl yuklash
+            {t.imports.another}
           </button>
         </div>
       )}
@@ -259,17 +261,17 @@ export default function ImportManager() {
             <span className="uz-imp-drop-ic">
               {uploading ? <Loader2 size={30} className="animate-spin" /> : <UploadCloud size={30} strokeWidth={2.2} />}
             </span>
-            <span className="uz-imp-drop-title">{uploading ? 'O‘qilmoqda…' : 'Fayl tanlang'}</span>
-            <span className="uz-sh-hint">Bank ko‘chirmasi: CSV yoki Excel</span>
+            <span className="uz-imp-drop-title">{uploading ? t.imports.reading : t.imports.pickFile}</span>
+            <span className="uz-sh-hint">{t.imports.fileHint}</span>
           </label>
           {uploadError && <div className="uz-qa-error" role="alert">{uploadError}</div>}
 
           <section className="uz-m-section">
-            <h2 className="uz-page-sub">Tarix</h2>
+            <h2 className="uz-page-sub">{t.imports.history}</h2>
             {loadingJobs ? (
               <TxListSkeleton count={2} />
             ) : jobs.length === 0 ? (
-              <div className="uz-sh-hint" style={{ textAlign: 'left', padding: '0 4px' }}>Hali import qilinmagan</div>
+              <div className="uz-sh-hint" style={{ textAlign: 'left', padding: '0 4px' }}>{t.imports.noHistory}</div>
             ) : (
               <div className="uz-m-list">
                 {jobs.map((j) => {
@@ -285,7 +287,7 @@ export default function ImportManager() {
                         <span className="uz-m-row-sub">{shortDate(j.created_at.slice(0, 10))}</span>
                       </span>
                       <span className="uz-m-row-amt" data-in={!failed} style={failed ? { color: '#C62F21' } : undefined}>
-                        {failed ? 'Xato' : `+${added}`}
+                        {failed ? t.imports.failed : `+${added}`}
                       </span>
                     </div>
                   );
@@ -305,16 +307,16 @@ export default function ImportManager() {
               <span>{preview.filename}</span>
             </div>
             <div className="uz-imp-stats">
-              <span data-kind="ok"><b className="num">{preview.validRows}</b> tayyor</span>
-              {preview.duplicateRows > 0 && <span data-kind="dup"><b className="num">{preview.duplicateRows}</b> takror</span>}
-              {preview.invalidRows > 0 && <span data-kind="bad"><b className="num">{preview.invalidRows}</b> xato</span>}
+              <span data-kind="ok"><b className="num">{preview.validRows}</b> {t.imports.ready}</span>
+              {preview.duplicateRows > 0 && <span data-kind="dup"><b className="num">{preview.duplicateRows}</b> {t.imports.duplicates}</span>}
+              {preview.invalidRows > 0 && <span data-kind="bad"><b className="num">{preview.invalidRows}</b> {t.imports.errors}</span>}
             </div>
           </div>
 
           <div className="uz-m-list">
             {preview.duplicateRows > 0 && (
               <label className="uz-sh-row">
-                <span className="uz-sh-row-label">Takrorlarni o‘tkazib yuborish</span>
+                <span className="uz-sh-row-label">{t.imports.skipDuplicates}</span>
                 <input
                   type="checkbox"
                   role="switch"
@@ -326,7 +328,7 @@ export default function ImportManager() {
             )}
             <button type="button" className="uz-m-row" aria-expanded={showMapping} onClick={() => setShowMapping((v) => !v)}>
               <SlidersHorizontal size={20} color="#6B7068" aria-hidden="true" />
-              <span className="uz-m-row-main"><span className="uz-m-row-name" style={{ fontSize: 16, fontWeight: 500 }}>Ustunlar</span></span>
+              <span className="uz-m-row-main"><span className="uz-m-row-name" style={{ fontSize: 16, fontWeight: 500 }}>{t.imports.columns}</span></span>
               <ChevronRight size={18} color="#AEB4AA" style={{ transform: showMapping ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }} aria-hidden="true" />
             </button>
             {showMapping && (
@@ -348,7 +350,7 @@ export default function ImportManager() {
                 ))}
                 <div style={{ padding: '8px 14px 12px' }}>
                   <button type="button" className="uz-page-retry" style={{ width: '100%' }} disabled={uploading} onClick={() => void handleFileSelect(undefined, mapping)}>
-                    {uploading ? 'O‘qilmoqda…' : 'Qayta o‘qish'}
+                    {uploading ? t.imports.reading : t.imports.reread}
                   </button>
                 </div>
               </>
@@ -361,9 +363,9 @@ export default function ImportManager() {
               return (
                 <div key={r.rowIndex} className="uz-m-row" style={{ cursor: 'default', opacity: r.isDuplicate && duplicateStrategy === 'skip' ? 0.5 : 1 }}>
                   <span className="uz-m-row-main">
-                    <span className="uz-m-row-name" style={{ fontSize: 15 }}>{r.parsed?.description || `Qator ${r.rowIndex + 1}`}</span>
+                    <span className="uz-m-row-name" style={{ fontSize: 15 }}>{r.parsed?.description || t.imports.row(r.rowIndex + 1)}</span>
                     <span className="uz-m-row-sub" style={r.errors.length ? { color: '#C62F21' } : undefined}>
-                      {r.errors.length ? r.errors[0] : r.isDuplicate ? 'Takror' : r.parsed?.transaction_date ? shortDate(r.parsed.transaction_date) : ''}
+                      {r.errors.length ? r.errors[0] : r.isDuplicate ? t.imports.duplicate : r.parsed?.transaction_date ? shortDate(r.parsed.transaction_date) : ''}
                     </span>
                   </span>
                   {r.parsed && (
@@ -375,15 +377,15 @@ export default function ImportManager() {
               );
             })}
           </div>
-          {preview.rows.length > 30 && <div className="uz-sh-hint">va yana {preview.rows.length - 30} qator</div>}
+          {preview.rows.length > 30 && <div className="uz-sh-hint">{t.imports.more(preview.rows.length - 30)}</div>}
           {uploadError && <div className="uz-qa-error" role="alert">{uploadError}</div>}
 
           <div className="uz-imp-foot">
-            <button type="button" className="uz-qa-round" aria-label="Bekor qilish" onClick={resetAll} disabled={committing}>
+            <button type="button" className="uz-qa-round" aria-label={t.common.cancel} onClick={resetAll} disabled={committing}>
               <X size={20} strokeWidth={2.2} />
             </button>
             <button type="button" className="uz-qa-save" style={{ flex: 1 }} disabled={committing || toImport <= 0} onClick={handleCommit}>
-              {committing ? 'Import qilinmoqda…' : `${toImport} ta amalni qo‘shish`}
+              {committing ? t.imports.importing : t.imports.addN(toImport)}
             </button>
           </div>
         </>

@@ -1,7 +1,8 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { getSupabaseUrl, getSupabaseServiceRoleKey } from '../supabase/config.ts';
 import { sendTelegramMessage, MINIAPP_URL } from './bot.ts';
-import { escapeHtml } from './html.ts';
+import { botTexts } from '../i18n/bot.ts';
+import { langForProfile, type Lang } from '../i18n/config.ts';
 import { isBlockedByUser, type BotApiResponse } from './botApi.ts';
 import { todayTashkent } from '../time/tashkent.ts';
 
@@ -30,6 +31,8 @@ export interface TelegramRecipient {
   hasLogged?: boolean;
   /** Whole days since the profile was created (Tashkent dates). */
   daysSinceSignup?: number;
+  /** The user's language (Uzbek unless they chose another). */
+  lang?: Lang;
 }
 
 export interface ReminderBroadcastResult {
@@ -77,10 +80,12 @@ export function toRecipient(p: ProfileRow): TelegramRecipient | null {
   }
   if (!tgId) return null;
   const rawName = p.first_name?.trim();
+  const lang = langForProfile(obData);
   return {
     userId: p.id,
     telegramId: tgId,
-    firstName: rawName && rawName !== 'Foydalanuvchi' ? rawName : 'aziz foydalanuvchi',
+    lang,
+    firstName: rawName && rawName !== 'Foydalanuvchi' ? rawName : botTexts(lang).fallbackName,
     username: typeof obData?.telegram_username === 'string' ? obData.telegram_username : null,
     hasLogged: p.has_logged,
     daysSinceSignup: p.created_at ? daysBetween(p.created_at.slice(0, 10), todayTashkent()) : undefined,
@@ -170,16 +175,14 @@ export async function getRegisteredTelegramUsers(client?: SupabaseClient): Promi
   return Array.from(byTelegramId.values());
 }
 
-/**
- * Builds a friendly, motivating transaction reminder message in Uzbek
- */
-export function buildTransactionReminderMessage(firstName: string): string {
-  return `Salom, <b>${escapeHtml(firstName)}</b>! 👋\n\nBugungi o‘tkazmalarni ilovaga kiritishni unutmang yoki shunchaki bugungi o‘tkazmalaringizni shu chatga yozib qo‘ying! ✍️`;
+/** The daily reminder, in the user's language. */
+export function buildTransactionReminderMessage(firstName: string, lang: Lang = 'uz'): string {
+  return botTexts(lang).reminder(firstName);
 }
 
 /** For someone who never logged anything: one concrete example they can copy and send. */
-export function buildFirstEntryReminderMessage(firstName: string): string {
-  return `Salom, <b>${escapeHtml(firstName)}</b>! 👋\n\nBirinchi xarajatingizni yozing — 5 soniya. Shu chatga yuboring:\n\n<code>non 8000</code>\n\nQolganini o‘zim qilaman 🔥`;
+export function buildFirstEntryReminderMessage(firstName: string, lang: Lang = 'uz'): string {
+  return botTexts(lang).firstEntryReminder(firstName);
 }
 
 export type ReminderSendStatus = 'sent' | 'blocked' | 'failed';
@@ -196,10 +199,12 @@ export async function sendTransactionReminderToUser(
   recipient: TelegramRecipient
 ): Promise<{ status: ReminderSendStatus; retryAfterSec?: number }> {
   const first = recipient.hasLogged === false;
+  const lang = recipient.lang ?? 'uz';
+  const t = botTexts(lang);
   const res = await sendTelegramMessage(
     recipient.telegramId,
-    first ? buildFirstEntryReminderMessage(recipient.firstName) : buildTransactionReminderMessage(recipient.firstName),
-    first ? '➕ Ilovada qo‘shish' : "🚀 UzHamyon'ni ochish",
+    first ? buildFirstEntryReminderMessage(recipient.firstName, lang) : buildTransactionReminderMessage(recipient.firstName, lang),
+    first ? t.addInApp : t.openUzHamyonRocket,
     MINIAPP_URL
   );
   return classifySendResult(res);

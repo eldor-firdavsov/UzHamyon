@@ -9,6 +9,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { findUserGoal } from '../goals/matchGoal.ts';
 import { convertAmount, formatAmount, toDisplayCurrency } from '../fx/currency.ts';
 import { getUsdUzsRate } from '../fx/rates.ts';
+import { botTexts } from '../i18n/bot.ts';
 import { buildActionSummary, type ExtractedActionItem, type ExtractionResult } from './actionExtractionEngine.ts';
 
 interface GoalRow {
@@ -75,8 +76,8 @@ export async function alignGoalCurrencies(
     const { actions, changed, converted } = alignGoalActions(result.actions, goals as GoalRow[], usdUzs);
     if (!changed) return result;
 
-    let summary = buildActionSummary(actions) || result.summaryUzbek;
-    if (converted) summary += `\n\n(1 $ = ${formatAmount(usdUzs, toDisplayCurrency('UZS'))} so‘m kursi bo‘yicha)`;
+    let summary = buildActionSummary(actions, result.language) || result.summaryUzbek;
+    if (converted) summary += `\n\n${botTexts(result.language).rateNote(formatAmount(usdUzs, toDisplayCurrency('UZS')))}`;
     return { ...result, actions, summaryUzbek: summary };
   } catch (err) {
     console.error('[goalCurrency] align failed:', err);

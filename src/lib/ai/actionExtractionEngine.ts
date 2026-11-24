@@ -10,14 +10,10 @@ import { isValidCalendarDate, isValidTimeString } from '../transactions/dateTime
 import { nowTashkent, yesterdayTashkent } from '../time/tashkent.ts';
 import { defaultCategoryNames, pickAllowedName } from '../categories/catalog.ts';
 import { AiBudget, isAiBudgetExceeded } from './aiBudget.ts';
-import {
-  MAX_ACTIONS_PER_MESSAGE,
-  isAmountWithinLimit,
-  TOO_MANY_ACTIONS_MESSAGE,
-  AMOUNT_TOO_LARGE_MESSAGE,
-} from './limits.ts';
-import { formatMoney } from '../formatters/money.ts';
+import { MAX_ACTIONS_PER_MESSAGE, isAmountWithinLimit } from './limits.ts';
 import { mentionedCurrency, type DisplayCurrency } from '../fx/currency.ts';
+import { botTexts, describeProposal } from '../i18n/bot.ts';
+import type { Lang } from '../i18n/config.ts';
 
 export type FinancialIntentType =
   | 'action_proposal'
@@ -65,6 +61,8 @@ export interface ExtractionResult {
   error?: 'ai_unavailable' | 'budget_exceeded';
   /** Voice input only: what the user said, word for word (from Gemini). */
   transcript?: string;
+  /** Language the texts are in (previews rebuilt later keep it). */
+  language?: Lang;
 }
 
 export interface ExtractionOptions {
@@ -76,6 +74,8 @@ export interface ExtractionOptions {
   budget?: AiBudget;
   /** Clock override for tests. */
   now?: Date;
+  /** Language of summaryUzbek / clarificationQuestion (the user's language; default Uzbek). */
+  language?: Lang;
   /**
    * The user's display currency: used for new transactions and goals when the message
    * names no currency. Omit when unknown yet (the bot applies it after sign-in).
@@ -117,9 +117,10 @@ function buildExtractionSystemPrompt(
   todayDate: string,
   currentTime: string,
   yesterdayDate: string,
-  categories: { expense: string[]; income: string[] }
+  categories: { expense: string[]; income: string[] },
+  language: Lang = 'uz'
 ): string {
-  return `Siz UzHamyon moliyaviy platformasi uchun foydalanuvchi xabarlarini tahlil qiluvchi va strukturaviy amallarni ajratuvchi AI yordamchisiz.
+  return `${languageRule(language)}Siz UzHamyon moliyaviy platformasi uchun foydalanuvchi xabarlarini tahlil qiluvchi va strukturaviy amallarni ajratuvchi AI yordamchisiz.
 Bugungi sana: ${todayDate}. Hozirgi vaqt: ${currentTime}.
 
 Vazifangiz: Foydalanuvchi xabarini diqqat bilan o'qib, qat'iy JSON formatida quyidagi sxemaga mos javob qaytarish:
@@ -175,27 +176,9 @@ QOIDALAR:
    - Masalan: "Quyidagi 2 ta xarajatni qayd etishni tasdiqlaysizmi?\\n• Tushlik: 45 000 so‘m\\n• Taksi: 15 000 so‘m"`;
 }
 
-/** Deterministic Uzbek confirmation text for the extracted actions. */
-export function buildActionSummary(actions: ExtractedActionItem[]): string {
-  if (actions.length === 1) {
-    const a = actions[0];
-    if (a.actionType === 'create_transaction') {
-      return `${formatMoney(a.amount, a.currency)} miqdorida ${a.transactionType === 'income' ? 'daromadni' : 'xarajatni'} («${a.description}») qayd etishni tasdiqlaysizmi?`;
-    } else if (a.actionType === 'create_goal') {
-      return `«${a.goalName}» uchun ${formatMoney(a.targetAmount || a.amount, a.currency)} jamg‘arma maqsadini yaratishni tasdiqlaysizmi?`;
-    } else if (a.actionType === 'update_goal') {
-      return `«${a.goalName}» maqsadi miqdorini ${formatMoney(a.targetAmount || a.amount, a.currency)}ga o‘zgartirishni tasdiqlaysizmi?`;
-    } else if (a.actionType === 'contribute_goal') {
-      return `«${a.goalName || 'Jamg‘arma'}» maqsadiga ${formatMoney(a.amount, a.currency)} qo‘shishni tasdiqlaysizmi?`;
-    }
-  } else if (actions.length > 1) {
-    const lines = actions.map((a, i) => {
-      const typeText = a.transactionType === 'income' ? 'Daromad' : 'Xarajat';
-      return `${i + 1}. ${a.description} (${typeText}): ${formatMoney(a.amount, a.currency)}`;
-    });
-    return `Quyidagi ${actions.length} ta operatsiyani qayd etishni tasdiqlaysizmi?\n\n` + lines.join('\n');
-  }
-  return '';
+/** Confirmation text for the extracted actions, in the user's language (Uzbek by default). */
+export function buildActionSummary(actions: ExtractedActionItem[], language: Lang = 'uz'): string {
+  return describeProposal(actions, language);
 }
 
 /**
@@ -222,7 +205,19 @@ export function applyDefaultCurrency(result: ExtractionResult, defaultCurrency: 
     return { ...a, currency: 'USD' };
   });
   if (!changed) return result;
-  return { ...result, actions, summaryUzbek: buildActionSummary(actions) || result.summaryUzbek };
+  return { ...result, actions, summaryUzbek: buildActionSummary(actions, result.language) || result.summaryUzbek };
+}
+
+/**
+ * For Russian / English users: the texts they read (summaryUzbek, clarificationQuestion) must be
+ * in their language. Category names and JSON keys stay exactly as listed.
+ */
+function languageRule(language: Lang): string {
+  if (language === 'uz') return '';
+  const name = language === 'ru' ? 'RUSSIAN (русский)' : 'ENGLISH';
+  return `OUTPUT LANGUAGE: the user reads ${name}. Write "summaryUzbek" and "clarificationQuestion" ONLY in ${name}, ` +
+    `even though the instructions below are in Uzbek. ${botTexts(language).aiLanguageRule} ` +
+    `Keep "categoryName" exactly as one of the listed names and keep "description" in the words the user used.\n\n`;
 }
 
 /**
@@ -254,6 +249,8 @@ export async function extractFinancialActions(
       ? { userFinancialContextText: contextOrOptions }
       : contextOrOptions || {};
   const { userFinancialContextText, budget } = options;
+  const language: Lang = options.language ?? 'uz';
+  const t = botTexts(language);
   const allowedCategories = {
     expense: options.categories?.expense?.length ? options.categories.expense : defaultCategoryNames('expense'),
     income: options.categories?.income?.length ? options.categories.income : defaultCategoryNames('income'),
@@ -263,7 +260,7 @@ export async function extractFinancialActions(
     return {
       intent: 'casual_chat',
       actions: [],
-      summaryUzbek: 'Iltimos, xabaringizni yozing.',
+      summaryUzbek: t.writeSomething,
     };
   }
 
@@ -274,7 +271,8 @@ export async function extractFinancialActions(
     todayDate,
     currentTime,
     yesterdayTashkent(nowAt),
-    allowedCategories
+    allowedCategories,
+    language
   );
 
   let fullPrompt = options.audio
@@ -324,8 +322,8 @@ ENG MUHIM QOIDA: faqat audioda HAQIQATAN eshitilgan inson nutqini yozing. Hech n
         intent: 'clarification',
         actions: [],
         transcript,
-        clarificationQuestion: TOO_MANY_ACTIONS_MESSAGE,
-        summaryUzbek: TOO_MANY_ACTIONS_MESSAGE,
+        clarificationQuestion: t.tooManyActions,
+        summaryUzbek: t.tooManyActions,
       };
     }
 
@@ -429,8 +427,8 @@ ENG MUHIM QOIDA: faqat audioda HAQIQATAN eshitilgan inson nutqini yozing. Hech n
         intent: 'clarification',
         actions: [],
         transcript,
-        clarificationQuestion: AMOUNT_TOO_LARGE_MESSAGE,
-        summaryUzbek: AMOUNT_TOO_LARGE_MESSAGE,
+        clarificationQuestion: t.amountTooLarge,
+        summaryUzbek: t.amountTooLarge,
       };
     }
 
@@ -444,14 +442,15 @@ ENG MUHIM QOIDA: faqat audioda HAQIQATAN eshitilgan inson nutqini yozing. Hech n
 
     // Gemini's own preview is kept unless we changed a currency it wrote into it.
     let summaryUzbek = currencyReplaced ? '' : parsed.summaryUzbek?.trim() || '';
-    if (!summaryUzbek) summaryUzbek = buildActionSummary(sanitizedActions);
+    if (!summaryUzbek) summaryUzbek = buildActionSummary(sanitizedActions, language);
 
     const result: ExtractionResult = {
       intent,
       actions: sanitizedActions,
       clarificationQuestion: parsed.clarificationQuestion || undefined,
       transcript,
-      summaryUzbek: summaryUzbek || 'Iltimos, ma’lumotingizni tasdiqlang.',
+      summaryUzbek: summaryUzbek || t.confirmGeneric,
+      language,
     };
     return options.defaultCurrency ? applyDefaultCurrency(result, options.defaultCurrency) : result;
   } catch (err: unknown) {
@@ -465,7 +464,7 @@ ENG MUHIM QOIDA: faqat audioda HAQIQATAN eshitilgan inson nutqini yozing. Hech n
     return {
       intent: 'financial_query',
       actions: [],
-      summaryUzbek: 'Xabaringiz qabul qilindi.',
+      summaryUzbek: t.received,
       error: budgetExceeded ? 'budget_exceeded' : 'ai_unavailable',
     };
   }

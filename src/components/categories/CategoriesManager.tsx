@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { Check, ChevronLeft, ChevronRight, Plus, Trash2, X } from 'lucide-react';
 import type { Category, CategoryType } from '@/types/database';
 import { getCategoryMeta } from '@/components/categories/CategoryIcon';
+import { useI18n } from '@/lib/i18n/client';
+import { categoryLabel } from '@/lib/i18n/format';
 import { getCategoryDisplayName } from '@/lib/categories/schemas';
 import { TxListSkeleton } from '@/components/mobile/TxRows';
 import { useClosing } from '@/lib/ui/useClosing';
@@ -16,6 +18,10 @@ type SheetState = { mode: 'new' } | { mode: 'edit'; category: Category } | { mod
  * built-in ones are shown for reference only (they cannot be changed), so they have no chevron.
  */
 export default function CategoriesManager() {
+  const { t, lang } = useI18n();
+  /** Server errors are Uzbek: show them as-is only to Uzbek readers. */
+  const serverError = (msg: unknown, fallback: string) => (lang === 'uz' && typeof msg === 'string' && msg ? msg : fallback);
+  const displayName = (c: Category) => (lang === 'uz' ? getCategoryDisplayName(c.name) : categoryLabel(c.name, lang));
   const [categories, setCategories] = useState<Category[]>([]);
   const [type, setType] = useState<CategoryType>('expense');
   const [loading, setLoading] = useState(true);
@@ -29,17 +35,18 @@ export default function CategoriesManager() {
     fetch('/api/categories', { cache: 'no-store' })
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || 'Kategoriyalarni yuklab bo‘lmadi');
+        if (!res.ok) throw new Error(serverError(data.error, t.categories.loadError));
         if (active) {
           setCategories(data.categories || []);
           setLoadError(null);
         }
       })
-      .catch((err: unknown) => active && setLoadError(err instanceof Error ? err.message : 'Kategoriyalarni yuklab bo‘lmadi'))
+      .catch((err: unknown) => active && setLoadError(err instanceof Error ? err.message : t.categories.loadError))
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reload]);
 
   useEffect(() => {
@@ -67,11 +74,11 @@ export default function CategoriesManager() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     }).catch(() => null);
-    if (!res) return 'Internet aloqasini tekshiring.';
+    if (!res) return t.common.checkInternet;
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) return data.error || 'Saqlab bo‘lmadi.';
+    if (!res.ok) return serverError(data.error, t.common.cannotSave);
     setSheet(null);
-    setToast(editing ? 'Saqlandi' : 'Qo‘shildi');
+    setToast(editing ? t.common.saved : t.common.added);
     if (!editing) setType(newType);
     refresh();
     return null;
@@ -79,11 +86,11 @@ export default function CategoriesManager() {
 
   const remove = async (category: Category): Promise<string | null> => {
     const res = await fetch(`/api/categories/${category.id}`, { method: 'DELETE' }).catch(() => null);
-    if (!res) return 'Internet aloqasini tekshiring.';
+    if (!res) return t.common.checkInternet;
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) return data.error || 'O‘chirib bo‘lmadi.';
+    if (!res.ok) return serverError(data.error, t.common.cannotDelete);
     setSheet(null);
-    setToast('O‘chirildi');
+    setToast(t.common.deleted);
     refresh();
     return null;
   };
@@ -97,7 +104,7 @@ export default function CategoriesManager() {
           <Icon size={20} strokeWidth={2} aria-hidden="true" />
         </span>
         <span className="uz-m-row-main">
-          <span className="uz-m-row-name">{getCategoryDisplayName(c.name)}</span>
+          <span className="uz-m-row-name">{displayName(c)}</span>
         </span>
         {editable && <ChevronRight size={18} color="#AEB4AA" aria-hidden="true" />}
       </>
@@ -116,18 +123,18 @@ export default function CategoriesManager() {
   return (
     <div id="categories-container" className="uz-page">
       <header className="uz-page-head">
-        <Link href="/settings" aria-label="Orqaga" className="uz-page-back">
+        <Link href="/settings" aria-label={t.common.back} className="uz-page-back">
           <ChevronLeft size={22} />
         </Link>
-        <h1>Kategoriyalar</h1>
-        <button type="button" id="add-category-btn" className="uz-page-add" aria-label="Kategoriya qo‘shish" onClick={() => setSheet({ mode: 'new' })}>
+        <h1>{t.categories.title}</h1>
+        <button type="button" id="add-category-btn" className="uz-page-add" aria-label={t.categories.add} onClick={() => setSheet({ mode: 'new' })}>
           <Plus size={22} strokeWidth={2.6} />
         </button>
       </header>
 
-      <div className="uz-m-seg" role="group" aria-label="Turi">
-        <button type="button" aria-pressed={type === 'expense'} onClick={() => setType('expense')}>Chiqim</button>
-        <button type="button" aria-pressed={type === 'income'} onClick={() => setType('income')}>Kirim</button>
+      <div className="uz-m-seg" role="group" aria-label={t.common.type}>
+        <button type="button" aria-pressed={type === 'expense'} onClick={() => setType('expense')}>{t.common.expense}</button>
+        <button type="button" aria-pressed={type === 'income'} onClick={() => setType('income')}>{t.common.income}</button>
       </div>
 
       {loading ? (
@@ -135,24 +142,24 @@ export default function CategoriesManager() {
       ) : loadError ? (
         <div className="uz-m-empty" role="alert">
           <span>{loadError}</span>
-          <button type="button" className="uz-page-retry" onClick={() => { setLoading(true); refresh(); }}>Qayta yuklash</button>
+          <button type="button" className="uz-page-retry" onClick={() => { setLoading(true); refresh(); }}>{t.common.reload}</button>
         </div>
       ) : (
         <>
           <section className="uz-m-section">
-            <h2 className="uz-page-sub">Sizniki</h2>
+            <h2 className="uz-page-sub">{t.categories.yours}</h2>
             {own.length ? (
               <div className="uz-m-list">{own.map((c) => row(c, true))}</div>
             ) : (
               <button type="button" className="uz-m-empty" onClick={() => setSheet({ mode: 'new' })}>
                 <span className="uz-m-empty-ic"><Plus size={26} strokeWidth={2.6} /></span>
-                <span>O‘z kategoriyangiz</span>
+                <span>{t.categories.yourOwn}</span>
               </button>
             )}
           </section>
           {builtIn.length > 0 && (
             <section className="uz-m-section">
-              <h2 className="uz-page-sub">Standart</h2>
+              <h2 className="uz-page-sub">{t.categories.standard}</h2>
               <div className="uz-m-list">{builtIn.map((c) => row(c, false))}</div>
             </section>
           )}
@@ -195,6 +202,7 @@ function CategorySheet({
   onSave: (name: string, type: CategoryType, editing?: Category) => Promise<string | null>;
   onDelete?: () => void;
 }) {
+  const { t } = useI18n();
   const [name, setName] = useState(editing?.name ?? '');
   const [type, setType] = useState<CategoryType>(editing?.type ?? defaultType);
   const [error, setError] = useState<string | null>(null);
@@ -213,13 +221,13 @@ function CategorySheet({
 
   return (
     <div className="uz-sh-overlay" data-closing={closing} onClick={(e) => e.target === e.currentTarget && !busy && close()}>
-      <div className="uz-sh" role="dialog" aria-modal="true" aria-label={editing ? 'Kategoriya' : 'Yangi kategoriya'}>
+      <div className="uz-sh" role="dialog" aria-modal="true" aria-label={editing ? t.categories.category : t.categories.newCategory}>
         <div className="uz-sh-grab" />
         <div className="uz-sh-head">
-          <button type="button" className="uz-qa-round" aria-label="Yopish" onClick={close}>
+          <button type="button" className="uz-qa-round" aria-label={t.common.close} onClick={close}>
             <X size={20} strokeWidth={2.2} />
           </button>
-          <h2>{editing ? 'Kategoriya' : 'Yangi kategoriya'}</h2>
+          <h2>{editing ? t.categories.category : t.categories.newCategory}</h2>
           <span style={{ width: 44 }} aria-hidden="true" />
         </div>
 
@@ -233,8 +241,8 @@ function CategorySheet({
           style={{ alignSelf: 'center' }}
           value={name}
           maxLength={50}
-          placeholder="Nomi"
-          aria-label="Kategoriya nomi"
+          placeholder={t.categories.namePlaceholder}
+          aria-label={t.categories.nameAria}
           onChange={(e) => {
             setName(e.target.value);
             setError(null);
@@ -242,21 +250,21 @@ function CategorySheet({
           onKeyDown={(e) => e.key === 'Enter' && void submit()}
         />
         {!editing && (
-          <div className="uz-m-seg" role="group" aria-label="Turi">
-            <button type="button" aria-pressed={type === 'expense'} onClick={() => setType('expense')}>Chiqim</button>
-            <button type="button" aria-pressed={type === 'income'} onClick={() => setType('income')}>Kirim</button>
+          <div className="uz-m-seg" role="group" aria-label={t.common.type}>
+            <button type="button" aria-pressed={type === 'expense'} onClick={() => setType('expense')}>{t.common.expense}</button>
+            <button type="button" aria-pressed={type === 'income'} onClick={() => setType('income')}>{t.common.income}</button>
           </div>
         )}
         {error && <div className="uz-qa-error" role="alert">{error}</div>}
 
         <div className="uz-sh-foot">
           {onDelete && (
-            <button type="button" className="uz-qa-trash" aria-label="Kategoriyani o‘chirish" onClick={onDelete} disabled={busy}>
+            <button type="button" className="uz-qa-trash" aria-label={t.categories.deleteAria} onClick={onDelete} disabled={busy}>
               <Trash2 size={22} strokeWidth={2.2} />
             </button>
           )}
           <button type="button" className="uz-qa-save" disabled={!changed || busy} onClick={submit}>
-            <Check size={20} strokeWidth={2.8} /> {busy ? 'Saqlanmoqda…' : 'Saqlash'}
+            <Check size={20} strokeWidth={2.8} /> {busy ? t.common.saving : t.common.save}
           </button>
         </div>
       </div>
@@ -265,17 +273,18 @@ function CategorySheet({
 }
 
 function DeleteSheet({ category, onCancel, onConfirm }: { category: Category; onCancel: () => void; onConfirm: () => Promise<string | null> }) {
+  const { t } = useI18n();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { closing, close } = useClosing(onCancel);
   return (
     <div className="uz-sh-overlay" data-closing={closing} onClick={(e) => e.target === e.currentTarget && !busy && close()}>
-      <div className="uz-sh" role="alertdialog" aria-modal="true" aria-label="Kategoriya o‘chirilsinmi?">
+      <div className="uz-sh" role="alertdialog" aria-modal="true" aria-label={t.categories.confirmDeleteAria}>
         <div className="uz-sh-grab" />
         <div className="uz-sh-confirm">
           <span className="uz-sh-confirm-ic"><Trash2 size={26} strokeWidth={2.2} /></span>
-          <h2>“{category.name}” o‘chirilsinmi?</h2>
-          <p>Uning amallari kategoriyasiz qoladi.</p>
+          <h2>{t.categories.confirmDelete(category.name)}</h2>
+          <p>{t.categories.deleteHint}</p>
           {error && <div className="uz-qa-error" role="alert">{error}</div>}
           <button
             type="button"
@@ -287,10 +296,10 @@ function DeleteSheet({ category, onCancel, onConfirm }: { category: Category; on
               setBusy(false);
             }}
           >
-            {busy ? 'O‘chirilmoqda…' : 'O‘chirish'}
+            {busy ? t.common.deleting : t.common.delete}
           </button>
           <button type="button" className="uz-sh-plain" onClick={close} disabled={busy}>
-            Bekor qilish
+            {t.common.cancel}
           </button>
         </div>
       </div>

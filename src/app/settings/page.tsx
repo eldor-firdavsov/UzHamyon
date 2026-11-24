@@ -4,19 +4,24 @@ import { ChevronLeft, ChevronRight, Download, LayoutGrid, Send, Target } from 'l
 import { createClient } from '@/lib/supabase/server';
 import ProfileForm from '@/components/ProfileForm';
 import LogoutButton from '@/components/LogoutButton';
+import LanguageSettings from '@/components/LanguageSettings';
+import { getT } from '@/lib/i18n/server';
 
-const LINKS = [
-  { href: '/categories', label: 'Kategoriyalar', bg: '#7A5AE0', Icon: LayoutGrid },
-  { href: '/imports', label: 'Import', bg: '#2457C5', Icon: Download },
-  { href: '/analytics', label: 'Limitlar va maqsadlar', bg: '#3E8E0A', Icon: Target },
-];
-
-export const metadata = {
-  title: 'Sozlamalar — UzHamyon',
-  description: 'Hisobingiz va profilingiz sozlamalarini boshqaring',
-};
+export async function generateMetadata() {
+  const { t } = await getT();
+  return {
+    title: `${t.settings.title} — UzHamyon`,
+    description: t.settings.metaDescription,
+  };
+}
 
 export default async function SettingsPage() {
+  const { t } = await getT();
+  const LINKS = [
+    { href: '/categories', label: t.profile.categories, bg: '#7A5AE0', Icon: LayoutGrid },
+    { href: '/imports', label: t.profile.import, bg: '#2457C5', Icon: Download },
+    { href: '/analytics', label: t.settings.limitsGoals, bg: '#3E8E0A', Icon: Target },
+  ];
   const supabase = await createClient();
 
   const {
@@ -42,7 +47,7 @@ export default async function SettingsPage() {
   const formattedEmailName = cleanEmailName
     ? cleanEmailName.charAt(0).toUpperCase() + cleanEmailName.slice(1).toLowerCase()
     : '';
-  const fullName = `${firstName} ${lastName}`.trim() || formattedEmailName || 'Foydalanuvchi';
+  const fullName = `${firstName} ${lastName}`.trim() || formattedEmailName || t.common.user;
 
   const initial = fullName.charAt(0).toUpperCase() || 'U';
   const viaTelegram = email.startsWith('tg_') && email.endsWith('@telegram.uzhamyon.uz');
@@ -53,13 +58,13 @@ export default async function SettingsPage() {
         <div className="flex items-center gap-2">
           <Link
             href="/dashboard"
-            aria-label="Orqaga"
+            aria-label={t.common.back}
             className="h-10 w-10 rounded-full bg-white text-[#3B403A] grid place-items-center shrink-0"
           >
             <ChevronLeft className="h-5 w-5" />
           </Link>
-          <h1 className="text-[28px] font-extrabold tracking-tight">Sozlamalar</h1>
-          <span className="sr-only">Hisob sozlamalari</span>
+          <h1 className="text-[28px] font-extrabold tracking-tight">{t.settings.title}</h1>
+          <span className="sr-only">{t.settings.srTitle}</span>
         </div>
 
         <div className="flex flex-col items-center gap-1.5 pt-1">
@@ -78,6 +83,8 @@ export default async function SettingsPage() {
         </div>
 
         <ProfileForm initialFirstName={firstName} initialLastName={lastName} email={email} />
+
+        <LanguageSettings />
 
         <div className="uz-m-list">
           {LINKS.map(({ href, label, bg, Icon }) => (

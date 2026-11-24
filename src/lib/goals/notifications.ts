@@ -11,18 +11,16 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { escapeHtml } from '../telegram/html.ts';
+import { botTexts } from '../i18n/bot.ts';
+import { langForProfile, type Lang } from '../i18n/config.ts';
 import { todayTashkent } from '../time/tashkent.ts';
 
-export function buildGoalCompletedMessage(goalName: string): string {
-  return `🎉 <b>Tabriklaymiz!</b> «${escapeHtml(goalName)}» maqsadingizga yetdingiz!\n\nAjoyib natija — shu ruhda davom eting! 💪`;
+export function buildGoalCompletedMessage(goalName: string, lang: Lang = 'uz'): string {
+  return botTexts(lang).goalCompleted(goalName);
 }
 
-export function buildGoalDeadlineMessage(goalName: string, targetDate: string): string {
-  return (
-    `⏰ «${escapeHtml(goalName)}» maqsadingiz muddati (${escapeHtml(targetDate)}) o‘tdi, lekin u hali yakunlanmagan.\n\n` +
-    `Hech gap yo‘q — yangi sana belgilab, davom ettirishingiz mumkin. Ilovada maqsadni oching va «Tahrirlash» orqali yangi muddat qo‘ying. 🙂`
-  );
+export function buildGoalDeadlineMessage(goalName: string, targetDate: string, lang: Lang = 'uz'): string {
+  return botTexts(lang).goalDeadline(goalName, targetDate);
 }
 
 /** Telegram user id stored for a profile (internal email or onboarding_data.telegram_id). */
@@ -51,7 +49,7 @@ function isMissingColumn(error: { code?: string; message?: string } | null): boo
  */
 export async function notifyCompletedGoals(
   client: SupabaseClient,
-  options: { userId?: string; chatId?: number } = {}
+  options: { userId?: string; chatId?: number; lang?: Lang } = {}
 ): Promise<number> {
   try {
     let userId = options.userId;
@@ -76,20 +74,22 @@ export async function notifyCompletedGoals(
     if (!claimed || claimed.length === 0) return 0;
 
     let chatId = options.chatId ?? null;
-    if (!chatId) {
+    let lang = options.lang;
+    if (!chatId || !lang) {
       const { data: profile } = await client
         .from('profiles')
         .select('email, onboarding_data')
         .eq('id', userId)
         .maybeSingle();
-      chatId = telegramIdFromProfile(profile);
+      chatId = chatId ?? telegramIdFromProfile(profile);
+      lang = lang ?? langForProfile(profile?.onboarding_data);
     }
     if (!chatId) return 0; // web-only user: nothing to send
 
     const { sendTelegramMessage, MINIAPP_URL } = await import('../telegram/bot.ts');
     let sent = 0;
     for (const goal of claimed) {
-      const res = await sendTelegramMessage(chatId, buildGoalCompletedMessage(goal.name), 'Ilovani ochish', MINIAPP_URL);
+      const res = await sendTelegramMessage(chatId, buildGoalCompletedMessage(goal.name, lang), botTexts(lang).openApp, MINIAPP_URL);
       if (res?.ok) sent++;
     }
     return sent;
@@ -147,19 +147,22 @@ export async function sendGoalDeadlineNotices(
       .select('id, email, onboarding_data')
       .in('id', userIds);
     const chatByUser = new Map<string, number>();
+    const langByUser = new Map<string, Lang>();
     for (const p of profiles || []) {
       const tg = telegramIdFromProfile(p);
       if (tg) chatByUser.set(p.id, tg);
+      langByUser.set(p.id, langForProfile(p.onboarding_data));
     }
 
     const { sendTelegramMessage, MINIAPP_URL } = await import('../telegram/bot.ts');
     for (const goal of claimed) {
       const chatId = chatByUser.get(goal.user_id);
       if (!chatId) continue;
+      const lang = langByUser.get(goal.user_id) ?? 'uz';
       const res = await sendTelegramMessage(
         chatId,
-        buildGoalDeadlineMessage(goal.name, goal.target_date),
-        'Maqsadni ochish',
+        buildGoalDeadlineMessage(goal.name, goal.target_date, lang),
+        botTexts(lang).openGoal,
         MINIAPP_URL
       );
       if (res?.ok) result.sent++;

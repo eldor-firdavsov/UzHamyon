@@ -3,11 +3,13 @@
 import React from 'react';
 import { Check, Flame, Snowflake } from 'lucide-react';
 import type { StreakDay, StreakSummary } from '@/lib/streak/compute';
+import { useI18n } from '@/lib/i18n/client';
+import { WEEKDAYS_SHORT } from '@/lib/i18n/format';
 
-const WEEKDAYS = ['Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh', 'Ya'];
 
 /** Flame + number. Dashed outline while today is not logged yet (streak at risk). */
 export function StreakChip({ streak, onClick }: { streak: StreakSummary; onClick?: () => void }) {
+  const { t } = useI18n();
   const atRisk = !streak.todayDone;
   return (
     <button
@@ -15,7 +17,7 @@ export function StreakChip({ streak, onClick }: { streak: StreakSummary; onClick
       className="uz-streak-chip"
       data-risk={atRisk}
       onClick={onClick}
-      aria-label={`Seriya: ${streak.current} kun${atRisk ? ', bugun hali yozilmagan' : ''}`}
+      aria-label={t.streak.chipAria(streak.current, atRisk)}
     >
       <Flame
         size={18}
@@ -38,29 +40,24 @@ function DayDot({ day }: { day: StreakDay }) {
   );
 }
 
-const STATE_LABEL: Record<StreakDay['state'], string> = {
-  done: 'yozildi',
-  frozen: 'muzlatildi',
-  missed: 'o‘tkazildi',
-  today: 'bugun',
-  future: '',
-};
 
 /** Monday → Sunday with logged / frozen / today states. */
 export function StreakWeek({ streak }: { streak: StreakSummary }) {
+  const { t, lang } = useI18n();
   if (!streak.week.length) return null;
+  const weekdays = WEEKDAYS_SHORT[lang];
   const today = todayOf(streak);
   return (
-    <div className="uz-week" role="list" aria-label="Shu hafta">
+    <div className="uz-week" role="list" aria-label={t.streak.thisWeek}>
       {streak.week.map((d, i) => (
         <div
           key={d.date}
           className="uz-week-day"
           data-today={d.date === today}
           role="listitem"
-          aria-label={`${WEEKDAYS[i]} ${STATE_LABEL[d.state]}`}
+          aria-label={`${weekdays[i]} ${t.streak.states[d.state]}`}
         >
-          <span>{WEEKDAYS[i]}</span>
+          <span>{weekdays[i]}</span>
           <DayDot day={d} />
         </div>
       ))}

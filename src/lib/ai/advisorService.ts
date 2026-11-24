@@ -8,6 +8,9 @@ import { formatMoney } from '../formatters/money.ts';
 import { convertAmount, formatAmount } from '../fx/currency.ts';
 import { getUsdUzsRate } from '../fx/rates.ts';
 import { getPreferredCurrency } from '../profile/preferredCurrency.ts';
+import { botTexts, describeExecutedActions } from '../i18n/bot.ts';
+import { formatMoneyIn } from '../i18n/format.ts';
+import type { Lang } from '../i18n/config.ts';
 
 export interface ServiceResult<T> {
   data: T | null;
@@ -360,6 +363,17 @@ async function gatherUserFinancialContext(
  * Honest fallback used only when the AI provider is unavailable.
  * Every number comes from verified database facts; nothing is invented.
  */
+/** AI unavailable, Russian / English: the key verified numbers in one line. */
+function buildPlainFallbackAnswer(facts: VerifiedFinancialFacts, language: Lang): string {
+  const money = (v: number) => formatMoneyIn(v, facts.primaryCurrency, language);
+  if (language === 'ru') {
+    if (facts.transactionCount === 0) return 'Пока нет ни одной записи о доходах или расходах, поэтому точных цифр нет. Добавьте операции — и я смогу их проанализировать.';
+    return `AI сейчас недоступен. По вашим записям: доход ${money(facts.totalIncome)}, расход ${money(facts.totalExpense)}, баланс ${money(facts.balance)} (операций: ${facts.transactionCount}).`;
+  }
+  if (facts.transactionCount === 0) return 'There are no income or spending entries yet, so there are no exact numbers. Add some entries and I can analyse them.';
+  return `AI is unavailable right now. From your entries: income ${money(facts.totalIncome)}, spending ${money(facts.totalExpense)}, balance ${money(facts.balance)} (${facts.transactionCount} entries).`;
+}
+
 function buildVerifiedFallbackAnswer(question: string, facts: VerifiedFinancialFacts): string {
   const q = question.toLowerCase();
   const money = (value: number) => formatMoney(value, facts.primaryCurrency);
@@ -447,6 +461,8 @@ export interface AskAdvisorOptions {
   channel?: 'web' | 'telegram';
   /** Shared AI time budget for this Telegram update. */
   budget?: AiBudget;
+  /** The user's language: the answer is written in it (default Uzbek). */
+  language?: Lang;
 }
 
 export async function askFinancialAdvisor(
@@ -563,11 +579,14 @@ export async function askFinancialAdvisor(
     }
 
     const isTelegram = options.channel === 'telegram';
+    const language: Lang = options.language ?? 'uz';
+    const bt = botTexts(language);
 
     // 3.1 Check deterministic financial action engine (5 core scenarios, clarifications, confirmations)
     // Web only: its proposals live in this conversation and cannot be confirmed from Telegram.
     const { processFinancialIntent } = await import('./financialActionEngine.ts');
-    const intentResult = isTelegram
+    // The regex engine only reads and answers Uzbek; other languages go straight to the AI.
+    const intentResult = isTelegram || language !== 'uz'
       ? { handled: false as const, answer: '', pendingAction: undefined, actionResult: undefined }
       : await processFinancialIntent(question, convId!, user.id, supabase);
 
@@ -623,6 +642,9 @@ export async function askFinancialAdvisor(
     if (latestPending && latestPending.status === 'pending') {
       if (isUserConfirmation(question)) {
         const execRes = await executePendingActionRecord(latestPending, supabase);
+        if (execRes.success && language !== 'uz') {
+          execRes.message = describeExecutedActions(latestPending.actions, language);
+        }
         const evidence = {
           grounded_context: verified.text,
           model_used: 'gemini-action-engine',
@@ -657,7 +679,7 @@ export async function askFinancialAdvisor(
 
       if (isUserCancellation(question)) {
         await cancelPendingAction(latestPending.actionId, user.id);
-        const cancelMsg = 'Amal bekor qilindi. Hech qanday moliyaviy yozuv kiritilmadi.';
+        const cancelMsg = bt.cancelledWeb;
         const evidence = {
           grounded_context: verified.text,
           model_used: 'gemini-action-engine',
@@ -706,6 +728,7 @@ export async function askFinancialAdvisor(
           userFinancialContextText: verified.text,
           categories: categoryOptions.length ? categoryNamesByType(categoryOptions) : undefined,
           defaultCurrency,
+          language,
         });
 
     if (extraction.intent === 'action_proposal' && extraction.actions.length > 0) {
@@ -839,7 +862,7 @@ Asosiy vazifalar va javob tuzilishi:
      * Jamg‘arma maqsadlari yangi boshlangan bo‘lsa, to‘plangan mablag‘ 0 soʻm ekanligini ko‘rsating.
    - Amal muvaffaqiyatsiz bo'lsa yoki bajarilmagan bo'lsa, aslo bajarildi deb da'vo qilmang.
 
-4. TILI: Sodda, ravon o'zbek tilida, grammatik to'g'ri, tugallangan jumlalar bilan yozing.`;
+4. TILI: ${language === 'uz' ? "Sodda, ravon o'zbek tilida, grammatik to'g'ri, tugallangan jumlalar bilan yozing." : `${bt.aiLanguageRule} (Javobni FAQAT shu tilda yozing, ko'rsatmalar o'zbekcha bo'lsa ham.)`}`;
 
     const { sanitizeUserInputForAi } = await import('./actionExtractionEngine.ts');
     const sanitizedQuestion = sanitizeUserInputForAi(question.trim());
@@ -851,7 +874,9 @@ Asosiy vazifalar va javob tuzilishi:
     const finalAnswer =
       !aiRes.isFallback && aiRes.text.trim()
         ? aiRes.text
-        : buildVerifiedFallbackAnswer(question, verified.facts);
+        : language === 'uz'
+        ? buildVerifiedFallbackAnswer(question, verified.facts)
+        : buildPlainFallbackAnswer(verified.facts, language);
 
     // 5. Save Assistant response to ai_messages
     const evidence = {

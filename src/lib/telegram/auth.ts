@@ -35,6 +35,8 @@ export interface TelegramAuthSession {
   };
   onboarding_completed: boolean;
   isNewUser: boolean;
+  /** Language the user chose (onboarding_data.language); null until they pick one. */
+  language?: Lang | null;
   error?: string;
 }
 
@@ -128,6 +130,7 @@ import {
   getSupabaseServiceRoleKey,
 } from '../supabase/config.ts';
 import { todayTashkent } from '../time/tashkent.ts';
+import { langFromOnboardingData, type Lang } from '../i18n/config.ts';
 
 /**
  * Derives a deterministic internal email and secure password for a Telegram user.
@@ -349,6 +352,7 @@ export async function getOrCreateTelegramUser(tgUser: TelegramUser): Promise<Tel
     .maybeSingle();
 
   let onboardingCompleted = existingProfile?.onboarding_completed ?? false;
+  const language = langFromOnboardingData(existingProfile?.onboarding_data);
 
   if (!existingProfile) {
     // Insert new profile
@@ -411,5 +415,6 @@ export async function getOrCreateTelegramUser(tgUser: TelegramUser): Promise<Tel
     },
     onboarding_completed: onboardingCompleted,
     isNewUser,
+    language,
   };
 }

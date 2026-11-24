@@ -1,8 +1,10 @@
 import React from 'react';
+import { getT } from '@/lib/i18n/server';
 
-export default function SettingsLoading() {
+export default async function SettingsLoading() {
+  const { t } = await getT();
   return (
-    <div className="min-h-screen bg-[#F2F4EF]" aria-busy="true" aria-label="Yuklanmoqda">
+    <div className="min-h-screen bg-[#F2F4EF]" aria-busy="true" aria-label={t.common.loading}>
       <div className="w-full max-w-xl mx-auto px-4 pt-4 flex flex-col gap-5 animate-pulse">
         <div className="flex items-center gap-2">
           <div className="h-10 w-10 rounded-full bg-white" />

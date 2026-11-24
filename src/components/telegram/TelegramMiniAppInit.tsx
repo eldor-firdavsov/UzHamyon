@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import UzHamyonLogo from '@/components/brand/UzHamyonLogo';
+import { useI18n } from '@/lib/i18n/client';
+import { normalizeLang } from '@/lib/i18n/config';
 
 declare global {
   interface Window {
@@ -50,6 +52,12 @@ declare global {
 export default function TelegramMiniAppInit() {
   const [isAuthenticating, setIsAuthenticating] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const { t, lang, setLang } = useI18n();
+  // Latest values for the one-time auth effect below.
+  const i18nRef = React.useRef({ t, lang, setLang });
+  useEffect(() => {
+    i18nRef.current = { t, lang, setLang };
+  }, [t, lang, setLang]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -106,9 +114,15 @@ export default function TelegramMiniAppInit() {
         const data = await res.json();
 
         if (!data.success || !data.session) {
-          setAuthError(data.error || 'Telegram orqali kirishda xatolik yuz berdi');
+          setAuthError(i18nRef.current.lang === 'uz' && data.error ? data.error : i18nRef.current.t.tg.errorDefault);
           setIsAuthenticating(false);
           return;
+        }
+
+        // The language chosen earlier (onboarding, settings or the bot) follows the user.
+        const savedLang = normalizeLang(data.language);
+        if (savedLang && savedLang !== i18nRef.current.lang) {
+          void i18nRef.current.setLang(savedLang, { persist: false });
         }
 
         // Set session in client Supabase (which writes @supabase/ssr cookies)
@@ -140,7 +154,8 @@ export default function TelegramMiniAppInit() {
         }
         setIsAuthenticating(false);
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Server bilan aloqa uzildi';
+        const msg = i18nRef.current.t.tg.connectionLost;
+        console.error('Telegram auth failed:', err);
         setAuthError(msg);
         setIsAuthenticating(false);
       }
@@ -179,10 +194,10 @@ export default function TelegramMiniAppInit() {
           <UzHamyonLogo variant="icon" size="xl" />
         </div>
         <h2 className="text-xl font-bold text-[#171B16] tracking-tight">UzHamyon</h2>
-        <p className="text-xs text-[#697168] mt-1 font-medium">Telegram hisobingiz tasdiqlanmoqda...</p>
+        <p className="text-xs text-[#697168] mt-1 font-medium">{t.tg.verifying}</p>
         <div className="mt-6 flex items-center gap-1.5 text-xs text-[#163300] font-semibold bg-[#F0F9E9] border border-[#9FE870]/40 px-3.5 py-1.5 rounded-full">
           <span className="w-2 h-2 rounded-full bg-[#163300] animate-ping" />
-          <span>Xavfsiz ulanish</span>
+          <span>{t.tg.secure}</span>
         </div>
       </div>
     );
@@ -194,14 +209,14 @@ export default function TelegramMiniAppInit() {
         <div className="w-16 h-16 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 mb-4 font-bold text-2xl">
           !
         </div>
-        <h3 className="text-base font-bold text-[#171B16]">Telegram orqali ulanishda xatolik</h3>
+        <h3 className="text-base font-bold text-[#171B16]">{t.tg.errorTitle}</h3>
         <p className="text-xs text-[#697168] mt-1.5 max-w-xs">{authError}</p>
         <button
           type="button"
           onClick={() => window.location.reload()}
           className="mt-5 px-5 py-2.5 rounded-xl bg-[#163300] text-[#9FE870] font-bold text-xs shadow-xs cursor-pointer active:scale-98"
         >
-          Qayta urinish
+          {t.common.retry}
         </button>
       </div>
     );

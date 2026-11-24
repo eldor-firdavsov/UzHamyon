@@ -5,6 +5,8 @@ import { ArrowDown, ArrowUp, Plus, Target } from 'lucide-react';
 import { getCategoryMeta } from '@/components/categories/CategoryIcon';
 import { shortAmount } from '@/lib/transactions/quickPicks';
 import { formatAmount, formatWithUnit, type DisplayCurrency } from '@/lib/fx/currency';
+import { useI18n } from '@/lib/i18n/client';
+import { categoryLabel } from '@/lib/i18n/format';
 
 const RING_COLORS = ['#2457C5', '#E8930C', '#3E8E0A', '#7A5AE0', '#C9CFC4'];
 
@@ -61,6 +63,7 @@ export default function TahlilMobile({
   onAddGoal,
   onOpenGoal,
 }: TahlilMobileProps) {
+  const { t, lang } = useI18n();
   const sorted = Object.entries(byCategory).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
   const top = sorted.slice(0, 4);
   const rest = sorted.slice(4).reduce((s, [, v]) => s + v, 0);
@@ -88,10 +91,10 @@ export default function TahlilMobile({
 
   return (
     <div className="uz-m-page" data-page="tahlil">
-      <section className="uz-m-card uz-t-ring-card" aria-label="Xarajatlar taqsimoti">
+      <section className="uz-m-card uz-t-ring-card" aria-label={t.tahlil.distribution}>
         {loading ? (
           <>
-            <div className="uz-t-ring uz-skel" style={{ borderRadius: '50%' }} aria-label="Yuklanmoqda" />
+            <div className="uz-t-ring uz-skel" style={{ borderRadius: '50%' }} aria-label={t.common.loading} />
             <div className="uz-t-legend">
               {[70, 55, 62].map((w) => (
                 <span key={w} className="uz-skel" style={{ width: `${w}%`, height: 14 }} />
@@ -100,14 +103,14 @@ export default function TahlilMobile({
           </>
         ) : (
         <>
-        <div className="uz-t-ring" style={{ background: ring }} role="img" aria-label={`Shu oy chiqim ${formatWithUnit(monthExpense, currency)}`}>
+        <div className="uz-t-ring" style={{ background: ring }} role="img" aria-label={t.tahlil.monthExpense(formatWithUnit(monthExpense, currency, lang))}>
           <div className="uz-t-ring-hole">
             <span className="uz-t-ring-total num">{compact(monthExpense, currency)}</span>
             {change !== null && change !== 0 && (
               <span
                 className="uz-t-ring-change"
                 data-good={change < 0}
-                aria-label={`O‘tgan oyga nisbatan ${change > 0 ? 'ko‘p' : 'kam'} ${Math.abs(change)}%`}
+                aria-label={t.tahlil.vsLastMonth(change > 0, Math.abs(change))}
               >
                 {change < 0 ? <ArrowDown size={12} strokeWidth={3} /> : <ArrowUp size={12} strokeWidth={3} />}
                 {Math.abs(change)}%
@@ -122,7 +125,7 @@ export default function TahlilMobile({
             slices.map((s) => (
               <div key={s.name} className="uz-t-legend-row">
                 <span className="uz-t-swatch" style={{ background: s.color }} />
-                <span className="uz-t-legend-name">{s.name}</span>
+                <span className="uz-t-legend-name">{categoryLabel(s.name, lang)}</span>
                 <span className="uz-t-legend-pct num">{s.pct}%</span>
               </div>
             ))
@@ -134,8 +137,8 @@ export default function TahlilMobile({
 
       <section className="uz-m-section">
         <header className="uz-m-section-hd">
-          <h2>Limitlar</h2>
-          <button type="button" className="uz-m-add-btn" aria-label="Limit qo‘shish" onClick={onAddBudget}>
+          <h2>{t.tahlil.limits}</h2>
+          <button type="button" className="uz-m-add-btn" aria-label={t.tahlil.addLimit} onClick={onAddBudget}>
             <Plus size={16} strokeWidth={2.6} />
           </button>
         </header>
@@ -154,11 +157,11 @@ export default function TahlilMobile({
                   </span>
                   <span className="uz-m-row-main" style={{ gap: 7 }}>
                     <span className="uz-t-budget-top">
-                      <span className="uz-m-row-name">{b.cat}</span>
+                      <span className="uz-m-row-name">{categoryLabel(b.cat, lang)}</span>
                       <span
                         className="num"
                         style={{ color: over ? '#C62F21' : '#6B7068' }}
-                        aria-label={over ? `Limitdan ${formatWithUnit(b.spent - b.limit, currency)} oshdi` : `Qoldi ${formatWithUnit(b.limit - b.spent, currency)}`}
+                        aria-label={over ? t.tahlil.overBy(formatWithUnit(b.spent - b.limit, currency, lang)) : t.tahlil.left(formatWithUnit(b.limit - b.spent, currency, lang))}
                       >
                         {over ? `−${cur}${formatAmount(b.spent - b.limit, currency)}` : `${cur}${formatAmount(b.limit - b.spent, currency)}`}
                       </span>
@@ -174,8 +177,8 @@ export default function TahlilMobile({
 
       <section className="uz-m-section">
         <header className="uz-m-section-hd">
-          <h2>Maqsadlar</h2>
-          <button type="button" className="uz-m-add-btn" aria-label="Maqsad qo‘shish" onClick={onAddGoal}>
+          <h2>{t.tahlil.goals}</h2>
+          <button type="button" className="uz-m-add-btn" aria-label={t.tahlil.addGoal} onClick={onAddGoal}>
             <Plus size={16} strokeWidth={2.6} />
           </button>
         </header>

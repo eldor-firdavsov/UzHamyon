@@ -9,6 +9,7 @@ import {
   Plus,
   Sparkles,
 } from 'lucide-react';
+import { useI18n } from '@/lib/i18n/client';
 
 export interface MobileNavBarProps {
   onOpenAddTransaction: () => void;
@@ -33,6 +34,8 @@ export const MobileNavBar: React.FC<MobileNavBarProps> = ({
   className,
   highlightAdd = false,
 }) => {
+  const { t } = useI18n();
+  const navNames = [t.tabs.home, t.tabs.act, t.tabs.tahlil, t.tabs.ai];
   const router = useRouter();
   const currentPathname = usePathname() || '';
   const pillRef = useRef<HTMLDivElement>(null);
@@ -178,14 +181,14 @@ export const MobileNavBar: React.FC<MobileNavBarProps> = ({
       </svg>
 
       <nav
-        aria-label="Mobil navigatsiya"
+        aria-label={t.tabs.mobileNav}
         className="pointer-events-auto flex items-center justify-between gap-2.5 sm:gap-3 w-full max-w-[430px]"
       >
         {/* Hidden accessible links for SSR Discovery and Screen Readers */}
         <div className="sr-only" aria-hidden="true">
-          <a href="/dashboard" id="mobile-nav-dashboard-link">Bosh sahifa</a>
-          <a href="/transactions" id="mobile-nav-transactions-link">Faoliyat</a>
-          <a href="/analytics" id="mobile-nav-analytics-link">Tahlil</a>
+          <a href="/dashboard" id="mobile-nav-dashboard-link">{t.tabs.home}</a>
+          <a href="/transactions" id="mobile-nav-transactions-link">{t.tabs.act}</a>
+          <a href="/analytics" id="mobile-nav-analytics-link">{t.tabs.tahlil}</a>
           <a href="/ai" id="mobile-nav-ai-link">AI</a>
         </div>
         {/* 1. LEFT CAPSULE: 3-Item Liquid Glass Pill */}
@@ -255,7 +258,7 @@ export const MobileNavBar: React.FC<MobileNavBarProps> = ({
                   id={item.linkId}
                   type="button"
                   onClick={(e) => handleItemClick(idx, e)}
-                  aria-label={item.name}
+                  aria-label={navNames[idx] ?? item.name}
                   aria-current={isActive ? 'page' : undefined}
                   className={`relative z-10 flex items-center justify-center w-[52px] h-[52px] sm:w-14 sm:h-14 rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer ${
                     isActive
@@ -278,7 +281,7 @@ export const MobileNavBar: React.FC<MobileNavBarProps> = ({
         <button
           type="button"
           onClick={onOpenAddTransaction}
-          aria-label="Amal qo‘shish"
+          aria-label={t.tabs.addEntry}
           className={`${highlightAdd ? 'uz-add-pulse ' : ''}liquid-glass-primary relative flex-shrink-0 flex items-center justify-center w-[66px] h-[66px] sm:w-[70px] sm:h-[70px] rounded-full ring-4 ring-card/60 dark:ring-card/40 backdrop-blur-md active:scale-90 hover:opacity-95 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer`}
         >
           {/* Refraction underlay for detached circle */}

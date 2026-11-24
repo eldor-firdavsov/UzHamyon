@@ -11,6 +11,8 @@ import { getNowLocalDateString, getNowLocalTimeString } from '@/lib/transactions
 import { useModalScrollLock } from '@/lib/ui/useModalScrollLock';
 import { haptic } from '@/lib/ui/haptics';
 import { useClosing } from '@/lib/ui/useClosing';
+import { useI18n } from '@/lib/i18n/client';
+import { categoryLabel, relativeDay, somLabel } from '@/lib/i18n/format';
 
 export interface QuickAddInput {
   type: 'in' | 'ex';
@@ -52,7 +54,6 @@ const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '000', '0', 'del'] as
 /** Dollars need cents more than "000": the bottom-left key becomes a decimal point. */
 const USD_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del'] as const;
 type Key = (typeof KEYS)[number] | (typeof USD_KEYS)[number];
-const SHORT_MONTHS = ['yan', 'fev', 'mar', 'apr', 'may', 'iyn', 'iyl', 'avg', 'sen', 'okt', 'noy', 'dek'];
 
 function groupDigits(digits: string): string {
   if (!digits) return '0';
@@ -73,11 +74,6 @@ function categoryFor(pickOrDesc: { cat?: string; desc: string }, type: 'in' | 'e
   return predictCategoryFromTitle(pickOrDesc.desc || '', type).category;
 }
 
-function dayChipLabel(date: string, today: string): string {
-  if (date === today) return 'Bugun';
-  if (date === addDaysToDate(today, -1)) return 'Kecha';
-  return `${Number(date.slice(8, 10))}-${SHORT_MONTHS[Number(date.slice(5, 7)) - 1] ?? ''}`;
-}
 
 export default function QuickAddSheet({
   transactions,
@@ -92,6 +88,8 @@ export default function QuickAddSheet({
   onDelete,
   title,
 }: QuickAddSheetProps) {
+  const { t, lang } = useI18n();
+  const dayChipLabel = (d: string, ref: string) => relativeDay(d, ref, lang, false);
   const today = getNowLocalDateString();
   const editing = Boolean(initial);
   const [type, setType] = useState<'in' | 'ex'>(initial?.type ?? 'ex');
@@ -199,26 +197,26 @@ export default function QuickAddSheet({
         if (e.target === e.currentTarget && !isSaving) close();
       }}
     >
-      <div className="uz-qa-sheet" role="dialog" aria-modal="true" aria-label={editing ? 'Amalni tahrirlash' : 'Amal qo‘shish'}>
+      <div className="uz-qa-sheet" role="dialog" aria-modal="true" aria-label={editing ? t.quick.editTitle : t.quick.addTitle}>
         <div className="uz-sh-grab" />
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <button type="button" className="uz-qa-round" aria-label="Yopish" onClick={close} disabled={isSaving}>
+          <button type="button" className="uz-qa-round" aria-label={t.common.close} onClick={close} disabled={isSaving}>
             <X size={20} strokeWidth={2.2} />
           </button>
-          <div className="uz-qa-seg" role="group" aria-label="Turi">
+          <div className="uz-qa-seg" role="group" aria-label={t.common.type}>
             <button type="button" aria-pressed={type === 'ex'} onClick={() => switchType('ex')}>
-              Chiqim
+              {t.common.expense}
             </button>
             <button type="button" aria-pressed={type === 'in'} onClick={() => switchType('in')}>
-              Kirim
+              {t.common.income}
             </button>
           </div>
           <button
             type="button"
             className="uz-qa-day"
             aria-expanded={panel === 'day'}
-            aria-label={`Sana: ${dayChipLabel(date, today)}. O‘zgartirish`}
+            aria-label={t.quick.dateAria(dayChipLabel(date, today))}
             onClick={() => setPanel((p) => (p === 'day' ? 'keys' : 'day'))}
           >
             <Clock size={14} strokeWidth={2.4} />
@@ -240,22 +238,22 @@ export default function QuickAddSheet({
               data-cur={currency}
               onClick={toggleCurrency}
               disabled={isSaving}
-              aria-label={`Valyuta: ${currency === 'USD' ? 'dollar' : 'so‘m'}. ${otherCurrency === 'USD' ? 'Dollarga' : 'So‘mga'} o‘tkazish`}
+              aria-label={t.currency.switchAria(otherCurrency === 'USD')}
             >
-              <span>{currency === 'USD' ? 'USD' : unitLabel(currency)}</span>
+              <span>{currency === 'USD' ? 'USD' : unitLabel(currency, lang)}</span>
               <ArrowLeftRight size={13} strokeWidth={2.6} aria-hidden="true" />
             </button>
           </div>
           <div className="uz-qa-equiv num" aria-live="polite">
-            {equivalent > 0 ? `≈ ${formatWithUnit(equivalent, otherCurrency)}` : usdUzs > 0 ? `1 $ = ${formatAmount(usdUzs, 'UZS')} so‘m` : '\u00a0'}
+            {equivalent > 0 ? `≈ ${formatWithUnit(equivalent, otherCurrency, lang)}` : usdUzs > 0 ? `1 $ = ${formatAmount(usdUzs, 'UZS')} ${somLabel(lang)}` : '\u00a0'}
           </div>
-          <label htmlFor="qa-desc" className="sr-only">Nomi</label>
+          <label htmlFor="qa-desc" className="sr-only">{t.quick.nameLabel}</label>
           <input
             id="qa-desc"
             className="uz-qa-desc"
             value={desc}
             maxLength={255}
-            placeholder={type === 'ex' ? 'Nimaga?' : 'Qayerdan?'}
+            placeholder={type === 'ex' ? t.quick.whatFor : t.quick.fromWhere}
             onFocus={() => setPanel('keys')}
             onChange={(e) => {
               setDesc(e.target.value);
@@ -268,19 +266,19 @@ export default function QuickAddSheet({
               className="uz-qa-chip"
               aria-expanded={panel === 'category'}
               onClick={() => setPanel((p) => (p === 'category' ? 'keys' : 'category'))}
-              aria-label={`Kategoriya: ${effectiveCat}. O‘zgartirish`}
+              aria-label={t.quick.categoryAria(categoryLabel(effectiveCat, lang))}
             >
               <span style={{ width: 22, height: 22, borderRadius: '50%', background: catMeta.bg, color: catMeta.color, display: 'grid', placeItems: 'center' }}>
                 <CatIcon size={13} strokeWidth={2.4} />
               </span>
-              <span>{effectiveCat}</span>
+              <span>{categoryLabel(effectiveCat, lang)}</span>
               <ChevronDown size={14} color="#6B7068" style={{ transform: panel === 'category' ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
             </button>
           )}
         </div>
 
         {panel === 'category' && (
-          <div className="uz-qa-catgrid" role="listbox" aria-label="Kategoriya">
+          <div className="uz-qa-catgrid" role="listbox" aria-label={t.common.category}>
             {catOptions.map((name) => {
               const isAuto = name === 'Auto';
               const meta = getCategoryMeta(isAuto ? effectiveCat : name, type);
@@ -305,7 +303,7 @@ export default function QuickAddSheet({
                   >
                     <Icon size={22} strokeWidth={2.1} />
                   </span>
-                  <span className="uz-qa-fav-name">{isAuto ? 'Avto' : name}</span>
+                  <span className="uz-qa-fav-name">{categoryLabel(isAuto ? 'Avto' : name, lang)}</span>
                 </button>
               );
             })}
@@ -321,14 +319,14 @@ export default function QuickAddSheet({
             ))}
             <label className="uz-qa-dayopt" aria-pressed={![today, addDaysToDate(today, -1), addDaysToDate(today, -2)].includes(date)}>
               <CalendarDays size={16} strokeWidth={2.2} aria-hidden="true" />
-              <span>Boshqa</span>
+              <span>{t.quick.other}</span>
               <input
                 type="date"
                 className="uz-qa-dateinput"
                 max={today}
                 min="2020-01-01"
                 value={date}
-                aria-label="Boshqa sana"
+                aria-label={t.quick.otherDate}
                 onChange={(e) => pickDay(e.target.value)}
               />
             </label>
@@ -356,7 +354,7 @@ export default function QuickAddSheet({
             )}
 
             {!editing && picks.recents.length > 0 && (
-              <div className="uz-qa-recents" aria-label="Oxirgilar">
+              <div className="uz-qa-recents" aria-label={t.quick.recents}>
                 <Clock size={18} color="#6B7068" style={{ flex: '0 0 18px' }} aria-hidden="true" />
                 {picks.recents.map((p) => (
                   <button key={p.key} type="button" className="uz-qa-recent" onClick={() => choose(p)}>
@@ -369,7 +367,7 @@ export default function QuickAddSheet({
 
             <div className="uz-qa-keys">
               {keys.map((k) => (
-                <button key={k} type="button" className="uz-qa-key" onClick={() => press(k)} aria-label={k === 'del' ? 'Raqamni o‘chirish' : k === '.' ? 'Nuqta (sent)' : k}>
+                <button key={k} type="button" className="uz-qa-key" onClick={() => press(k)} aria-label={k === 'del' ? t.quick.deleteDigit : k === '.' ? t.currency.decimalPoint : k}>
                   {k === 'del' ? <Delete size={24} strokeWidth={2} /> : k}
                 </button>
               ))}
@@ -381,13 +379,13 @@ export default function QuickAddSheet({
 
         <div className="uz-qa-actions">
           {editing && onDelete && (
-            <button type="button" className="uz-qa-trash" aria-label="Amalni o‘chirish" onClick={onDelete} disabled={isSaving}>
+            <button type="button" className="uz-qa-trash" aria-label={t.quick.deleteEntry} onClick={onDelete} disabled={isSaving}>
               <Trash2 size={22} strokeWidth={2.2} />
             </button>
           )}
           <button type="button" className="uz-qa-save" style={{ flex: 1 }} disabled={!canSave} onClick={save}>
             {isSaving ? <Loader2 size={20} strokeWidth={2.6} className="animate-spin" /> : <Check size={20} strokeWidth={2.8} />}
-            {isSaving ? 'Saqlanmoqda…' : 'Saqlash'}
+            {isSaving ? t.common.saving : t.common.save}
           </button>
         </div>
       </div>

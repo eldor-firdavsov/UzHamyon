@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import TelegramMiniAppInit from "@/components/telegram/TelegramMiniAppInit";
+import { I18nProvider } from "@/lib/i18n/client";
+import { htmlLang } from "@/lib/i18n/config";
+import { getT } from "@/lib/i18n/server";
 import "./globals.css";
 
 export const viewport: Viewport = {
@@ -11,24 +14,28 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export const metadata: Metadata = {
-  title: "UzHamyon — Aqlli shaxsiy moliya va budjet boshqaruvi",
-  description: "UzHamyon — Shaxsiy moliya, xarajatlar va daromadlar boshqaruvi",
-  icons: {
-    icon: [
-      { url: "/icon.png", type: "image/png" },
-      { url: "/favicon.ico", sizes: "any" },
-    ],
-    apple: "/apple-icon.png",
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getT();
+  return {
+    title: t.meta.appTitle,
+    description: t.meta.appDescription,
+    icons: {
+      icon: [
+        { url: "/icon.png", type: "image/png" },
+        { url: "/favicon.ico", sizes: "any" },
+      ],
+      apple: "/apple-icon.png",
+    },
+  };
+}
 
 export const instant = false;
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const { lang } = await getT();
   return (
     <html
-      lang="uz"
+      lang={htmlLang(lang)}
       className="h-full antialiased font-sans"
       suppressHydrationWarning
     >
@@ -48,8 +55,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         className="min-h-full flex flex-col bg-[#F7F8F5] text-[#171B16] font-sans selection:bg-[#F0F9E9] selection:text-[#163300]"
         suppressHydrationWarning
       >
-        <TelegramMiniAppInit />
-        {children}
+        <I18nProvider initialLang={lang}>
+          <TelegramMiniAppInit />
+          {children}
+        </I18nProvider>
       </body>
     </html>
   );

@@ -1,11 +1,15 @@
 import type { Metadata } from 'next';
 import { Send, ExternalLink } from 'lucide-react';
 import UzHamyonLogo from '@/components/brand/UzHamyonLogo';
+import { getT } from '@/lib/i18n/server';
 
-export const metadata: Metadata = {
-  title: 'UzHamyon — Telegram Mini App',
-  description: 'UzHamyon shaxsiy moliya platformasiga Telegram orqali kiring',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getT();
+  return {
+    title: 'UzHamyon — Telegram Mini App',
+    description: t.login.description,
+  };
+}
 
 const BOT_USERNAME =
   process.env.TELEGRAM_BOT_USERNAME?.trim() ||
@@ -15,7 +19,8 @@ const BOT_USERNAME =
 const TELEGRAM_DEEP_LINK = `https://t.me/${BOT_USERNAME}?start=start`;
 const TELEGRAM_WEB_FALLBACK = `https://web.telegram.org/a/#?tgaddr=resolve%3Fdomain%3D${encodeURIComponent(BOT_USERNAME)}%26start%3Dstart`;
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const { t } = await getT();
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#F7F8F5] px-4 py-12 text-[#171B16]">
       <div className="w-full max-w-sm space-y-6 rounded-[24px] border border-[#E8EBE5] bg-white p-7 sm:p-8 shadow-[0_12px_40px_rgba(22,51,0,0.06)] text-center">
@@ -27,7 +32,7 @@ export default function LoginPage() {
             UzHamyon
           </h1>
           <p className="text-sm text-[#697168] leading-relaxed">
-            Ilovadan foydalanish uchun Telegram botimiz orqali kiring.
+            {t.login.hint}
           </p>
         </div>
 
@@ -39,7 +44,7 @@ export default function LoginPage() {
           className="flex w-full min-h-[50px] items-center justify-center gap-2 rounded-2xl bg-[#9FE870] hover:bg-[#8ED660] px-5 py-3.5 text-sm font-bold text-[#163300] transition-all focus:outline-none focus:ring-2 focus:ring-[#163300]/20 shadow-xs active:scale-[0.98]"
         >
           <Send className="h-4 w-4" />
-          <span>Telegram’da ochish</span>
+          <span>{t.login.open}</span>
         </a>
 
         {/* Telegram Web Fallback */}
@@ -51,7 +56,7 @@ export default function LoginPage() {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#166534] hover:text-[#14532D] hover:underline transition-colors"
           >
-            <span>Telegram Web orqali ochish</span>
+            <span>{t.login.openWeb}</span>
             <ExternalLink className="h-3 w-3" />
           </a>
         </div>

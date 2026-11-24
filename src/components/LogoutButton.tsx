@@ -4,6 +4,7 @@ import { useTransition } from 'react';
 import { logoutAction } from '@/app/auth/actions';
 import { LogOut, Loader2 } from 'lucide-react';
 import { clearAllCache } from '@/lib/cache/clientCache';
+import { useI18n } from '@/lib/i18n/client';
 
 export default function LogoutButton({
   className = '',
@@ -14,6 +15,7 @@ export default function LogoutButton({
   variant?: 'row' | 'pill';
 }) {
   const [isPending, startTransition] = useTransition();
+  const { t } = useI18n();
 
   const handleLogout = () => {
     clearAllCache();
@@ -31,7 +33,7 @@ export default function LogoutButton({
         disabled={isPending}
         className={`w-full min-h-[52px] px-4 text-left text-[16px] font-medium text-[#C62F21] disabled:opacity-60 cursor-pointer ${className}`}
       >
-        {isPending ? 'Chiqilmoqda…' : 'Hisobdan chiqish'}
+        {isPending ? t.profile.loggingOut : t.profile.logout}
       </button>
     );
   }
@@ -47,12 +49,12 @@ export default function LogoutButton({
       {isPending ? (
         <>
           <Loader2 className="h-4 w-4 animate-spin text-[#697168]" />
-          <span>Chiqilmoqda...</span>
+          <span>{t.profile.loggingOut}</span>
         </>
       ) : (
         <>
           <LogOut className="h-4 w-4 text-[#697168] group-hover:text-[#D64D4D]" />
-          <span>Chiqish</span>
+          <span>{t.profile.logoutShort}</span>
         </>
       )}
     </button>

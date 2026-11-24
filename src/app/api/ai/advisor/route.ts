@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { askFinancialAdvisor, simulateBudgetScenario } from '@/lib/ai/advisorService';
+import { getLang } from '@/lib/i18n/server';
 
 export const maxDuration = 30;
 
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Savol kiritilishi shart' }, { status: 400 });
     }
 
-    const result = await askFinancialAdvisor(question, conversationId);
+    const result = await askFinancialAdvisor(question, conversationId, undefined, { language: await getLang() });
     if (result.error) {
       // AI is available only to authenticated Telegram Mini App users.
       // Never accept client-supplied financial context or fabricate guest answers.

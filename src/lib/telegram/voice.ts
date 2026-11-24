@@ -6,6 +6,8 @@
  */
 
 import { callBotApi, getBotToken } from './botApi.ts';
+import { botTexts } from '../i18n/bot.ts';
+import type { Lang } from '../i18n/config.ts';
 
 /** Longest voice message we analyse (seconds). */
 export const VOICE_MAX_SECONDS = 60;
@@ -30,13 +32,12 @@ export interface TelegramAudioLike {
 
 export type VoiceRejectReason = 'too_long' | 'too_large' | 'unsupported_type';
 
-export const VOICE_MESSAGES = {
-  tooLong: `🎤 Ovozli xabar juda uzun. Iltimos, ${VOICE_MAX_SECONDS} soniyadan qisqaroq yozib yuboring.`,
-  tooLarge: '🎤 Fayl juda katta. Iltimos, qisqaroq ovozli xabar yuboring.',
-  unsupported: '🎤 Bu audio formatini o‘qiy olmayman. Iltimos, oddiy ovozli xabar yuboring yoki yozib yuboring.',
-  notUnderstood: 'Ovozli xabarni tushunib bo‘lmadi, iltimos yozib yuboring.',
-  videoNote: '🎥 Video-xabarlarni hali tushuna olmayman. Iltimos, ovozli xabar yoki matn yuboring.',
-};
+/** Voice replies in Uzbek (kept for existing callers); use voiceMessages(lang) for others. */
+export const VOICE_MESSAGES = botTexts('uz').voice;
+
+export function voiceMessages(lang: Lang = 'uz') {
+  return botTexts(lang).voice;
+}
 
 /** Normalizes Telegram's mime_type to one Gemini lists; voice notes are OGG/Opus → audio/ogg. */
 export function normalizeAudioMimeType(mime: string | undefined, isVoice: boolean): string | null {
@@ -65,10 +66,11 @@ export function validateAudioMeta(
   return { ok: true, mimeType };
 }
 
-export function rejectMessageFor(reason: VoiceRejectReason): string {
-  if (reason === 'too_long') return VOICE_MESSAGES.tooLong;
-  if (reason === 'too_large') return VOICE_MESSAGES.tooLarge;
-  return VOICE_MESSAGES.unsupported;
+export function rejectMessageFor(reason: VoiceRejectReason, lang: Lang = 'uz'): string {
+  const m = voiceMessages(lang);
+  if (reason === 'too_long') return m.tooLong;
+  if (reason === 'too_large') return m.tooLarge;
+  return m.unsupported;
 }
 
 /**

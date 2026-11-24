@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import OnboardingWizard from '@/components/onboarding/OnboardingWizard';
 import TelegramOnboarding from '@/components/onboarding/TelegramOnboarding';
+import { langFromOnboardingData } from '@/lib/i18n/config';
 
 export const metadata = {
   title: 'Moliyaviy rejalashtirish — UzHamyon',
@@ -40,7 +41,12 @@ export default async function OnboardingPage({
     const isTelegramUser = isTgParam || !!initialData?.is_telegram || !!meta?.telegram_id;
 
     if (isTelegramUser) {
-      return <TelegramOnboarding initialFirstName={initialFirstName} />;
+      return (
+        <TelegramOnboarding
+          initialFirstName={initialFirstName}
+          savedLanguage={langFromOnboardingData(initialData)}
+        />
+      );
     }
 
     const initialStep = Math.min(7, Math.max(1, profile?.onboarding_step || 1));

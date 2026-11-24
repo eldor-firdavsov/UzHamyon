@@ -15,6 +15,8 @@ import crypto from 'node:crypto';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { getSupabaseUrl, getSupabaseServiceRoleKey } from '../supabase/config.ts';
 import { findAuthUserIdByEmail } from './auth.ts';
+import { botTexts } from '../i18n/bot.ts';
+import type { Lang } from '../i18n/config.ts';
 
 export const DELETE_CONFIRM_TTL_MS = 5 * 60 * 1000;
 export const DELETE_CALLBACK_PREFIX = 'acct_del:';
@@ -65,6 +67,8 @@ export function verifyDeletionToken(
 export function isDeleteDataRequest(text: string): boolean {
   const t = text.trim().toLowerCase().replace(/[‘’ʻʼ`']/g, '');
   if (/^\/delete(@uz_hamyonbot)?$/.test(t)) return true;
+  if (/^(удали|удалить)\s+(все\s+)?(мои\s+)?(данные|аккаунт)/.test(t)) return true;
+  if (/^delete\s+(all\s+)?my\s+(data|account)/.test(t)) return true;
   return /^(malumotlarimni|hisobimni|akkauntimni)\s+(ochir|ochirish|ochiring|ochirib\s+tashla)/.test(t);
 }
 
@@ -93,35 +97,24 @@ export async function countUserData(client: SupabaseClient, userId: string): Pro
   return { transactions, goals, budgets, categories };
 }
 
-export function buildDeletionPrompt(c: UserDataCounts): string {
-  return (
-    '🗑 <b>Barcha ma’lumotlaringizni o‘chirmoqchimisiz?</b>\n\n' +
-    'Quyidagilar butunlay o‘chiriladi:\n' +
-    `• ${c.transactions} ta tranzaksiya (daromad va xarajat)\n` +
-    `• ${c.goals} ta maqsad va jamg‘arma tarixi\n` +
-    `• ${c.budgets} ta budjet\n` +
-    `• ${c.categories} ta shaxsiy kategoriya\n` +
-    '• AI suhbatlar, eslatma sozlamalari va profilingiz\n\n' +
-    '⚠️ <b>Bu amalni qaytarib bo‘lmaydi.</b> Tasdiqlash tugmasi 5 daqiqa amal qiladi.'
-  );
+export function buildDeletionPrompt(c: UserDataCounts, lang: Lang = 'uz'): string {
+  return botTexts(lang).deletion.prompt(c);
 }
 
-export function buildDeletionKeyboard(telegramId: number, now: number = Date.now()) {
+export function buildDeletionKeyboard(telegramId: number, now: number = Date.now(), lang: Lang = 'uz') {
+  const t = botTexts(lang).deletion;
   return [
-    [{ text: '🗑 Ha, hammasini o‘chirish', callback_data: `${DELETE_CALLBACK_PREFIX}${createDeletionToken(telegramId, now)}` }],
-    [{ text: '❌ Bekor qilish', callback_data: DELETE_CANCEL_CALLBACK }],
+    [{ text: t.confirmBtn, callback_data: `${DELETE_CALLBACK_PREFIX}${createDeletionToken(telegramId, now)}` }],
+    [{ text: t.cancelBtn, callback_data: DELETE_CANCEL_CALLBACK }],
   ];
 }
 
-export const DELETION_MESSAGES = {
-  deleting: '⏳ Ma’lumotlaringiz o‘chirilmoqda...',
-  done: '✅ Barcha ma’lumotlaringiz o‘chirildi.\n\nUzHamyon’dan foydalanganingiz uchun rahmat. Qaytmoqchi bo‘lsangiz, /start bosing — yangi, bo‘sh hisob ochiladi.',
-  cancelled: '👌 Bekor qilindi. Ma’lumotlaringiz joyida qoldi.',
-  expired: '⌛ Tasdiqlash muddati tugagan (5 daqiqa). Qaytadan /delete yuboring.',
-  invalid: '⛔ Bu tugma sizga tegishli emas.',
-  failed: '⚠️ Ma’lumotlarni o‘chirib bo‘lmadi. Iltimos, birozdan so‘ng qayta urinib ko‘ring.',
-  notFound: 'ℹ️ Sizda saqlangan ma’lumot topilmadi.',
-};
+/** Uzbek texts (kept for existing callers); use deletionMessages(lang) for others. */
+export const DELETION_MESSAGES = botTexts('uz').deletion;
+
+export function deletionMessages(lang: Lang = 'uz') {
+  return botTexts(lang).deletion;
+}
 
 /** Deletes the Supabase auth user of this Telegram user (cascades to all data). */
 export async function deleteTelegramAccount(

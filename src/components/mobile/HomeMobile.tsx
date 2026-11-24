@@ -7,6 +7,7 @@ import { StreakWeek } from '@/components/streak/StreakParts';
 import { TxFlatList, TxListSkeleton, type TxRowData } from './TxRows';
 import { useCountUp } from '@/lib/ui/useCountUp';
 import { formatAmount, formatWithUnit, unitLabel, type DisplayCurrency } from '@/lib/fx/currency';
+import { useI18n } from '@/lib/i18n/client';
 
 interface HomeMobileProps {
   balance: number;
@@ -37,6 +38,7 @@ export default function HomeMobile({
   onSeeAll,
   onAdd,
 }: HomeMobileProps) {
+  const { t, lang } = useI18n();
   // Start from 0 on first show so the balance visibly counts up.
   const bal = useCountUp(loading ? 0 : balance);
   const inc = useCountUp(loading ? 0 : monthIncome);
@@ -46,21 +48,21 @@ export default function HomeMobile({
   const show = (animated: number, real: number) => formatAmount(animated === Math.round(real) ? real : animated, currency);
   return (
     <div className="uz-m-page" data-page="home">
-      <section className="uz-m-hero" aria-label="Balans">
+      <section className="uz-m-hero" aria-label={t.home.balance}>
         <div className="uz-m-hero-bal" data-neg={balance < 0}>
           {loading ? (
-            <span className="uz-skel uz-skel-dark" style={{ width: 220, height: 40 }} aria-label="Yuklanmoqda" />
+            <span className="uz-skel uz-skel-dark" style={{ width: 220, height: 40 }} aria-label={t.common.loading} />
           ) : (
             <span className="num">{bal < 0 ? '−' : ''}{usd ? '$' : ''}{show(bal, balance)}</span>
           )}
-          {!usd && <span className="uz-m-hero-cur">{unitLabel(currency)}</span>}
+          {!usd && <span className="uz-m-hero-cur">{unitLabel(currency, lang)}</span>}
         </div>
         <div className="uz-m-hero-pills">
-          <div className="uz-m-hero-pill" data-kind="in" aria-label={`Shu oy kirim ${formatWithUnit(monthIncome, currency)}`}>
+          <div className="uz-m-hero-pill" data-kind="in" aria-label={t.home.monthIncome(formatWithUnit(monthIncome, currency, lang))}>
             <span className="uz-m-hero-dot" data-kind="in"><ArrowDown size={15} strokeWidth={2.6} /></span>
             <span className="num">{usd ? '$' : ''}{show(inc, monthIncome)}</span>
           </div>
-          <div className="uz-m-hero-pill" data-kind="ex" aria-label={`Shu oy chiqim ${formatWithUnit(monthExpense, currency)}`}>
+          <div className="uz-m-hero-pill" data-kind="ex" aria-label={t.home.monthExpense(formatWithUnit(monthExpense, currency, lang))}>
             <span className="uz-m-hero-dot" data-kind="ex"><ArrowUp size={15} strokeWidth={2.6} /></span>
             <span className="num">{usd ? '$' : ''}{show(exp, monthExpense)}</span>
           </div>
@@ -71,9 +73,9 @@ export default function HomeMobile({
 
       <section className="uz-m-section">
         <header className="uz-m-section-hd">
-          <h2>Oxirgi</h2>
+          <h2>{t.home.recent}</h2>
           {recent.length > 0 && (
-            <button type="button" className="uz-m-icon-btn" aria-label="Barcha amallar" onClick={onSeeAll}>
+            <button type="button" className="uz-m-icon-btn" aria-label={t.home.allEntries} onClick={onSeeAll}>
               <ChevronRight size={22} strokeWidth={2.2} />
             </button>
           )}
@@ -83,8 +85,8 @@ export default function HomeMobile({
         ) : recent.length === 0 ? (
           <button type="button" className="uz-m-empty" onClick={onAdd}>
             <span className="uz-m-empty-ic"><Plus size={26} strokeWidth={2.6} /></span>
-            <span>Birinchi xarajatni qo‘shing</span>
-            <span className="uz-m-empty-hint">yoki botga yozing: <b>taksi 20000</b></span>
+            <span>{t.home.firstExpense}</span>
+            <span className="uz-m-empty-hint">{t.home.orBot} <b>{t.home.botExample}</b></span>
           </button>
         ) : (
           <TxFlatList rows={recent} today={today} onOpen={onOpenTx} />

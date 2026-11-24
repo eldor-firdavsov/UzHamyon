@@ -5,6 +5,9 @@ import { Send } from 'lucide-react';
 import { getCategoryMeta } from '@/components/categories/CategoryIcon';
 import { dayLabel } from '@/lib/time/dayLabel';
 import { formatAmount, formatWithUnit } from '@/lib/fx/currency';
+import { useI18n } from '@/lib/i18n/client';
+import { categoryLabel } from '@/lib/i18n/format';
+import type { Lang } from '@/lib/i18n/config';
 
 export interface TxRowData {
   id: string;
@@ -36,15 +39,16 @@ export function signedAmount(t: Pick<TxRowData, 'type' | 'amount' | 'currency'>)
 }
 
 /** "50 000 so‘m" under a converted row, so the user still sees what was saved. */
-function originalNote(t: TxRowData): string | null {
+function originalNote(t: TxRowData, lang: Lang): string | null {
   if (!t.origCurrency || t.origAmount === undefined) return null;
   if ((t.origCurrency || 'UZS').toUpperCase() === (t.currency || 'UZS').toUpperCase()) return null;
-  return formatWithUnit(t.origAmount, t.origCurrency);
+  return formatWithUnit(t.origAmount, t.origCurrency, lang);
 }
 
 function TxRow({ t, sub: daySub, onOpen }: { t: TxRowData; sub?: string; onOpen: (t: TxRowData) => void }) {
+  const { t: tr, lang } = useI18n();
   const meta = getCategoryMeta(t.cat, t.type);
-  const note = originalNote(t);
+  const note = originalNote(t, lang);
   const sub = [daySub, note].filter(Boolean).join(' · ') || undefined;
   const Icon = meta.icon;
   return (
@@ -53,10 +57,10 @@ function TxRow({ t, sub: daySub, onOpen }: { t: TxRowData; sub?: string; onOpen:
         <Icon size={20} strokeWidth={2} aria-hidden="true" />
       </span>
       <span className="uz-m-row-main">
-        <span className="uz-m-row-name">{t.desc || t.cat}</span>
+        <span className="uz-m-row-name">{t.desc || categoryLabel(t.cat, lang)}</span>
         {sub && <span className="uz-m-row-sub">{sub}</span>}
       </span>
-      {t.viaBot && <Send size={14} color="#2AABEE" aria-label="Telegram orqali" />}
+      {t.viaBot && <Send size={14} color="#2AABEE" aria-label={tr.activity.viaTelegram} />}
       <span className="uz-m-row-amt" data-in={t.type === 'in'}>
         {signedAmount(t)}
       </span>
@@ -66,10 +70,11 @@ function TxRow({ t, sub: daySub, onOpen }: { t: TxRowData; sub?: string; onOpen:
 
 /** Flat inset list; each row shows "Bugun / Kecha / 18-noy" under the name. */
 export function TxFlatList({ rows, today, onOpen }: { rows: TxRowData[]; today: string; onOpen: (t: TxRowData) => void }) {
+  const { lang } = useI18n();
   return (
     <div className="uz-m-list">
       {rows.map((t) => (
-        <TxRow key={t.id} t={t} sub={dayLabel(t.date, today)} onOpen={onOpen} />
+        <TxRow key={t.id} t={t} sub={dayLabel(t.date, today, lang)} onOpen={onOpen} />
       ))}
     </div>
   );
@@ -77,6 +82,7 @@ export function TxFlatList({ rows, today, onOpen }: { rows: TxRowData[]; today: 
 
 /** Rows grouped by day; the header shows the day and its net total (rows' own display currency). */
 export function TxDayGroups({ rows, today, onOpen }: { rows: TxRowData[]; today: string; onOpen: (t: TxRowData) => void }) {
+  const { lang } = useI18n();
   const groups: Array<{ date: string; rows: TxRowData[] }> = [];
   for (const t of rows) {
     const last = groups[groups.length - 1];
@@ -93,7 +99,7 @@ export function TxDayGroups({ rows, today, onOpen }: { rows: TxRowData[]; today:
         return (
           <section key={g.date} className="uz-m-group">
             <header className="uz-m-group-hd">
-              <span>{dayLabel(g.date, today)}</span>
+              <span>{dayLabel(g.date, today, lang)}</span>
               <span className="num">{net === 0 ? '0' : `${net > 0 ? '+' : '−'}${cur === 'USD' ? '$' : ''}${formatAmount(net, cur)}`}</span>
             </header>
             <div className="uz-m-list">

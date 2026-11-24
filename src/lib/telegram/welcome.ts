@@ -1,5 +1,6 @@
 import { callBotApi } from './botApi.ts';
-import { escapeHtml } from './html.ts';
+import { botTexts } from '../i18n/bot.ts';
+import type { Lang } from '../i18n/config.ts';
 
 const MINIAPP = process.env.TELEGRAM_MINIAPP_URL || 'https://uzhamyon.vercel.app/';
 
@@ -13,26 +14,18 @@ export function telegramIdOf(email: string | null | undefined, meta: Record<stri
 }
 
 /** Sent once, right after registration: the fastest way to log is writing in this chat. */
-export function buildRegistrationDoneMessage(firstName: string): string {
-  return [
-    `✅ <b>Tayyor, ${escapeHtml(firstName)}!</b>`,
-    '',
-    'Xarajatni shu chatga yozing — o‘zim qo‘shaman:',
-    '<code>taksi 20000</code>',
-    '<code>tushlik 45 ming</code>',
-    '',
-    '🎤 Ovozli xabar ham bo‘ladi.',
-  ].join('\n');
+export function buildRegistrationDoneMessage(firstName: string, lang: Lang = 'uz'): string {
+  return botTexts(lang).registrationDone(firstName);
 }
 
-export async function sendRegistrationDoneMessage(chatId: number, firstName: string): Promise<boolean> {
+export async function sendRegistrationDoneMessage(chatId: number, firstName: string, lang: Lang = 'uz'): Promise<boolean> {
   const res = await callBotApi(
     'sendMessage',
     {
       chat_id: chatId,
-      text: buildRegistrationDoneMessage(firstName),
+      text: buildRegistrationDoneMessage(firstName, lang),
       parse_mode: 'HTML',
-      reply_markup: { inline_keyboard: [[{ text: '➕ Ilovada qo‘shish', web_app: { url: MINIAPP } }]] },
+      reply_markup: { inline_keyboard: [[{ text: botTexts(lang).addInApp, web_app: { url: MINIAPP } }]] },
     },
     { timeoutMs: 5_000 }
   );

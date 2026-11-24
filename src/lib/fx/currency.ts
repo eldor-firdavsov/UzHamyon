@@ -5,6 +5,9 @@
  * user's chosen currency at the current USD→UZS rate (Central Bank of Uzbekistan).
  */
 
+import type { Lang } from '../i18n/config.ts';
+import { somLabel } from '../i18n/format.ts';
+
 export type DisplayCurrency = 'UZS' | 'USD';
 
 export const DISPLAY_CURRENCIES: DisplayCurrency[] = ['UZS', 'USD'];
@@ -77,13 +80,13 @@ export function formatAmount(n: number, currency: string): string {
 }
 
 /** Short unit shown next to numbers. */
-export function unitLabel(currency: string): string {
-  return toDisplayCurrency(currency) === 'USD' ? '$' : 'so‘m';
+export function unitLabel(currency: string, lang: Lang = 'uz'): string {
+  return toDisplayCurrency(currency) === 'USD' ? '$' : somLabel(lang);
 }
 
 /** "12 000 so‘m" / "$12.50" (no sign). */
-export function formatWithUnit(n: number, currency: string): string {
-  return toDisplayCurrency(currency) === 'USD' ? `$${formatAmount(n, 'USD')}` : `${formatAmount(n, 'UZS')} so‘m`;
+export function formatWithUnit(n: number, currency: string, lang: Lang = 'uz'): string {
+  return toDisplayCurrency(currency) === 'USD' ? `$${formatAmount(n, 'USD')}` : `${formatAmount(n, 'UZS')} ${somLabel(lang)}`;
 }
 
 /** Spoken name, for labels and toasts. */

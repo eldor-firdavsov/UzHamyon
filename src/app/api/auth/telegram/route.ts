@@ -3,6 +3,7 @@ import { verifyTelegramWebAppData, getOrCreateTelegramUser } from '@/lib/telegra
 import { recordSignupSource } from '@/lib/telegram/signupSource';
 import { createServerClient } from '@supabase/ssr';
 import { getSupabaseUrl, getSupabaseAnonKey } from '@/lib/supabase/config';
+import { LANG_COOKIE, LANG_COOKIE_MAX_AGE } from '@/lib/i18n/config';
 
 export async function POST(req: NextRequest) {
   try {
@@ -47,7 +48,18 @@ export async function POST(req: NextRequest) {
       session: authResult.session,
       onboarding_completed: authResult.onboarding_completed,
       isNewUser: authResult.isNewUser,
+      language: authResult.language ?? null,
     });
+
+    // The language chosen earlier (Mini App or bot) renders server pages in that language.
+    if (authResult.language) {
+      res.cookies.set(LANG_COOKIE, authResult.language, {
+        path: '/',
+        sameSite: 'none',
+        secure: true,
+        maxAge: LANG_COOKIE_MAX_AGE,
+      });
+    }
 
     const supabaseUrl = getSupabaseUrl();
     const supabaseAnonKey = getSupabaseAnonKey();

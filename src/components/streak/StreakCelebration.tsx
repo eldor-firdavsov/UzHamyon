@@ -6,6 +6,7 @@ import type { StreakSummary } from '@/lib/streak/compute';
 import { useClosing } from '@/lib/ui/useClosing';
 import { useModalScrollLock } from '@/lib/ui/useModalScrollLock';
 import { haptic } from '@/lib/ui/haptics';
+import { useI18n } from '@/lib/i18n/client';
 
 /** Milestones the progress bar aims at. */
 const MILESTONES = [3, 7, 14, 30, 60, 100, 200, 365];
@@ -31,6 +32,7 @@ interface StreakCelebrationProps {
 
 /** Full-screen "streak grew" moment after the first log of the day. */
 export default function StreakCelebration({ from, streak, onClose }: StreakCelebrationProps) {
+  const { t } = useI18n();
   const to = streak.current;
   const goal = nextMilestone(to);
   const prevGoalBase = [...MILESTONES].reverse().find((m) => m <= to) ?? 0;
@@ -50,7 +52,7 @@ export default function StreakCelebration({ from, streak, onClose }: StreakCeleb
   const todayIndex = streak.week.reduce((idx, d, i) => (d.state !== 'future' ? i : idx), -1);
 
   return (
-    <div className="uz-cele" data-closing={closing} role="dialog" aria-modal="true" aria-label={`Seriya: ${to} kun`}>
+    <div className="uz-cele" data-closing={closing} role="dialog" aria-modal="true" aria-label={t.streak.sheetAria(to)}>
       <div className="uz-cele-flame-wrap" aria-hidden="true">
         <div className="uz-cele-glow" />
         {SPARKS.map((s, i) => (
@@ -70,7 +72,7 @@ export default function StreakCelebration({ from, streak, onClose }: StreakCeleb
           {from !== to && <span className="uz-cele-out">{from}</span>}
           <span className={from !== to ? 'uz-cele-in' : ''} style={{ color: '#9FE870' }}>{to}</span>
         </div>
-        <span style={{ fontSize: 24, fontWeight: 700, color: '#CFE3BF' }}>kun</span>
+        <span style={{ fontSize: 24, fontWeight: 700, color: '#CFE3BF' }}>{t.streak.days}</span>
       </div>
 
       {streak.week.length > 0 && (
@@ -99,14 +101,14 @@ export default function StreakCelebration({ from, streak, onClose }: StreakCeleb
 
       <div
         style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,.08)', borderRadius: 14, padding: '10px 14px', fontSize: 14, fontWeight: 600, color: '#E3F0D8' }}
-        aria-label={`Muzlatish: ${streak.freezesLeft}`}
+        aria-label={t.streak.freezeAria(streak.freezesLeft)}
       >
         <Snowflake size={18} color="#9AD7FF" aria-hidden="true" />
         <span>{streak.freezesLeft}</span>
       </div>
 
       <button type="button" className="uz-cele-btn" onClick={close} autoFocus>
-        Zo‘r!
+        {t.streak.great}
       </button>
     </div>
   );

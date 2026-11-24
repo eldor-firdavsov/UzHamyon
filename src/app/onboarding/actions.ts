@@ -15,6 +15,7 @@ import {
 import { todayTashkent } from '@/lib/time/tashkent';
 import { after } from 'next/server';
 import { sendRegistrationDoneMessage, telegramIdOf } from '@/lib/telegram/welcome';
+import { langForProfile } from '@/lib/i18n/config';
 
 export interface OnboardingActionResult<T = unknown> {
   success: boolean;
@@ -181,6 +182,7 @@ export async function completeOnboardingAction(
       goals,
       custom_goal,
       category_expenses,
+      language,
     } = validated.data;
 
     // 1. Fetch existing profile to preserve existing financial_start_date and Telegram identity
@@ -213,6 +215,7 @@ export async function completeOnboardingAction(
           goals,
           custom_goal: custom_goal || null,
           category_expenses,
+          ...(language ? { language } : {}),
           completed_at: new Date().toISOString(),
         },
         updated_at: new Date().toISOString(),
@@ -236,7 +239,8 @@ export async function completeOnboardingAction(
     // 4. First completion only: the bot explains the fastest way to log (writing in the chat).
     const chatId = telegramIdOf(user.email, user.user_metadata);
     if (chatId && !existingOnboardingData.completed_at) {
-      after(() => sendRegistrationDoneMessage(chatId, first_name).catch(() => false));
+      const botLang = language ?? langForProfile(existingOnboardingData);
+      after(() => sendRegistrationDoneMessage(chatId, first_name, botLang).catch(() => false));
     }
 
     return { success: true };

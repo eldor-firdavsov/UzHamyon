@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowUp, Calculator, PenLine, PiggyBank, Search, SquarePen, Sparkles, Target, TrendingDown } from 'lucide-react';
 import { haptic } from '@/lib/ui/haptics';
+import { useI18n } from '@/lib/i18n/client';
 
 interface Msg {
   id: string;
@@ -20,21 +21,18 @@ interface AiChatProps {
   onAnswered?: () => void;
 }
 
-const STARTERS = [
-  { text: 'Pulim qayerga ketyapti?', Icon: TrendingDown },
-  { text: 'Shu oy tejadimmi?', Icon: PiggyBank },
-  { text: 'Maqsadimga qachon yetaman?', Icon: Target },
-];
+const STARTER_ICONS = [TrendingDown, PiggyBank, Target];
 
 /** Loading steps, Claude-style: one shimmering line that moves on while the answer is prepared. */
 const STEPS = [
-  { at: 0, label: 'O‘ylayapman', Icon: Sparkles },
-  { at: 1800, label: 'Ma’lumotlaringizni ko‘ryapman', Icon: Search },
-  { at: 4500, label: 'Hisoblayapman', Icon: Calculator },
-  { at: 9000, label: 'Javobni yozyapman', Icon: PenLine },
+  { at: 0, Icon: Sparkles },
+  { at: 1800, Icon: Search },
+  { at: 4500, Icon: Calculator },
+  { at: 9000, Icon: PenLine },
 ];
 
 function Thinking() {
+  const { t } = useI18n();
   const [step, setStep] = useState(0);
   const [secs, setSecs] = useState(0);
   useEffect(() => {
@@ -50,7 +48,8 @@ function Thinking() {
     }, 250);
     return () => window.clearInterval(timer);
   }, []);
-  const { label, Icon } = STEPS[step];
+  const { Icon } = STEPS[step];
+  const label = t.ai.steps[step];
   return (
     <div className="uz-ai-think" role="status" aria-live="polite">
       <span className="uz-ai-think-ic" key={step}><Icon size={16} strokeWidth={2.2} aria-hidden="true" /></span>
@@ -111,6 +110,7 @@ const nextId = () => `m${Date.now()}-${seq++}`;
 
 /** Chat with the finance assistant: a question, a short answer, three starter chips. */
 export default function AiChat({ isAuthenticated, getAuthToken, onAnswered }: AiChatProps) {
+  const { t } = useI18n();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -129,7 +129,7 @@ export default function AiChat({ isAuthenticated, getAuthToken, onAnswered }: Ai
     setMessages((m) => [...m, { id: nextId(), role: 'me', text: question }]);
 
     if (!isAuthenticated) {
-      setMessages((m) => [...m, { id: nextId(), role: 'ai', text: 'AI uchun Telegram orqali kiring.', error: true }]);
+      setMessages((m) => [...m, { id: nextId(), role: 'ai', text: t.ai.loginRequired, error: true }]);
       return;
     }
 
@@ -157,7 +157,7 @@ export default function AiChat({ isAuthenticated, getAuthToken, onAnswered }: Ai
       haptic('success');
       onAnswered?.();
     } catch {
-      setMessages((m) => [...m, { id: nextId(), role: 'ai', text: 'Hozir javob bera olmadim. Qayta urinib ko‘ring.', error: true }]);
+      setMessages((m) => [...m, { id: nextId(), role: 'ai', text: t.ai.failed, error: true }]);
       haptic('warning');
     } finally {
       setBusy(false);
@@ -175,7 +175,7 @@ export default function AiChat({ isAuthenticated, getAuthToken, onAnswered }: Ai
         {messages.length === 0 ? (
           <div className="uz-ai-hello">
             <span className="uz-ai-badge"><Sparkles size={28} strokeWidth={2} /></span>
-            <span className="uz-ai-hello-title">Nima haqida so‘raymiz?</span>
+            <span className="uz-ai-hello-title">{t.ai.hello}</span>
           </div>
         ) : (
           messages.map((m) => (
@@ -197,12 +197,15 @@ export default function AiChat({ isAuthenticated, getAuthToken, onAnswered }: Ai
       <div className="uz-ai-dock">
         {messages.length === 0 && (
           <div className="uz-ai-chips">
-            {STARTERS.map(({ text, Icon }) => (
+            {t.ai.starters.map((text, i) => {
+              const Icon = STARTER_ICONS[i] ?? Sparkles;
+              return (
               <button key={text} type="button" className="uz-ai-chip" onClick={() => void ask(text)}>
                 <Icon size={15} strokeWidth={2.2} aria-hidden="true" />
                 {text}
               </button>
-            ))}
+              );
+            })}
           </div>
         )}
         <form
@@ -213,19 +216,19 @@ export default function AiChat({ isAuthenticated, getAuthToken, onAnswered }: Ai
           }}
         >
           {messages.length > 0 && (
-            <button type="button" className="uz-ai-round" aria-label="Yangi suhbat" onClick={reset} disabled={busy}>
+            <button type="button" className="uz-ai-round" aria-label={t.ai.newChat} onClick={reset} disabled={busy}>
               <SquarePen size={18} strokeWidth={2.2} />
             </button>
           )}
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Savol bering…"
-            aria-label="Savol"
+            placeholder={t.ai.placeholder}
+            aria-label={t.ai.question}
             maxLength={1000}
             enterKeyHint="send"
           />
-          <button type="submit" className="uz-ai-send" aria-label="Yuborish" disabled={!input.trim() || busy}>
+          <button type="submit" className="uz-ai-send" aria-label={t.ai.send} disabled={!input.trim() || busy}>
             <ArrowUp size={22} strokeWidth={2.6} />
           </button>
         </form>

@@ -55,6 +55,8 @@ export const completeOnboardingSchema = z.object({
   goals: z.array(z.string()).default([]),
   custom_goal: z.string().trim().max(120).optional().nullable(),
   category_expenses: z.record(z.string(), z.number().min(0)).default({}),
+  /** Language picked on the first onboarding screen. */
+  language: z.enum(['uz', 'ru', 'en']).optional(),
 });
 
 export type OnboardingNameInput = z.infer<typeof onboardingNameSchema>;

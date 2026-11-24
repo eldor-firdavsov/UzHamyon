@@ -4,6 +4,7 @@ import { useActionState, useState } from 'react';
 import { updateProfileAction } from '@/app/auth/actions';
 import { type AuthActionResult } from '@/app/auth/schemas';
 import { Check, Loader2 } from 'lucide-react';
+import { useI18n } from '@/lib/i18n/client';
 
 interface ProfileFormProps {
   initialFirstName: string;
@@ -13,6 +14,7 @@ interface ProfileFormProps {
 
 /** Name as an inset list; the save button shows only after a change. */
 export default function ProfileForm({ initialFirstName, initialLastName, email }: ProfileFormProps) {
+  const { t, lang } = useI18n();
   const [state, formAction, isPending] = useActionState<AuthActionResult | null, FormData>(updateProfileAction, null);
   const [first, setFirst] = useState(initialFirstName);
   const [last, setLast] = useState(initialLastName);
@@ -36,7 +38,7 @@ export default function ProfileForm({ initialFirstName, initialLastName, email }
     <form id="profile-edit-form" action={formAction} className="flex flex-col gap-2">
       <div className="uz-m-list">
         <label className={rowClass}>
-          <span className="text-[16px] font-medium w-24 shrink-0">Ism</span>
+          <span className="text-[16px] font-medium w-28 shrink-0">{t.settings.firstName}</span>
           <input
             id="profile-first-name-input"
             name="firstName"
@@ -44,13 +46,13 @@ export default function ProfileForm({ initialFirstName, initialLastName, email }
             required
             value={first}
             onChange={(e) => setFirst(e.target.value)}
-            placeholder="Ism"
+            placeholder={t.settings.firstName}
             className={inputClass}
           />
         </label>
         <div className="h-px bg-[#ECEFE8] ml-4" />
         <label className={rowClass}>
-          <span className="text-[16px] font-medium w-24 shrink-0">Familiya</span>
+          <span className="text-[16px] font-medium w-28 shrink-0">{t.settings.lastName}</span>
           <input
             id="profile-last-name-input"
             name="lastName"
@@ -58,7 +60,7 @@ export default function ProfileForm({ initialFirstName, initialLastName, email }
             required
             value={last}
             onChange={(e) => setLast(e.target.value)}
-            placeholder="Familiya"
+            placeholder={t.settings.lastName}
             className={inputClass}
           />
         </label>
@@ -67,12 +69,12 @@ export default function ProfileForm({ initialFirstName, initialLastName, email }
 
       {(fieldError || state?.error) && (
         <p id="profile-error-banner" role="alert" className="px-4 text-[13px] font-semibold text-[#C62F21]">
-          {fieldError || state?.error}
+          {lang === 'uz' ? fieldError || state?.error : t.common.cannotSave}
         </p>
       )}
       {state?.success && !dirty && (
         <p id="profile-success-banner" role="status" className="px-4 text-[13px] font-semibold text-[#2E7D32] inline-flex items-center gap-1">
-          <Check className="h-3.5 w-3.5" /> Saqlandi
+          <Check className="h-3.5 w-3.5" /> {t.common.saved}
         </p>
       )}
 
@@ -84,7 +86,7 @@ export default function ProfileForm({ initialFirstName, initialLastName, email }
           className="min-h-[48px] rounded-2xl bg-[#163300] text-[#9FE870] text-[16px] font-bold inline-flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer"
         >
           {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-          {isPending ? 'Saqlanmoqda…' : 'Saqlash'}
+          {isPending ? t.common.saving : t.common.save}
         </button>
       )}
     </form>

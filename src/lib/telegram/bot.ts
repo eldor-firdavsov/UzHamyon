@@ -39,8 +39,14 @@ import {
   validateAudioMeta,
   rejectMessageFor,
   downloadTelegramFileBase64,
-  VOICE_MESSAGES,
 } from './voice.ts';
+import {
+  botTexts,
+  buildLanguageKeyboard,
+  describeExecutedActions,
+  LANG_CALLBACK_PREFIX,
+} from '../i18n/bot.ts';
+import { langFromOnboardingData, langFromTelegram, normalizeLang, type Lang } from '../i18n/config.ts';
 import type { ExtractionResult } from '../ai/actionExtractionEngine.ts';
 import { sourceFromStartCommand, recordSignupSource } from './signupSource.ts';
 import {
@@ -52,7 +58,6 @@ import {
   deleteTelegramAccount,
   DELETE_CALLBACK_PREFIX,
   DELETE_CANCEL_CALLBACK,
-  DELETION_MESSAGES,
 } from './accountDeletion.ts';
 
 /** Streak for the bot reply; never lets a streak problem break saving. */
@@ -65,9 +70,8 @@ async function safeStreak(client: SupabaseClient, userId: string): Promise<Strea
   }
 }
 
-/** Shown when the AI could not answer in time or is unavailable (#21). */
-export const AI_RETRY_MESSAGE =
-  '⏳ Kechirasiz, hozir xabaringizni tahlil qila olmadim. Iltimos, birozdan so‘ng qayta yozib ko‘ring.';
+/** Shown when the AI could not answer in time or is unavailable (#21). Uzbek; see botTexts(lang).aiRetry. */
+export const AI_RETRY_MESSAGE = botTexts('uz').aiRetry;
 
 export const MINIAPP_URL = process.env.TELEGRAM_MINIAPP_URL || 'https://uzhamyon.vercel.app/';
 
@@ -123,6 +127,7 @@ export interface TelegramUpdate {
       first_name: string;
       last_name?: string;
       username?: string;
+      language_code?: string;
     };
     message?: {
       message_id: number;
@@ -306,8 +311,94 @@ export async function isReturningTelegramUser(telegramId: number): Promise<boole
 
 export const BOT_USERNAME = 'uz_hamyonbot';
 
-export const GROUP_CHAT_NOTE =
-  `Men faqat shaxsiy chatda ishlayman — moliyaviy ma’lumotlaringiz xavfsizligi uchun. 🙂\n👉 t.me/${BOT_USERNAME}`;
+export const GROUP_CHAT_NOTE = botTexts('uz').groupNote;
+
+// ── Language ──────────────────────────────────────────────────────────────────
+
+const LANG_CACHE_TTL_MS = 2 * 60 * 1000;
+const langCache = new Map<number, { lang: Lang; chosen: boolean; expiresAt: number }>();
+
+/**
+ * The language the bot speaks with this user: their choice (profiles.onboarding_data.language);
+ * Uzbek for existing users who never chose; a guess from Telegram's language_code for people
+ * without a profile yet. `chosen` = the user picked it explicitly.
+ */
+export async function getTelegramUserLang(from: { id: number; language_code?: string }): Promise<{ lang: Lang; chosen: boolean }> {
+  const hit = langCache.get(from.id);
+  if (hit && hit.expiresAt > Date.now()) return { lang: hit.lang, chosen: hit.chosen };
+
+  let result: { lang: Lang; chosen: boolean } = { lang: langFromTelegram(from.language_code), chosen: false };
+  try {
+    const serviceRoleKey = getSupabaseServiceRoleKey();
+    if (serviceRoleKey) {
+      const admin = createClient(getSupabaseUrl(), serviceRoleKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+      const { data: profile, error } = await admin
+        .from('profiles')
+        .select('onboarding_data')
+        .eq('email', `tg_${from.id}@telegram.uzhamyon.uz`)
+        .maybeSingle();
+      if (!error && profile) {
+        const chosen = langFromOnboardingData(profile.onboarding_data);
+        result = chosen ? { lang: chosen, chosen: true } : { lang: 'uz', chosen: false };
+      }
+    }
+  } catch (err) {
+    console.warn('[Bot] language lookup failed:', err instanceof Error ? err.message : err);
+  }
+  rememberLang(from.id, result.lang, result.chosen);
+  return result;
+}
+
+function rememberLang(telegramId: number, lang: Lang, chosen: boolean): void {
+  langCache.set(telegramId, { lang, chosen, expiresAt: Date.now() + LANG_CACHE_TTL_MS });
+  while (langCache.size > 5000) {
+    const oldest = langCache.keys().next().value;
+    if (oldest === undefined) break;
+    langCache.delete(oldest);
+  }
+}
+
+/** Saves the language picked in the bot on the user's profile (the Mini App follows it). */
+async function saveTelegramUserLang(
+  from: { id: number; first_name?: string; last_name?: string; username?: string },
+  lang: Lang
+): Promise<boolean> {
+  rememberLang(from.id, lang, true);
+  const auth = await getTelegramUserSupabaseClient(from);
+  if (!auth) return false;
+  const { data: profile, error: readErr } = await auth.client
+    .from('profiles')
+    .select('onboarding_data')
+    .eq('id', auth.userId)
+    .maybeSingle();
+  if (readErr) {
+    console.warn('[Bot] language save (read) failed:', readErr.message);
+    return false;
+  }
+  const data = (profile?.onboarding_data as Record<string, unknown> | null) || {};
+  const { error } = await auth.client
+    .from('profiles')
+    .update({ onboarding_data: { ...data, language: lang }, updated_at: new Date().toISOString() })
+    .eq('id', auth.userId);
+  if (error) {
+    console.warn('[Bot] language save failed:', error.message);
+    return false;
+  }
+  return true;
+}
+
+/** /start greeting in the user's language, with the Mini App button. */
+async function sendWelcome(chatId: number, from: { id: number; first_name?: string }, lang: Lang): Promise<void> {
+  const t = botTexts(lang);
+  const name = from.first_name || t.fallbackName;
+  if (await isReturningTelegramUser(from.id)) {
+    await sendTelegramMessage(chatId, t.welcomeReturning(name), t.openApp, MINIAPP_URL);
+  } else {
+    await sendTelegramMessage(chatId, t.welcomeNew(name), t.openUzHamyon, MINIAPP_URL);
+  }
+}
 
 /** "/start", "/help@uz_hamyonbot" → true; "/help@other_bot" or plain text → false. */
 export function isCommandForThisBot(text: string, botUsername: string = BOT_USERNAME): boolean {
@@ -330,38 +421,43 @@ async function clearTelegramBlockedFlag(telegramId: number): Promise<void> {
     .not('telegram_blocked_at', 'is', null);
 }
 
-function buildConfirmKeyboard(actionId: string) {
+function buildConfirmKeyboard(actionId: string, lang: Lang = 'uz') {
+  const t = botTexts(lang);
   return [
     [
-      { text: '✅ Tasdiqlash', callback_data: `act_confirm:${actionId}` },
-      { text: '❌ Bekor qilish', callback_data: `act_cancel:${actionId}` },
+      { text: t.confirm, callback_data: `act_confirm:${actionId}` },
+      { text: t.cancel, callback_data: `act_cancel:${actionId}` },
     ],
   ];
 }
 
-const CANCELLED_TEXT = '❌ Amal bekor qilindi. Hech qanday moliyaviy yozuv kiritilmadi.';
+/** Message after a successful execution: the stored Uzbek result, or the same rebuilt in `lang`. */
+function executedText(record: PendingActionRecord, storedMessage: string | undefined, lang: Lang): string {
+  if (lang === 'uz') return storedMessage || botTexts('uz').saved;
+  return record.actions.length ? describeExecutedActions(record.actions, lang) : botTexts(lang).saved;
+}
 
 /**
  * Human-readable (HTML-safe) text for a proposal that can no longer be confirmed or cancelled.
  * Always reflects the REAL status stored in the database.
  */
-export function describeResolvedPendingAction(record: PendingActionRecord, now: number = Date.now()): string {
+export function describeResolvedPendingAction(record: PendingActionRecord, now: number = Date.now(), lang: Lang = 'uz'): string {
+  const t = botTexts(lang);
   switch (record.status) {
     case 'executed':
-      return record.resultMessage
-        ? escapeHtml(record.resultMessage)
-        : '✅ Bu amal allaqachon saqlangan.';
+      if (lang !== 'uz' && record.actions.length) return escapeHtml(describeExecutedActions(record.actions, lang));
+      return record.resultMessage ? escapeHtml(record.resultMessage) : t.alreadySaved;
     case 'cancelled':
-      return '❌ Bu amal bekor qilingan. Hech qanday moliyaviy yozuv kiritilmadi.';
+      return t.wasCancelled;
     case 'executing':
-      return '⏳ Bu amal hozir saqlanmoqda. Birozdan so‘ng ilovada tekshirib ko‘ring.';
+      return t.executing;
     case 'failed':
       if (now <= record.expiresAt) {
-        return '⚠️ Bu amalni saqlab bo‘lmagan edi. Iltimos, qayta urinib ko‘ring.';
+        return t.failedRetry;
       }
-      return '⌛ Bu taklifning muddati tugagan (15 daqiqa). Iltimos, xabaringizni qayta yuboring.';
+      return t.expired;
     default:
-      return '⌛ Bu taklifning muddati tugagan (15 daqiqa). Iltimos, xabaringizni qayta yuboring.';
+      return t.expired;
   }
 }
 
@@ -382,9 +478,23 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
     // Financial actions only in private chats (#39).
     if (message.chat.type !== 'private') return;
 
+    // Language picker (/start for new users, /language): save, confirm, then greet.
+    if (data.startsWith(LANG_CALLBACK_PREFIX)) {
+      const picked = normalizeLang(data.slice(LANG_CALLBACK_PREFIX.length));
+      if (!picked) return;
+      await saveTelegramUserLang(from, picked);
+      await editTelegramMessageText(message.chat.id, message.message_id, botTexts(picked).languageSaved);
+      await sendWelcome(message.chat.id, from, picked);
+      return;
+    }
+
+    const { lang } = await getTelegramUserLang(from);
+    const t = botTexts(lang);
+    const deletionText = t.deletion;
+
     // "Delete my data" confirmation (signed, 5 minutes, this user only).
     if (data === DELETE_CANCEL_CALLBACK) {
-      await editTelegramMessageText(message.chat.id, message.message_id, DELETION_MESSAGES.cancelled);
+      await editTelegramMessageText(message.chat.id, message.message_id, deletionText.cancelled);
       return;
     }
     if (data.startsWith(DELETE_CALLBACK_PREFIX)) {
@@ -393,21 +503,21 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
         await editTelegramMessageText(
           message.chat.id,
           message.message_id,
-          verdict === 'expired' ? DELETION_MESSAGES.expired : DELETION_MESSAGES.invalid
+          verdict === 'expired' ? deletionText.expired : deletionText.invalid
         );
         return;
       }
-      await editTelegramMessageText(message.chat.id, message.message_id, DELETION_MESSAGES.deleting);
+      await editTelegramMessageText(message.chat.id, message.message_id, deletionText.deleting);
       const result = await deleteTelegramAccount(from.id);
       forgetTelegramUserCaches(from.id);
       if (result.ok) {
         console.log(`[AccountDeletion] Telegram user ${from.id} deleted their data`);
-        await editTelegramMessageText(message.chat.id, message.message_id, DELETION_MESSAGES.done);
+        await editTelegramMessageText(message.chat.id, message.message_id, deletionText.done);
       } else if (result.reason === 'not_found') {
-        await editTelegramMessageText(message.chat.id, message.message_id, DELETION_MESSAGES.notFound);
+        await editTelegramMessageText(message.chat.id, message.message_id, deletionText.notFound);
       } else {
         console.error(`[AccountDeletion] failed for Telegram user ${from.id}:`, result.detail);
-        await editTelegramMessageText(message.chat.id, message.message_id, DELETION_MESSAGES.failed);
+        await editTelegramMessageText(message.chat.id, message.message_id, deletionText.failed);
       }
       return;
     }
@@ -423,12 +533,12 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
       await editTelegramMessageText(
         chatId,
         messageId,
-        `${originalText ? `${escapeHtml(originalText)}\n\n` : ''}⏳ <i>Saqlanmoqda...</i>`
+        `${originalText ? `${escapeHtml(originalText)}\n\n` : ''}${t.saving}`
       );
 
       const userAuth = await getTelegramUserSupabaseClient(from);
       if (!userAuth) {
-        await editTelegramMessageText(chatId, messageId, '⚠️ Foydalanuvchi hisobi topilmadi. Avval ilovani oching.');
+        await editTelegramMessageText(chatId, messageId, t.accountNotFound);
         return;
       }
 
@@ -436,14 +546,11 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
 
       // 2. Already executed / cancelled / expired: show the REAL stored status.
       if (pending.record && (pending.error === 'already_processed' || pending.error === 'expired')) {
-        await editTelegramMessageText(chatId, messageId, describeResolvedPendingAction(pending.record));
+        await editTelegramMessageText(chatId, messageId, describeResolvedPendingAction(pending.record, Date.now(), lang));
         return;
       }
       if (!pending.record || pending.error) {
-        const errorMsg =
-          pending.error === 'unauthorized'
-            ? '⛔ Ruxsat berilmagan: bu amal boshqa foydalanuvchiga tegishli.'
-            : '⚠️ Tasdiqlanuvchi amal topilmadi.';
+        const errorMsg = pending.error === 'unauthorized' ? t.unauthorized : t.actionNotFound;
         await editTelegramMessageText(chatId, messageId, errorMsg);
         return;
       }
@@ -457,24 +564,24 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
           ? await safeStreak(userAuth.client, userAuth.userId)
           : null;
         const streakLine = streakAfter && streakAfter.todayDone
-          ? `\n\n🔥 ${streakAfter.current} kun ketma-ket!`
+          ? `\n\n${t.streakLine(streakAfter.current)}`
           : '';
-        await editTelegramMessageText(chatId, messageId, escapeHtml(execRes.message || '✅ Saqlandi.') + streakLine);
+        await editTelegramMessageText(chatId, messageId, escapeHtml(executedText(pending.record, execRes.message, lang)) + streakLine);
         // A contribution may have just completed a goal: congratulate once (#33).
-        await notifyCompletedGoals(userAuth.client, { userId: userAuth.userId, chatId });
+        await notifyCompletedGoals(userAuth.client, { userId: userAuth.userId, chatId, lang });
       } else {
         // A parallel tap may have executed it already: show the real stored status then.
         const after = await getPendingAction(actionId, userAuth.userId, from.id, userAuth.client);
         if (after.record && after.record.status === 'executed') {
-          await editTelegramMessageText(chatId, messageId, describeResolvedPendingAction(after.record));
+          await editTelegramMessageText(chatId, messageId, describeResolvedPendingAction(after.record, Date.now(), lang));
           return;
         }
         // Otherwise keep the buttons so the user can retry a failed action.
         await editTelegramMessageText(
           chatId,
           messageId,
-          `${originalText ? `${escapeHtml(originalText)}\n\n` : ''}⚠️ Xatolik yuz berdi: ${escapeHtml(execRes.message || 'Saqlab bo‘lmadi')}`,
-          buildConfirmKeyboard(actionId)
+          `${originalText ? `${escapeHtml(originalText)}\n\n` : ''}${t.errorOccurred(lang === 'uz' ? execRes.message || t.couldNotSave : t.couldNotSave)}`,
+          buildConfirmKeyboard(actionId, lang)
         );
       }
       return;
@@ -487,24 +594,24 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
 
       const userAuth = await getTelegramUserSupabaseClient(from);
       if (!userAuth) {
-        await editTelegramMessageText(chatId, messageId, '⚠️ Foydalanuvchi hisobi topilmadi. Avval ilovani oching.');
+        await editTelegramMessageText(chatId, messageId, t.accountNotFound);
         return;
       }
 
       // Cancel first, then show the real outcome (an executed action cannot be cancelled).
       const cancelRes = await cancelPendingAction(actionId, userAuth.userId, from.id, userAuth.client);
       if (cancelRes.success) {
-        await editTelegramMessageText(chatId, messageId, CANCELLED_TEXT);
+        await editTelegramMessageText(chatId, messageId, t.cancelled);
         return;
       }
 
       const pending = await getPendingAction(actionId, userAuth.userId, from.id, userAuth.client);
       if (pending.record && pending.error !== 'unauthorized') {
-        await editTelegramMessageText(chatId, messageId, describeResolvedPendingAction(pending.record));
+        await editTelegramMessageText(chatId, messageId, describeResolvedPendingAction(pending.record, Date.now(), lang));
       } else if (pending.error === 'unauthorized') {
-        await editTelegramMessageText(chatId, messageId, '⛔ Ruxsat berilmagan: bu amal boshqa foydalanuvchiga tegishli.');
+        await editTelegramMessageText(chatId, messageId, t.unauthorized);
       } else {
-        await editTelegramMessageText(chatId, messageId, '⚠️ Bekor qilinadigan amal topilmadi.');
+        await editTelegramMessageText(chatId, messageId, t.cancelNotFound);
       }
       return;
     }
@@ -520,17 +627,20 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
   // except a command addressed to the bot, which gets one short note.
   if (message.chat.type !== 'private') {
     if (message.text && isCommandForThisBot(message.text)) {
-      await sendTelegramMessage(message.chat.id, GROUP_CHAT_NOTE);
+      await sendTelegramMessage(message.chat.id, botTexts(langFromTelegram(message.from.language_code)).groupNote);
     }
     return;
   }
 
+  const { lang, chosen: langChosen } = await getTelegramUserLang(message.from);
+  const t = botTexts(lang);
+
   // ── Voice / audio messages (Phase 2): same extraction, validation and ✅/❌ flow ──
   if (!message.text) {
     if (message.voice || message.audio) {
-      await handleVoiceMessage(message.chat.id, message.from, (message.voice || message.audio)!, Boolean(message.voice));
+      await handleVoiceMessage(message.chat.id, message.from, (message.voice || message.audio)!, Boolean(message.voice), lang);
     } else if (message.video_note) {
-      await sendTelegramMessage(message.chat.id, VOICE_MESSAGES.videoNote);
+      await sendTelegramMessage(message.chat.id, t.voice.videoNote);
     }
     return;
   }
@@ -541,7 +651,7 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
   const chatId = message.chat.id;
   const from = message.from;
   const text = message.text.trim();
-  const firstName = escapeHtml(from.first_name || 'aziz foydalanuvchi');
+  const firstName = from.first_name || t.fallbackName;
 
   // Immediately broadcast 'typing' chat action so user sees loading feedback right away
   sendTelegramChatAction(chatId, 'typing').catch(() => {});
@@ -554,54 +664,53 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
     clearTelegramBlockedFlag(from.id).catch(() => {});
     // Make sure the account exists (new users are created here) and remember where they
     // came from: t.me/uz_hamyonbot?start=<source>. Only the first source is ever stored.
-    const [isReturning, startAuth] = await Promise.all([
-      isReturningTelegramUser(from.id),
-      getTelegramUserSupabaseClient(from),
-    ]);
+    const startAuth = await getTelegramUserSupabaseClient(from);
     if (startAuth) {
       await recordSignupSource(startAuth.userId, sourceFromStartCommand(text));
     }
 
-    if (isReturning) {
-      const returningMsg = `<b>Qaytganingizdan xursandmiz, ${firstName}!</b>\n\nUzHamyon tayyor. Moliyaviy holatingizni davom ettiring.\n\n🎤 Ovozli xabar yuborishingiz ham mumkin — masalan: «bugun tushlikka 45 ming sarfladim».`;
-      await sendTelegramMessage(chatId, returningMsg, 'Ilovani ochish', MINIAPP_URL);
-    } else {
-      const welcomeMsg = `<b>Assalomu alaykum, ${firstName}!</b>\n\nUzHamyon — xarajatlaringizni 5 soniyada yozib boradigan hamyon.\n\n✍️ Shu chatga yozing: <code>taksi 20000</code>\n🎤 Yoki ovozli xabar yuboring.\n\nYoki pastdagi tugma bilan ilovani oching 👇`;
-      await sendTelegramMessage(chatId, welcomeMsg, "UzHamyon'ni ochish", MINIAPP_URL);
+    // No language chosen yet: ask first; the greeting follows in the picked language.
+    if (!langChosen) {
+      await sendTelegramInlineButtons(chatId, t.chooseLanguage, buildLanguageKeyboard());
+      return;
     }
+    await sendWelcome(chatId, from, lang);
     return;
   }
 
-  // 2.2 Slash command: /app
+  // 2.2 Slash command: /language — change the language at any time.
+  if (/^\/(language|lang|til|язык)(@\w+)?$/i.test(text)) {
+    await sendTelegramInlineButtons(chatId, t.chooseLanguage, buildLanguageKeyboard());
+    return;
+  }
+
+  // 2.3 Slash command: /app
   if (text === '/app') {
-    const appMsg = `UzHamyon ilovasini ochish uchun quyidagi tugmani bosing:`;
-    await sendTelegramMessage(chatId, appMsg, "UzHamyon'ni ochish", MINIAPP_URL);
+    await sendTelegramMessage(chatId, t.appMsg, t.openUzHamyon, MINIAPP_URL);
     return;
   }
 
-  // 2.3 Slash command: /help
+  // 2.4 Slash command: /help
   if (text === '/help') {
-    const helpMsg = `<b>UzHamyon — shaxsiy moliyaviy yordamchingiz.</b>\n\n<b>Mavjud buyruqlar:</b>\n/start — UzHamyonni boshlash\n/app — Ilovani ochish\n/help — Yordam ma’lumotlari\n/about — UzHamyon haqida\n/delete — Barcha ma’lumotlarimni o‘chirish\n\nShuningdek, tabiiy tilda xabar yozishingiz mumkin:\n• <i>«Bugun tushlikka 45 000 so'm ishlatdim»</i>\n• <i>«Oylik maoshim 5 000 000 so'm tushdi»</i>\n• <i>«Mashina uchun 50 mln maqsad yarat»</i>\n• <i>«Bu oy qancha pul sarfladim?»</i>\n\n🎤 Ovozli xabar yuborishingiz ham mumkin (60 soniyagacha): o‘zbekcha, ruscha yoki aralash gapiring — masalan, «bugun tushlikka 45 ming, taksiga 15 ming».`;
-    await sendTelegramMessage(chatId, helpMsg, 'Ilovani ochish', MINIAPP_URL);
+    await sendTelegramMessage(chatId, t.help, t.openApp, MINIAPP_URL);
     return;
   }
 
-  // 2.4 Slash command: /about
+  // 2.5 Slash command: /about
   if (text === '/about') {
-    const aboutMsg = `<b>UzHamyon haqida</b>\n\nUzHamyon — O‘zbekiston foydalanuvchilari uchun shaxsiy moliya va budjet boshqaruvi tizimi.\n\nDaromad va xarajatlaringizni kuzatib boring, jamg‘arma maqsadlaringizni belgilang va sun’iy intellekt (UzHamyon AI) tavsiyalaridan foydalaning.\n\nBarcha ma’lumotlaringiz xavfsiz va shifrlangan holatda saqlanadi.`;
-    await sendTelegramMessage(chatId, aboutMsg, 'Ilovani ochish', MINIAPP_URL);
+    await sendTelegramMessage(chatId, t.about, t.openApp, MINIAPP_URL);
     return;
   }
 
-  // 2.5 "Delete my data": show what will be deleted and ask for confirmation.
+  // 2.6 "Delete my data": show what will be deleted and ask for confirmation.
   if (isDeleteDataRequest(text)) {
     const userAuth = await getTelegramUserSupabaseClient(from);
     if (!userAuth) {
-      await sendTelegramMessage(chatId, DELETION_MESSAGES.notFound);
+      await sendTelegramMessage(chatId, t.deletion.notFound);
       return;
     }
     const counts = await countUserData(userAuth.client, userAuth.userId);
-    await sendTelegramInlineButtons(chatId, buildDeletionPrompt(counts), buildDeletionKeyboard(from.id));
+    await sendTelegramInlineButtons(chatId, buildDeletionPrompt(counts, lang), buildDeletionKeyboard(from.id, Date.now(), lang));
     return;
   }
 
@@ -617,9 +726,14 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
       if (latestAction && latestAction.status === 'pending') {
         if (isSimpleConfirmation) {
           const execRes = await executePendingActionRecord(latestAction, userAuth.client);
-          await sendTelegramMessage(chatId, escapeHtml(execRes.message));
+          const reply = execRes.success
+            ? executedText(latestAction, execRes.message, lang)
+            : lang === 'uz'
+            ? execRes.message
+            : t.errorOccurred(t.couldNotSave);
+          await sendTelegramMessage(chatId, execRes.success || lang === 'uz' ? escapeHtml(reply) : reply);
           if (execRes.success) {
-            await notifyCompletedGoals(userAuth.client, { userId: userAuth.userId, chatId });
+            await notifyCompletedGoals(userAuth.client, { userId: userAuth.userId, chatId, lang });
           }
           return;
         }
@@ -627,7 +741,9 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
           const cancelRes = await cancelPendingAction(latestAction.actionId, userAuth.userId, from.id, userAuth.client);
           await sendTelegramMessage(
             chatId,
-            cancelRes.success ? CANCELLED_TEXT : `⚠️ ${escapeHtml(cancelRes.reason || 'Amalni bekor qilib bo‘lmadi.')}`
+            cancelRes.success
+              ? t.cancelled
+              : `⚠️ ${escapeHtml(lang === 'uz' && cancelRes.reason ? cancelRes.reason : t.couldNotCancel)}`
           );
           return;
         }
@@ -636,24 +752,23 @@ export async function handleTelegramUpdate(update: TelegramUpdate) {
       // A bare "ha" / "bekor" with nothing active (e.g. the 15-minute window passed):
       // say so instead of sending the word to the AI (#26).
       if (text.split(/\s+/).length <= 2) {
-        await sendTelegramMessage(
-          chatId,
-          '⌛ Tasdiqlanadigan faol taklif topilmadi (muddati tugagan bo‘lishi mumkin). Iltimos, xabaringizni qayta yuboring.'
-        );
+        await sendTelegramMessage(chatId, t.noActiveProposal);
         return;
       }
     }
   }
 
-  await processFinancialMessage({ chatId, from, firstName, budget, text });
+  await processFinancialMessage({ chatId, from, firstName, budget, text, lang });
 }
 
 
 interface FinancialMessageInput {
   chatId: number;
   from: { id: number; first_name?: string; last_name?: string; username?: string };
-  /** Already HTML-escaped first name. */
+  /** First name (raw; escaped where it is used). */
   firstName: string;
+  /** The user's language. */
+  lang: Lang;
   budget: AiBudget;
   /** Text message. */
   text?: string;
@@ -690,6 +805,7 @@ function setCachedCategories(telegramId: number, options: CategoryOption[]): voi
 
 export function forgetTelegramUserCaches(telegramId: number): void {
   categoryCache.delete(telegramId);
+  langCache.delete(telegramId);
   telegramSessionCache.delete(telegramId);
 }
 
@@ -733,13 +849,14 @@ async function deliver(
  * validation → pending action + ✅/❌ (nothing is saved before ✅), clarification, or advisor.
  */
 async function processFinancialMessage(input: FinancialMessageInput): Promise<void> {
-  const { chatId, from, firstName, budget } = input;
+  const { chatId, from, firstName, budget, lang } = input;
+  const t = botTexts(lang);
   const isVoice = Boolean(input.audio);
   const t0 = Date.now();
 
   // 1. Instant feedback (well under a second): the answer will replace this message.
   const placeholderId =
-    input.placeholderMessageId ?? (await sendPlaceholder(chatId, '⏳ Tekshirilmoqda...'));
+    input.placeholderMessageId ?? (await sendPlaceholder(chatId, t.checking));
 
   // 2. Sign-in and the AI call run in parallel. The AI gets the user's cached category
   //    list, or the standard Uzbek list on a cold cache (custom names are matched after).
@@ -753,12 +870,12 @@ async function processFinancialMessage(input: FinancialMessageInput): Promise<vo
     categories: cachedCategories ? categoryNamesByType(cachedCategories) : undefined,
     budget,
     audio: input.audio,
+    language: lang,
   });
 
   const userAuth = await authPromise;
   if (!userAuth) {
-    const defaultMsg = `Assalomu alaykum, ${firstName}!\n\nUzHamyon ilovasi orqali hisobingizni ochish uchun quyidagi tugmani bosing:`;
-    await deliver(chatId, placeholderId, defaultMsg, { webApp: { text: "UzHamyon'ni ochish", url: MINIAPP_URL } });
+    await deliver(chatId, placeholderId, t.openAccount(firstName), { webApp: { text: t.openUzHamyon, url: MINIAPP_URL } });
     return;
   }
 
@@ -786,19 +903,19 @@ async function processFinancialMessage(input: FinancialMessageInput): Promise<vo
 
   if (extracted.error) {
     // The AI was unavailable or out of time: do not guess.
-    await deliver(chatId, placeholderId, isVoice ? VOICE_MESSAGES.notUnderstood : AI_RETRY_MESSAGE);
+    await deliver(chatId, placeholderId, isVoice ? t.voice.notUnderstood : t.aiRetry);
     finish(extracted.error);
     return;
   }
 
   const transcript = (extracted.transcript || '').trim();
   if (isVoice && !transcript) {
-    await deliver(chatId, placeholderId, VOICE_MESSAGES.notUnderstood);
+    await deliver(chatId, placeholderId, t.voice.notUnderstood);
     finish('empty_transcript');
     return;
   }
   // "🎤 Siz aytdingiz: …" before every voice reply (escaped).
-  const voicePrefix = isVoice ? `🎤 <i>Siz aytdingiz:</i> «${escapeHtml(transcript)}»\n\n` : '';
+  const voicePrefix = isVoice ? t.youSaid(transcript) : '';
   const userText = isVoice ? transcript : input.text || '';
 
   if (extracted.intent === 'action_proposal' && extracted.actions.length > 0) {
@@ -821,9 +938,7 @@ async function processFinancialMessage(input: FinancialMessageInput): Promise<vo
       if (saveRes.error) {
         console.error('[Telegram Bot] Failed to save pending action:', saveRes.error);
       }
-      const errMsg = saveRes.migrationMissing
-        ? '⚠️ Tizimda yangilanishlar bajarilmoqda. Iltimos, keyinroq qayta urinib ko‘ring.'
-        : '⚠️ Amalni saqlab bo‘lmadi. Iltimos, birozdan so‘ng qayta urinib ko‘ring.';
+      const errMsg = saveRes.migrationMissing ? t.updating : t.actionSaveFailed;
       await deliver(chatId, placeholderId, errMsg);
       finish('save_failed');
       return;
@@ -831,25 +946,25 @@ async function processFinancialMessage(input: FinancialMessageInput): Promise<vo
 
     // The confirmation (preview + ✅/❌) — nothing is written to transactions before ✅.
     await deliver(chatId, placeholderId, voicePrefix + escapeHtml(proposal.summaryUzbek), {
-      keyboard: buildConfirmKeyboard(saveRes.record.actionId),
+      keyboard: buildConfirmKeyboard(saveRes.record.actionId, lang),
     });
     finish('proposal');
     return;
   }
 
   if (extracted.intent === 'clarification') {
-    const q = extracted.clarificationQuestion || 'Iltimos, summani yoki boshqa tafsilotlarni aniqlashtirib yozing.';
+    const q = extracted.clarificationQuestion || t.clarifyDefault;
     await deliver(chatId, placeholderId, voicePrefix + escapeHtml(q));
     finish('clarification');
     return;
   }
 
   // financial_query / casual_chat → the advisor answers the (transcribed) text.
-  const advisorRes = await askFinancialAdvisor(userText, undefined, userAuth.client, { channel: 'telegram', budget });
+  const advisorRes = await askFinancialAdvisor(userText, undefined, userAuth.client, { channel: 'telegram', budget, language: lang });
   if (extracted.intent === 'financial_query') {
     const reply = advisorRes.data?.answer
       ? escapeHtml(advisorRes.data.answer)
-      : 'Moliyaviy ma’lumotlarni tahlil qilishda xatolik yuz berdi.';
+      : t.queryFailed;
     await deliver(chatId, placeholderId, voicePrefix + reply);
     finish('query');
     return;
@@ -857,8 +972,8 @@ async function processFinancialMessage(input: FinancialMessageInput): Promise<vo
 
   const reply = advisorRes.data?.answer
     ? escapeHtml(advisorRes.data.answer)
-    : `Assalomu alaykum, ${firstName}! Sizga qanday yordam bera olaman?`;
-  await deliver(chatId, placeholderId, voicePrefix + reply, { webApp: { text: 'Ilovani ochish', url: MINIAPP_URL } });
+    : t.chatDefault(firstName);
+  await deliver(chatId, placeholderId, voicePrefix + reply, { webApp: { text: t.openApp, url: MINIAPP_URL } });
   finish('chat');
 }
 
@@ -867,28 +982,31 @@ async function handleVoiceMessage(
   chatId: number,
   from: { id: number; first_name?: string; last_name?: string; username?: string },
   media: TelegramAudioLike,
-  isVoice: boolean
+  isVoice: boolean,
+  lang: Lang = 'uz'
 ): Promise<void> {
+  const t = botTexts(lang);
   const check = validateAudioMeta(media, isVoice);
   if (!check.ok) {
-    await sendTelegramMessage(chatId, rejectMessageFor(check.reason));
+    await sendTelegramMessage(chatId, rejectMessageFor(check.reason, lang));
     return;
   }
 
-  const placeholderId = await sendPlaceholder(chatId, '🎤 Ovozli xabar tinglanmoqda...');
+  const placeholderId = await sendPlaceholder(chatId, t.listening);
   // Up to 8 s per Gemini call, 25 s in total.
   const budget = new AiBudget(TELEGRAM_AI_BUDGET_MS, VOICE_PER_CALL_TIMEOUT_MS);
 
   const file = await downloadTelegramFileBase64(media.file_id);
   if (!file) {
-    await deliver(chatId, placeholderId, VOICE_MESSAGES.notUnderstood);
+    await deliver(chatId, placeholderId, t.voice.notUnderstood);
     return;
   }
 
   await processFinancialMessage({
     chatId,
     from,
-    firstName: escapeHtml(from.first_name || 'aziz foydalanuvchi'),
+    firstName: from.first_name || t.fallbackName,
+    lang,
     budget,
     audio: { mimeType: check.mimeType, base64: file.base64 },
     placeholderMessageId: placeholderId,

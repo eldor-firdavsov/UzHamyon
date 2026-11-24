@@ -648,7 +648,11 @@ export function isUserConfirmation(text: string): boolean {
   return (
     /^(ha|tasdiq|tasdiqlayman|ha tasdiqlayman|ha albatta|ha saqla|saqla|ha bajar|bajar|yes|confirm|albatta|roziman|mayli|qayd et)$/i.test(
       norm
-    ) || /^(ha|tasdiqlayman|saqla)\b/i.test(norm)
+    ) ||
+    /^(ha|tasdiqlayman|saqla)\b/i.test(norm) ||
+    // Russian / English users
+    /^(да|ага|подтверждаю|подтвердить|сохрани|сохранить|записывай|верно|yes please|save it)$/i.test(norm) ||
+    /^(да|подтверждаю)(\s|$)/i.test(norm)
   );
 }
 
@@ -665,6 +669,10 @@ export function isUserCancellation(text: string): boolean {
   return (
     /^(yoq|bekor|bekor qil|bekor qilish|rad|rad etaman|kerak emas|keragi yoq|shart emas|no|cancel)$/i.test(
       norm
-    ) || /^(bekor|rad et)\b/i.test(norm)
+    ) ||
+    /^(bekor|rad et)\b/i.test(norm) ||
+    // Russian / English users
+    /^(нет|отмена|отмени|отменить|не надо|не нужно|no thanks|don't|dont)$/i.test(norm) ||
+    /^(отмен)/i.test(norm)
   );
 }

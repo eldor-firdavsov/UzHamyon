@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import Link from 'next/link';
 import UzHamyonLogo from '@/components/brand/UzHamyonLogo';
 import { AlertCircle, RefreshCw, ArrowLeft } from 'lucide-react';
+import { useI18n } from '@/lib/i18n/client';
 
 export default function ErrorBoundary({
   error,
@@ -12,6 +13,7 @@ export default function ErrorBoundary({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const { t } = useI18n();
   useEffect(() => {
     // Log the error to console or error reporting service
     console.error('Application error:', error);
@@ -30,14 +32,14 @@ export default function ErrorBoundary({
 
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-[#17211B]">
-            Xatolik yuz berdi
+            {t.errorPage.title}
           </h1>
           <p className="mt-2 text-base text-[#47544C] leading-relaxed">
-            Server bilan bog‘lanishda yoki sahifani yuklashda kutilmagan xatolik yuz berdi.
+            {t.errorPage.body}
           </p>
           {error?.digest && (
             <p className="mt-2 text-sm font-mono text-[#5A675F] bg-[#F7F9F7] py-1 px-2.5 rounded-lg border border-[#D5DED7] inline-block">
-              Xato kodi: {error.digest}
+              {t.errorPage.code} {error.digest}
             </p>
           )}
         </div>
@@ -49,7 +51,7 @@ export default function ErrorBoundary({
             className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#176B45] hover:bg-[#124D35] text-white text-sm font-semibold transition-all shadow-fintech-card active:scale-98"
           >
             <RefreshCw className="h-4 w-4" />
-            <span>Qayta urinish</span>
+            <span>{t.errorPage.retry}</span>
           </button>
 
           <Link
@@ -57,7 +59,7 @@ export default function ErrorBoundary({
             className="w-full sm:w-auto min-h-[44px] inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border border-[#D5DED7] bg-white hover:bg-[#F7F9F7] text-sm font-semibold text-[#17211B] transition-colors"
           >
             <ArrowLeft className="h-4 w-4 text-[#47544C]" />
-            <span>Kirish sahifasi</span>
+            <span>{t.errorPage.login}</span>
           </Link>
         </div>
       </div>

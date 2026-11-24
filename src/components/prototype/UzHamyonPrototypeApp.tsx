@@ -58,6 +58,9 @@ import {
   type FxRate,
 } from '@/lib/fx/currency';
 import { getNowLocalDateString, getNowLocalTimeString, isValidCalendarDate, isValidTimeString } from '@/lib/transactions/dateTime';
+import { useI18n } from '@/lib/i18n/client';
+import type { Dict } from '@/lib/i18n/dict';
+import { categoryLabel, dayAndMonth, monthName, monthShortTitle, shortDateWithYear, somLabel } from '@/lib/i18n/format';
 
 // ── Types & Interfaces ──
 export type TabType = 'dash' | 'act' | 'tahlil' | 'ai';
@@ -140,7 +143,6 @@ export interface UzHamyonPrototypeAppProps {
 
 // ── Constants from Specification ──
 const MIN_ALLOWED_DATE = '2020-01-01';
-const MOBILE_TITLES: Record<TabType, string> = { dash: 'Bugun', act: 'Faoliyat', tahlil: 'Tahlil', ai: 'AI' };
 const TODAY_DATE = getNowLocalDateString();
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -168,22 +170,6 @@ const INCOME_CATEGORIES = [
   'Frilans',
   "Sovg'alar",
   'Boshqa daromad',
-];
-
-const UZBEK_MONTH_NAMES = [
-  '',
-  'Yanvar',
-  'Fevral',
-  'Mart',
-  'Aprel',
-  'May',
-  'Iyun',
-  'Iyul',
-  'Avgust',
-  'Sentyabr',
-  'Oktyabr',
-  'Noyabr',
-  'Dekabr',
 ];
 
 // Demo sample transactions used ONLY for unauthenticated prototype preview
@@ -226,11 +212,6 @@ const DEMO_GOALS: Goal[] = [
   },
 ];
 
-/** "31-dek 2026" for a goal deadline. */
-function goalDeadlineLabel(iso: string): string {
-  const m = ['yan', 'fev', 'mar', 'apr', 'may', 'iyn', 'iyl', 'avg', 'sen', 'okt', 'noy', 'dek'][Number(iso.slice(5, 7)) - 1];
-  return m ? `${Number(iso.slice(8, 10))}-${m} ${iso.slice(0, 4)}` : iso;
-}
 
 /** 'YYYY-MM-DD HH:mm' in Tashkent time for an ISO timestamp. */
 function formatTashkentDate(iso: string): string {
@@ -333,31 +314,18 @@ function mapApiBudget(b: ApiBudgetRow): Budget {
  * Converts technical API/database messages into a user-facing Uzbek message.
  * The raw reason is logged by the caller for diagnostics.
  */
-function toUzbekTxError(raw?: string, action: 'save' | 'delete' = 'save'): string {
+function toUserTxError(t: Dict, raw?: string, action: 'save' | 'delete' = 'save'): string {
   const message = (raw || '').toLowerCase();
+  const e = t.txErrors;
 
-  if (message.includes('unauthorized') || message.includes('authentication')) {
-    return 'Tizimga kirish talab qilinadi. Iltimos, Telegram orqali qaytadan kiring.';
-  }
-  if (message.includes('failed to fetch') || message.includes('network')) {
-    return 'Server bilan aloqa uzildi. Internetni tekshirib, qayta urining.';
-  }
-  if (message.includes('incompatible') || message.includes('category')) {
-    return 'Kategoriya tranzaksiya turiga mos emas. Iltimos, boshqa kategoriya tanlang.';
-  }
-  if (message.includes('amount')) {
-    return 'Summa noto‘g‘ri kiritilgan. Iltimos, musbat son kiriting.';
-  }
-  if (message.includes('date')) {
-    return 'Sana noto‘g‘ri kiritilgan. Iltimos, sanani qayta tanlang.';
-  }
-  if (message.includes('description')) {
-    return 'Tranzaksiya nomi noto‘g‘ri kiritilgan.';
-  }
+  if (message.includes('unauthorized') || message.includes('authentication')) return e.auth;
+  if (message.includes('failed to fetch') || message.includes('network')) return e.network;
+  if (message.includes('incompatible') || message.includes('category')) return e.category;
+  if (message.includes('amount')) return e.badAmount;
+  if (message.includes('date')) return e.badDate;
+  if (message.includes('description')) return e.badName;
 
-  return action === 'delete'
-    ? 'Tranzaksiyani o‘chirishda xatolik yuz berdi. Iltimos, qayta urining.'
-    : 'Tranzaksiyani saqlashda xatolik yuz berdi. Iltimos, qayta urining.';
+  return action === 'delete' ? e.deleteFailed : e.saveFailed;
 }
 
 async function fetchAllTransactions(token?: string): Promise<ApiTransactionRow[]> {
@@ -410,6 +378,9 @@ export default function UzHamyonPrototypeApp({
   allowDemoFallback = false,
   syncBrowserUrl = true,
 }: UzHamyonPrototypeAppProps = {}) {
+  const { t, lang } = useI18n();
+  const som = somLabel(lang);
+  const mobileTitles: Record<TabType, string> = { dash: t.tabs.dash, act: t.tabs.act, tahlil: t.tabs.tahlil, ai: t.tabs.ai };
   // ── Navigation State ──
   const [tab, setTab] = useState<TabType>(initialTab);
   const [subTab, setSubTab] = useState<SubTabType>(initialSubTab);
@@ -495,12 +466,12 @@ export default function UzHamyonPrototypeApp({
         key,
         year: y,
         month: m,
-        label: `${UZBEK_MONTH_NAMES[m]} ${y}`,
-        shortLabel: `${UZBEK_MONTH_NAMES[m]?.slice(0, 3) || ''} ${y}`,
+        label: `${monthName(m, lang)} ${y}`,
+        shortLabel: `${monthShortTitle(m, lang)} ${y}`,
         count: monthCounts.get(key) || 0,
       };
     });
-  }, [transactions]);
+  }, [transactions, lang]);
 
   // ── Modal Sheet & Form State ──
   const [activeSheet, setActiveSheet] = useState<SheetType>(initialSheet);
@@ -954,7 +925,7 @@ export default function UzHamyonPrototypeApp({
     }
   };
 
-  const monthLabel = UZBEK_MONTH_NAMES[month] || '';
+  const monthLabel = monthName(month, lang);
   const daysInCurrentMonth = new Date(year, month, 0).getDate();
 
   // Transactions strictly for currently active month
@@ -1185,7 +1156,7 @@ export default function UzHamyonPrototypeApp({
     const q = searchQuery.trim().toLowerCase();
     const list = sortedTransactions.filter((t) => {
       const matchFilter = activityFilter === 'all' || t.type === activityFilter;
-      const matchQuery = !q || (t.desc + ' ' + t.cat).toLowerCase().includes(q);
+      const matchQuery = !q || (t.desc + ' ' + t.cat + ' ' + categoryLabel(t.cat, lang)).toLowerCase().includes(q);
       return matchFilter && matchQuery;
     });
 
@@ -1197,13 +1168,13 @@ export default function UzHamyonPrototypeApp({
         const d = parseInt(t.date.slice(8), 10);
         groups.push({
           isHead: true,
-          label: `${d} ${UZBEK_MONTH_NAMES[month].toLowerCase()}`,
+          label: d ? dayAndMonth(t.date, lang) : '',
         });
       }
       groups.push({ isHead: false, tx: t });
     });
     return groups;
-  }, [sortedTransactions, searchQuery, activityFilter, month]);
+  }, [sortedTransactions, searchQuery, activityFilter, lang]);
 
   // New entries flash once in the lists. Only ids that appear after the first load count.
   const seenTxIdsRef = useRef<Set<string> | null>(null);
@@ -1248,17 +1219,17 @@ export default function UzHamyonPrototypeApp({
 
   const sheetTitle =
     activeSheet === 'budget'
-      ? editId ? 'Limit' : 'Yangi limit'
+      ? editId ? t.sheets.limit : t.sheets.newLimit
       : activeSheet === 'goal'
-      ? editId ? 'Maqsad' : 'Yangi maqsad'
+      ? editId ? t.sheets.goal : t.sheets.newGoal
       : activeSheet === 'contrib'
-      ? 'Pul qo‘shish'
+      ? t.sheets.addMoney
       : activeSheet === 'detail'
-      ? activeGoal?.name || 'Maqsad'
+      ? activeGoal?.name || t.sheets.goal
       : activeSheet === 'user'
-      ? 'Profil'
+      ? t.sheets.profile
       : activeSheet === 'month'
-      ? 'Oy'
+      ? t.sheets.month
       : '';
 
   const activityRows = useMemo(
@@ -1283,12 +1254,12 @@ export default function UzHamyonPrototypeApp({
       if (token) headers['Authorization'] = `Bearer ${token}`;
       const res = await fetch('/api/profile/currency', { method: 'PUT', headers, body: JSON.stringify({ currency: next }) });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(typeof data?.error === 'string' ? data.error : 'Valyutani saqlab bo‘lmadi');
-      triggerToast(`Endi hammasi ${currencyName(next)}da`);
+      if (!res.ok) throw new Error(typeof data?.error === 'string' ? data.error : 'currency save failed');
+      triggerToast(t.currency.switched(next === 'USD'));
     } catch (err) {
       console.error('Currency save failed:', err);
       setDisplayCurrency(prev);
-      triggerToast('Valyutani saqlab bo‘lmadi. Qayta urinib ko‘ring.', 'error');
+      triggerToast(t.currency.saveError, 'error');
     } finally {
       setIsSavingCurrency(false);
     }
@@ -1395,19 +1366,19 @@ export default function UzHamyonPrototypeApp({
     const type = (fd.type || 'ex') as 'in' | 'ex';
 
     if (amt <= 0) {
-      setTxError('Iltimos, to‘g‘ri summa kiriting.');
+      setTxError(t.txErrors.amount);
       return false;
     }
     if (!desc) {
-      setTxError('Iltimos, tranzaksiya nomini kiriting.');
+      setTxError(t.txErrors.name);
       return false;
     }
     if (!date || !isValidCalendarDate(date)) {
-      setTxError('Iltimos, to‘g‘ri sanani tanlang (YYYY-MM-DD).');
+      setTxError(t.txErrors.date);
       return false;
     }
     if (time && !isValidTimeString(time)) {
-      setTxError('Iltimos, to‘g‘ri vaqtni kiriting (HH:mm).');
+      setTxError(t.txErrors.time);
       return false;
     }
 
@@ -1508,7 +1479,7 @@ export default function UzHamyonPrototypeApp({
         setYear(parseInt(date.slice(0, 4), 10));
         setMonth(parseInt(date.slice(5, 7), 10));
       }
-      triggerToast(isNew ? 'Tranzaksiya qo‘shildi' : 'Tranzaksiya yangilandi');
+      triggerToast(isNew ? t.toast.txAdded : t.toast.txUpdated);
       setActiveSheet(null);
       setQuickOpen(false);
       setQuickEdit(null);
@@ -1520,7 +1491,7 @@ export default function UzHamyonPrototypeApp({
       // Keep the sheet open with the user's input intact.
       console.error('Transaction save failed:', err);
       setTxError(
-        toUzbekTxError(err instanceof Error ? err.message : undefined, 'save')
+        toUserTxError(t, err instanceof Error ? err.message : undefined, 'save')
       );
       return false;
     } finally {
@@ -1564,7 +1535,7 @@ export default function UzHamyonPrototypeApp({
       // Same rule as the server: one limit per category.
       const key = normalizeCategory(cat, 'ex');
       if (budgets.some((b) => b.id !== editId && normalizeCategory(b.cat, 'ex') === key)) {
-        setBudgetError('Bu kategoriyaga shu oy uchun limit allaqachon bor. Uni ro‘yxatdan ochib o‘zgartiring.');
+        setBudgetError(t.toast.budgetExists);
         return;
       }
       if (editId) {
@@ -1572,7 +1543,7 @@ export default function UzHamyonPrototypeApp({
       } else {
         setBudgets((prev) => [...prev, { id: 'b' + Date.now(), cat, limit, currency: budgetCurrency }]);
       }
-      triggerToast(editId ? 'Limit yangilandi' : 'Limit qo‘shildi');
+      triggerToast(editId ? t.toast.budgetUpdated : t.toast.budgetAdded);
       closeSheet();
       return;
     }
@@ -1605,7 +1576,7 @@ export default function UzHamyonPrototypeApp({
       }
     }
     if (!catObj) {
-      setBudgetError('Kategoriya topilmadi. Boshqasini tanlang yoki ilovani qayta oching.');
+      setBudgetError(t.toast.categoryNotFound);
       return;
     }
     setBudgetError(null);
@@ -1641,10 +1612,10 @@ export default function UzHamyonPrototypeApp({
       if (!res.ok || !data?.budget) {
         throw new Error(
           res.status === 409
-            ? 'Bu kategoriyaga shu oy uchun limit allaqachon bor. Uni ro‘yxatdan ochib o‘zgartiring.'
+            ? t.toast.budgetExists
             : typeof data?.error === 'string' && data.error
             ? data.error
-            : 'Limitni saqlab bo‘lmadi. Qayta urinib ko‘ring.'
+            : t.toast.budgetSaveError
         );
       }
 
@@ -1653,12 +1624,14 @@ export default function UzHamyonPrototypeApp({
         editId ? prev.map((b) => (b.id === editId ? saved : b)) : [...prev, saved]
       );
       invalidateAllFinancialCaches();
-      triggerToast(editId ? 'Limit yangilandi' : 'Limit qo‘shildi');
+      triggerToast(editId ? t.toast.budgetUpdated : t.toast.budgetAdded);
       closeSheet();
     } catch (err) {
       console.error('Budget save failed:', err);
       // Shown inside the sheet so it is never hidden behind it; the input stays.
-      setBudgetError(err instanceof Error && err.message ? err.message : 'Limitni saqlab bo‘lmadi. Qayta urinib ko‘ring.');
+      setBudgetError(
+        err instanceof Error && err.message && (lang === 'uz' || err.message === t.toast.budgetExists) ? err.message : t.toast.budgetSaveError
+      );
     } finally {
       setIsSavingBudget(false);
     }
@@ -1703,7 +1676,7 @@ export default function UzHamyonPrototypeApp({
       } else {
         setGoals((prev) => [...prev, { id: 'g' + Date.now(), name, target, date, saved: 0, currency: goalCurrency, status: 'in_progress', contribs: [], contribsLoaded: true }]);
       }
-      triggerToast(editId ? 'Maqsad yangilandi' : 'Maqsad qo‘shildi');
+      triggerToast(editId ? t.toast.goalUpdated : t.toast.goalAdded);
       closeGoalSheet();
       return;
     }
@@ -1736,12 +1709,12 @@ export default function UzHamyonPrototypeApp({
         setGoals((prev) => [...prev, { id, name, target, date, saved: 0, currency: goalCurrency, status: 'in_progress', contribs: [], contribsLoaded: true }]);
       }
       invalidateAllFinancialCaches();
-      triggerToast(editId ? 'Maqsad yangilandi' : 'Maqsad qo‘shildi');
+      triggerToast(editId ? t.toast.goalUpdated : t.toast.goalAdded);
       closeGoalSheet();
     } catch (err) {
       console.error('Goal save failed:', err);
       triggerToast(
-        err instanceof Error && err.message ? err.message : 'Maqsadni saqlab bo‘lmadi. Qayta urinib ko‘ring.',
+        lang === 'uz' && err instanceof Error && err.message ? err.message : t.toast.goalSaveError,
         'error'
       );
     } finally {
@@ -1771,7 +1744,7 @@ export default function UzHamyonPrototypeApp({
             : g
         )
       );
-      triggerToast('Hissa qo‘shildi');
+      triggerToast(t.toast.contribAdded);
       setActiveSheet('detail');
       setFormData({});
       return;
@@ -1808,13 +1781,13 @@ export default function UzHamyonPrototypeApp({
         )
       );
       invalidateAllFinancialCaches();
-      triggerToast(data?.goal?.status === 'completed' ? '🎉 Maqsadga yetdingiz!' : 'Hissa qo‘shildi');
+      triggerToast(data?.goal?.status === 'completed' ? t.toast.goalReached : t.toast.contribAdded);
       setActiveSheet('detail');
       setFormData({});
       void loadGoalContributions(goalId);
     } catch (err) {
       console.error('Goal contribution failed:', err);
-      triggerToast(err instanceof Error && err.message ? err.message : 'Hissani saqlab bo‘lmadi', 'error');
+      triggerToast(lang === 'uz' && err instanceof Error && err.message ? err.message : t.toast.contribError, 'error');
     } finally {
       setIsSavingContrib(false);
     }
@@ -1881,18 +1854,18 @@ export default function UzHamyonPrototypeApp({
         }
         setTransactions((prev) => prev.filter((t) => t.id !== id));
         invalidateAllFinancialCaches();
-        triggerToast("Tranzaksiya o'chirildi");
+        triggerToast(t.toast.txDeleted);
       } catch (err) {
         console.error('Transaction delete failed:', err);
         triggerToast(
-          toUzbekTxError(err instanceof Error ? err.message : undefined, 'delete'),
+          toUserTxError(t, err instanceof Error ? err.message : undefined, 'delete'),
           'error'
         );
       }
     } else if (k === 'budget') {
       if (!isAuthenticated) {
         setBudgets((prev) => prev.filter((b) => b.id !== id));
-        triggerToast('Limit o‘chirildi');
+        triggerToast(t.toast.budgetDeleted);
       } else {
         try {
           const res = await fetch(`/api/budgets/${id}`, { method: 'DELETE', headers: authHeaders });
@@ -1902,26 +1875,26 @@ export default function UzHamyonPrototypeApp({
           }
           setBudgets((prev) => prev.filter((b) => b.id !== id));
           invalidateAllFinancialCaches();
-          triggerToast('Limit o‘chirildi');
+          triggerToast(t.toast.budgetDeleted);
         } catch (err) {
           console.error('Budget delete failed:', err);
-          triggerToast('Limitni o‘chirib bo‘lmadi. Qayta urinib ko‘ring.', 'error');
+          triggerToast(t.toast.budgetDeleteError, 'error');
         }
       }
     } else if (k === 'goal') {
       if (!isAuthenticated) {
         setGoals((prev) => prev.filter((g) => g.id !== id));
-        triggerToast('Maqsad o‘chirildi');
+        triggerToast(t.toast.goalDeleted);
       } else {
         try {
           const res = await fetch(`/api/goals/${id}`, { method: 'DELETE', headers: authHeaders });
           if (!res.ok) throw new Error('Goal delete failed');
           setGoals((prev) => prev.filter((g) => g.id !== id));
           invalidateAllFinancialCaches();
-          triggerToast('Maqsad o‘chirildi');
+          triggerToast(t.toast.goalDeleted);
         } catch (err) {
           console.error('Goal delete failed:', err);
-          triggerToast('Maqsadni o‘chirib bo‘lmadi. Qayta urinib ko‘ring.', 'error');
+          triggerToast(t.toast.goalDeleteError, 'error');
         }
       }
     }
@@ -1948,24 +1921,24 @@ export default function UzHamyonPrototypeApp({
         <div className="flex items-center gap-2.5 min-w-0">
           <button
             type="button"
-            aria-label="Profil"
+            aria-label={t.sheets.profile}
             onClick={() => setActiveSheet('user')}
             className="h-9 w-9 shrink-0 rounded-full bg-[#163300] text-[#9FE870] flex items-center justify-center font-bold text-[15px] cursor-pointer"
           >
             {userName.trim() ? userName.trim()[0].toUpperCase() : <User className="h-4 w-4" />}
           </button>
-          <span className="uz-m-title">{MOBILE_TITLES[tab]}</span>
+          <span className="uz-m-title">{mobileTitles[tab]}</span>
         </div>
         <div className="flex items-center gap-2">
           {(tab === 'act' || tab === 'tahlil') && availableMonths.length > 0 && (
             <div className="uz-m-month">
-              <button type="button" aria-label="Oldingi oy" disabled={noPrev} onClick={() => handleNavigateMonth(-1)}>
+              <button type="button" aria-label={t.sheets.prevMonth} disabled={noPrev} onClick={() => handleNavigateMonth(-1)}>
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <button type="button" className="uz-m-month-label" onClick={() => setActiveSheet('month')}>
-                {monthLabel.slice(0, 3)}
+                {monthShortTitle(month, lang)}
               </button>
-              <button type="button" aria-label="Keyingi oy" disabled={noNext} onClick={() => handleNavigateMonth(1)}>
+              <button type="button" aria-label={t.sheets.nextMonth} disabled={noNext} onClick={() => handleNavigateMonth(1)}>
                 <ChevronRight className="h-4 w-4" />
               </button>
             </div>
@@ -2085,7 +2058,7 @@ export default function UzHamyonPrototypeApp({
                 }
               : undefined
           }
-          title={firstRun && transactions.length === 0 ? 'Bugun nimaga pul sarfladingiz?' : undefined}
+          title={firstRun && transactions.length === 0 ? t.quick.firstQuestion : undefined}
           onClose={() => {
             setQuickOpen(false);
             setQuickEdit(null);
@@ -2162,17 +2135,17 @@ export default function UzHamyonPrototypeApp({
             if (e.target === e.currentTarget) closeSheet();
           }}
         >
-          <div className="uz-sh" data-kind={activeSheet} role="dialog" aria-modal="true" aria-label={sheetTitle || 'Oyna'}>
+          <div className="uz-sh" data-kind={activeSheet} role="dialog" aria-modal="true" aria-label={sheetTitle || t.common.dialog}>
             <div className="uz-sh-grab" />
 
             {activeSheet !== 'confirm' && (
               <div className="uz-sh-head">
-                <button type="button" className="uz-qa-round" aria-label="Yopish" onClick={closeSheet}>
+                <button type="button" className="uz-qa-round" aria-label={t.common.close} onClick={closeSheet}>
                   <X size={20} strokeWidth={2.2} />
                 </button>
                 <h2>{sheetTitle}</h2>
                 {activeSheet === 'detail' && activeGoal ? (
-                  <button type="button" className="uz-qa-round" aria-label="Maqsadni tahrirlash" onClick={() => handleOpenEditGoal(activeGoal)}>
+                  <button type="button" className="uz-qa-round" aria-label={t.sheets.editGoal} onClick={() => handleOpenEditGoal(activeGoal)}>
                     <Pencil size={18} strokeWidth={2.2} />
                   </button>
                 ) : (
@@ -2190,13 +2163,13 @@ export default function UzHamyonPrototypeApp({
                     className="uz-big-input"
                     inputMode="numeric"
                     placeholder="0"
-                    aria-label={`Oylik limit, ${currencyName(dc)}`}
+                    aria-label={t.sheets.monthlyLimitAria(unitLabel(dc, lang))}
                     value={formData.limit || ''}
                     onChange={(e) => { setBudgetError(null); setFormData((prev) => ({ ...prev, limit: formatNumberWithGaps(e.target.value) })); }}
                   />
-                  <span>{unitLabel(dc)} / oy</span>
+                  <span>{t.sheets.perMonth(unitLabel(dc, lang))}</span>
                 </div>
-                <div className="uz-qa-catgrid" role="listbox" aria-label="Kategoriya">
+                <div className="uz-qa-catgrid" role="listbox" aria-label={t.common.category}>
                   {Array.from(new Set([...quickCategories.ex, formData.cat].filter((c): c is string => Boolean(c) && c !== 'Auto'))).map((name) => {
                     const meta = getCategoryMeta(name, 'ex');
                     const Icon = meta.icon;
@@ -2212,7 +2185,7 @@ export default function UzHamyonPrototypeApp({
                         <span className="uz-qa-fav-ic" style={{ background: meta.bg, color: meta.color }}>
                           <Icon size={22} strokeWidth={2.1} />
                         </span>
-                        <span className="uz-qa-fav-name">{name}</span>
+                        <span className="uz-qa-fav-name">{categoryLabel(name, lang)}</span>
                       </button>
                     );
                   })}
@@ -2222,12 +2195,12 @@ export default function UzHamyonPrototypeApp({
                 )}
                 <div className="uz-sh-foot">
                   {editId && (
-                    <button type="button" className="uz-qa-trash" aria-label="Limitni o‘chirish" onClick={() => { setConfirmConfig({ k: 'budget', id: editId }); setActiveSheet('confirm'); }}>
+                    <button type="button" className="uz-qa-trash" aria-label={t.sheets.deleteLimit} onClick={() => { setConfirmConfig({ k: 'budget', id: editId }); setActiveSheet('confirm'); }}>
                       <Trash2 size={22} strokeWidth={2.2} />
                     </button>
                   )}
                   <button type="button" className="uz-qa-save" disabled={isSaveBudgetDisabled} onClick={handleSaveBudget}>
-                    <Check size={20} strokeWidth={2.8} /> Saqlash
+                    <Check size={20} strokeWidth={2.8} /> {t.common.save}
                   </button>
                 </div>
               </>
@@ -2240,8 +2213,8 @@ export default function UzHamyonPrototypeApp({
                   id="goal-name"
                   className="uz-qa-desc"
                   style={{ alignSelf: 'center' }}
-                  placeholder="Nima uchun yig‘asiz?"
-                  aria-label="Maqsad nomi"
+                  placeholder={t.sheets.goalPlaceholder}
+                  aria-label={t.sheets.goalNameAria}
                   maxLength={80}
                   value={formData.name || ''}
                   onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
@@ -2252,17 +2225,17 @@ export default function UzHamyonPrototypeApp({
                     className="uz-big-input"
                     inputMode="numeric"
                     placeholder="0"
-                    aria-label={`Kerakli summa, ${currencyName(dc)}`}
+                    aria-label={t.sheets.goalTargetAria(unitLabel(dc, lang))}
                     value={formData.target || ''}
                     onChange={(e) => setFormData((prev) => ({ ...prev, target: formatNumberWithGaps(e.target.value) }))}
                   />
-                  <span>{unitLabel(dc)} kerak</span>
+                  <span>{t.sheets.needed(unitLabel(dc, lang))}</span>
                 </div>
                 <div className="uz-m-list">
                   <label className="uz-sh-row">
                     <CalendarDays size={20} strokeWidth={2} color="#6B7068" aria-hidden="true" />
-                    <span className="uz-sh-row-label">Muddat</span>
-                    {!formData.date && <span className="uz-sh-row-date">Ixtiyoriy</span>}
+                    <span className="uz-sh-row-label">{t.sheets.deadline}</span>
+                    {!formData.date && <span className="uz-sh-row-date">{t.common.optional}</span>}
                     <input
                       id="goal-date"
                       type="date"
@@ -2276,12 +2249,12 @@ export default function UzHamyonPrototypeApp({
                 </div>
                 <div className="uz-sh-foot">
                   {editId && (
-                    <button type="button" className="uz-qa-trash" aria-label="Maqsadni o‘chirish" onClick={() => { setConfirmConfig({ k: 'goal', id: editId }); setActiveSheet('confirm'); }}>
+                    <button type="button" className="uz-qa-trash" aria-label={t.sheets.deleteGoal} onClick={() => { setConfirmConfig({ k: 'goal', id: editId }); setActiveSheet('confirm'); }}>
                       <Trash2 size={22} strokeWidth={2.2} />
                     </button>
                   )}
                   <button type="button" className="uz-qa-save" disabled={isSaveGoalDisabled} onClick={handleSaveGoal}>
-                    <Check size={20} strokeWidth={2.8} /> Saqlash
+                    <Check size={20} strokeWidth={2.8} /> {t.common.save}
                   </button>
                 </div>
               </>
@@ -2296,16 +2269,16 @@ export default function UzHamyonPrototypeApp({
                     className="uz-big-input"
                     inputMode="numeric"
                     placeholder="0"
-                    aria-label={`Qo‘shiladigan summa, ${currencyName(dc)}`}
+                    aria-label={t.sheets.contribAria(unitLabel(dc, lang))}
                     value={formData.contrib || ''}
                     onChange={(e) => setFormData((prev) => ({ ...prev, contrib: formatNumberWithGaps(e.target.value) }))}
                   />
-                  <span>{unitLabel(dc)}</span>
+                  <span>{unitLabel(dc, lang)}</span>
                 </div>
                 <div className="uz-sh-hint" data-warn={currentBalance - parseNumber(formData.contrib) < 0}>
                   {currentBalance - parseNumber(formData.contrib) < 0
-                    ? `Balans ${formatWithUnit(currentBalance - parseNumber(formData.contrib), dc)} minusga tushadi`
-                    : `Balansda qoladi: ${formatWithUnit(currentBalance - parseNumber(formData.contrib), dc)}`}
+                    ? t.sheets.balanceGoesNegative(formatWithUnit(currentBalance - parseNumber(formData.contrib), dc, lang))
+                    : t.sheets.balanceLeft(formatWithUnit(currentBalance - parseNumber(formData.contrib), dc, lang))}
                 </div>
                 {currentBalance > 0 && (
                   <div className="uz-qa-days">
@@ -2319,7 +2292,7 @@ export default function UzHamyonPrototypeApp({
                           aria-pressed={parseNumber(formData.contrib) === amt}
                           onClick={() => setFormData((prev) => ({ ...prev, contrib: formatNumberWithGaps(String(amt)) }))}
                         >
-                          {pct === 100 ? 'Hammasi' : `${pct}%`}
+                          {pct === 100 ? t.sheets.everything : `${pct}%`}
                         </button>
                       );
                     })}
@@ -2327,7 +2300,7 @@ export default function UzHamyonPrototypeApp({
                 )}
                 <div className="uz-sh-foot">
                   <button type="button" className="uz-qa-save" disabled={isSaveContribDisabled} onClick={handleSaveContribution}>
-                    <Plus size={20} strokeWidth={2.8} /> Qo‘shish
+                    <Plus size={20} strokeWidth={2.8} /> {t.common.add}
                   </button>
                 </div>
               </>
@@ -2347,12 +2320,12 @@ export default function UzHamyonPrototypeApp({
                     </div>
                     <div className="uz-sh-goal-num num">{dc === 'USD' ? '$' : ''}{formatAmount(saved, dc)}</div>
                     <div className="uz-m-row-sub num">
-                      / {formatWithUnit(target, dc)}
-                      {activeGoal.date ? ` · ${goalDeadlineLabel(activeGoal.date)} gacha` : ''}
+                      / {formatWithUnit(target, dc, lang)}
+                      {activeGoal.date ? t.sheets.until(shortDateWithYear(activeGoal.date, lang)) : ''}
                     </div>
                   </div>
                   <button type="button" className="uz-qa-save" onClick={() => handleOpenAddContrib(activeGoal.id)}>
-                    <Plus size={20} strokeWidth={2.8} /> Pul qo‘shish
+                    <Plus size={20} strokeWidth={2.8} /> {t.sheets.addMoney}
                   </button>
                   {!activeGoal.contribsLoaded ? (
                     <TxListSkeleton count={2} />
@@ -2361,9 +2334,9 @@ export default function UzHamyonPrototypeApp({
                       {activeGoal.contribs.map((c, i) => (
                         <div key={i} className="uz-m-row" style={{ cursor: 'default' }}>
                           <span className="uz-m-row-main">
-                            <span className="uz-m-row-name" style={{ fontSize: 15 }}>{/^\d{4}-\d{2}-\d{2}/.test(c.d) ? dayLabel(c.d.slice(0, 10), getNowLocalDateString()) : c.d}</span>
+                            <span className="uz-m-row-name" style={{ fontSize: 15 }}>{/^\d{4}-\d{2}-\d{2}/.test(c.d) ? dayLabel(c.d.slice(0, 10), getNowLocalDateString(), lang) : c.d}</span>
                             {(c.source === 'initial_balance' || c.note) && (
-                              <span className="uz-m-row-sub">{c.source === 'initial_balance' ? 'Boshlang‘ich qoldiq' : c.note}</span>
+                              <span className="uz-m-row-sub">{c.source === 'initial_balance' ? t.sheets.initialBalance : c.note}</span>
                             )}
                           </span>
                           <span className="uz-m-row-amt" data-in={c.a >= 0}>
@@ -2373,7 +2346,7 @@ export default function UzHamyonPrototypeApp({
                       ))}
                     </div>
                   ) : (
-                    <div className="uz-sh-hint">Hali pul qo‘shilmagan</div>
+                    <div className="uz-sh-hint">{t.sheets.noContribs}</div>
                   )}
                 </>
               );
@@ -2383,15 +2356,15 @@ export default function UzHamyonPrototypeApp({
             {activeSheet === 'confirm' && (
               <div className="uz-sh-confirm">
                 <span className="uz-sh-confirm-ic"><Trash2 size={26} strokeWidth={2.2} /></span>
-                <h2>{confirmConfig?.k === 'budget' ? 'Limit o‘chirilsinmi?' : confirmConfig?.k === 'goal' ? 'Maqsad o‘chirilsinmi?' : 'Amal o‘chirilsinmi?'}</h2>
-                <p>Buni qaytarib bo‘lmaydi.</p>
-                <button type="button" className="uz-sh-danger" onClick={handleConfirmDelete}>O‘chirish</button>
+                <h2>{confirmConfig?.k === 'budget' ? t.sheets.confirmLimit : confirmConfig?.k === 'goal' ? t.sheets.confirmGoal : t.sheets.confirmEntry}</h2>
+                <p>{t.common.cannotUndo}</p>
+                <button type="button" className="uz-sh-danger" onClick={handleConfirmDelete}>{t.common.delete}</button>
                 <button
                   type="button"
                   className="uz-sh-plain"
                   onClick={closeSheet}
                 >
-                  Bekor qilish
+                  {t.common.cancel}
                 </button>
               </div>
             )}
@@ -2401,10 +2374,10 @@ export default function UzHamyonPrototypeApp({
               availableMonths.length === 0 ? (
                 <button type="button" className="uz-m-empty" onClick={handleOpenAddTx}>
                   <span className="uz-m-empty-ic"><Plus size={26} strokeWidth={2.6} /></span>
-                  <span>Birinchi amal</span>
+                  <span>{t.common.firstEntry}</span>
                 </button>
               ) : (
-                <div className="uz-m-list" role="listbox" aria-label="Oy">
+                <div className="uz-m-list" role="listbox" aria-label={t.sheets.month}>
                   {availableMonths.map((item) => {
                     const isSelected = year === item.year && month === item.month;
                     return (
@@ -2417,7 +2390,7 @@ export default function UzHamyonPrototypeApp({
                         onClick={() => handleSelectMonth(item.year, item.month)}
                       >
                         <span className="uz-m-row-main"><span className="uz-m-row-name">{item.label}</span></span>
-                        <span className="uz-m-row-sub num">{item.count} ta</span>
+                        <span className="uz-m-row-sub num">{t.common.count(item.count)}</span>
                         <span style={{ width: 22, display: 'grid', placeItems: 'center', color: '#2E6B00' }}>
                           {isSelected && <Check size={20} strokeWidth={2.8} />}
                         </span>
